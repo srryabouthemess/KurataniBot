@@ -34,23 +34,13 @@ git clone https://github.com/srryabouthemess/KurataniBot.git
 cd KurataniBot
 ```
 
-**2. Instale o Rust** (caso ainda não tenha)
-
-Linux/macOS:
-```bash
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-source "$HOME/.cargo/env"
-```
-
-Windows: baixe e execute o instalador em https://rustup.rs
-
-**3. Instale as dependências Node**
+**2. Instale as dependências Node**
 ```bash
 npm install
 ```
 > ⚠️ O `rosu-pp-js` compila Rust durante o install — pode levar alguns minutos.
 
-**4. Instale a dependência Python** (necessária para FC PP no Daycore RX)
+**3. Instale a dependência Python** (necessária para FC PP no Daycore RX)
 ```bash
 pip install akatsuki-pp-py
 ```
@@ -67,7 +57,7 @@ pip install akatsuki-pp-py
 > sudo dnf install gcc python3-devel
 > ```
 
-**5. Configure as variáveis de ambiente**
+**4. Configure as variáveis de ambiente**
 ```bash
 cp .env.example .env
 ```
@@ -82,12 +72,12 @@ Edite o `.env` com suas credenciais:
 | `OSU_CLIENT_ID` | ID do OAuth da osu! API v2 |
 | `OSU_CLIENT_SECRET` | Secret do OAuth da osu! API v2 |
 
-**6. Registre os comandos slash**
+**5. Registre os comandos slash**
 ```bash
 node deploy-commands.js
 ```
 
-**7. Inicie o bot**
+**6. Inicie o bot**
 ```bash
 node index.js
 ```
