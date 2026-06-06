@@ -38,7 +38,6 @@ cd KurataniBot
 ```bash
 npm install
 ```
-> ⚠️ O `rosu-pp-js` compila Rust durante o install — pode levar alguns minutos.
 
 **3. Instale a dependência Python** (necessária para FC PP no Daycore RX)
 ```bash
