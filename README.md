@@ -5,12 +5,19 @@ Bot de Discord para exibir estatísticas do **osu!**, com suporte a **Bancho** (
 ## Funcionalidades
 
 Perfil de jogadores
+
 Última play (recent)
+
 Top plays
+
 Comparação entre jogadores
+
 Simulação de PP (What If)
+
 Vinculação de contas Discord ↔ osu!
+
 Suporte a múltiplos idiomas
+
 Suporte a Bancho e servidores privados
 
 O **PP por FC** é calculado localmente:
@@ -40,6 +47,7 @@ cd KurataniBot
 **2. Instale as dependências Node**
 ```bash
 npm install
+npm audit fix  # corrige vulnerabilidades conhecidas nas dependências
 ```
 
 **3. Instale a dependência Python** (necessária para FC PP no Daycore RX)
