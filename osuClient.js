@@ -325,6 +325,14 @@ async function getFCpp(score, mode = DEFAULT_MODE) {
   const modsBits = (score.mods ?? []).reduce((acc, m) => acc | (MOD_BITS[m] ?? 0), 0);
 
   try {
+    // ── Relax: akatsuki-pp-py via Python (oppai-2019, mesmo sistema do Daycore) ─
+    // O script Python baixa o .osu internamente, então não precisamos fazer
+    // o download aqui — evita que uma falha de rede neste trecho mate o PPFC.
+    if (mode === 'private_rx') {
+      return await getFCppPython(beatmapId, modsBits, n300, n100, n50, misses);
+    }
+
+    // ── Bancho / Daycore vanilla: rosu-pp-js (algoritmo oficial) ──────────────
     // Baixa o arquivo .osu (público no Bancho, mesmo para mapas do Daycore)
     const response = await axios.get(`https://osu.ppy.sh/osu/${beatmapId}`, {
       responseType: 'arraybuffer',
@@ -332,12 +340,6 @@ async function getFCpp(score, mode = DEFAULT_MODE) {
     });
     const beatmapBytes = new Uint8Array(response.data);
 
-    // ── Relax: akatsuki-pp-py via Python (oppai-2019, mesmo sistema do Daycore) ─
-    if (mode === 'private_rx') {
-      return await getFCppPython(beatmapId, modsBits, n300, n100, n50, misses);
-    }
-
-    // ── Bancho / Daycore vanilla: rosu-pp-js (algoritmo oficial) ──────────────
     let rosu;
     try { rosu = require('rosu-pp-js'); } catch { return null; }
 
