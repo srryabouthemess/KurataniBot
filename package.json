@@ -1,0 +1,18 @@
+{
+  "name": "kuratanibot",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "axios": "^1.14.0",
+    "discord.js": "^14.26.2",
+    "dotenv": "^17.4.0",
+    "rosu-pp-js": "^3.1.0"
+  }
+}

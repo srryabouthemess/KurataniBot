@@ -1,0 +1,19 @@
+# Variáveis de ambiente (NUNCA commitar isso!)
+.env
+.env.local
+.env.*.local
+
+# Dependências
+node_modules/
+
+# Logs
+*.log
+npm-debug.log*
+
+# Sistema operacional
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/

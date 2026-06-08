@@ -1,0 +1,100 @@
+const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
+const osu = require('../osuClient');
+const { resolvePlayer } = require('../userLink');
+const { t } = require('../i18n');
+
+const toDiscordTimestamp = (dateString, format = 'R') => {
+  if (!dateString) return 'Unknown';
+  const unix = Math.floor(new Date(dateString).getTime() / 1000);
+  return `<t:${unix}:${format}>`;
+};
+
+module.exports = {
+  data: new SlashCommandBuilder()
+    .setName('profile')
+    .setDescription("Show a player's osu! profile")
+    .setDescriptionLocalizations({ 'pt-BR': 'Mostra o perfil de um jogador de osu!' })
+    .addStringOption(option =>
+      option
+        .setName('player')
+        .setDescription('Player name (optional if /link is set)')
+        .setDescriptionLocalizations({ 'pt-BR': 'Nome do jogador (opcional se tiver /link)' })
+        .setRequired(false)
+    )
+    .addStringOption(option =>
+      option
+        .setName('server')
+        .setDescription('Which server to use? (default: official)')
+        .setDescriptionLocalizations({ 'pt-BR': 'Qual servidor usar? (padrão: oficial)' })
+        .setRequired(false)
+        .addChoices(
+          { name: 'Bancho',     value: 'official'   },
+          { name: 'Daycore',    value: 'private'     },
+          { name: 'Daycore RX', value: 'private_rx'  }
+        )
+    ),
+
+  async execute(interaction) {
+    const s        = t(interaction);
+    const resolved = resolvePlayer(interaction, 'player', 'server');
+    if (!resolved) {
+      return interaction.reply({ content: s.no_link_set, ephemeral: true });
+    }
+
+    const { username, mode } = resolved;
+    await interaction.deferReply();
+
+    try {
+      const user = await osu.getUser(username, mode);
+      if (!user) return interaction.editReply(s.player_not_found);
+
+      const stats     = user.statistics;
+      const bestPlays = await osu.getBestScores(user.id, 1, mode);
+      const bestPlay  = bestPlays[0] || null;
+
+      let topPlayString = s.profile_no_play;
+      if (bestPlay) {
+        const mapUrl = osu.getMapUrl(bestPlay.beatmap.id, bestPlay.beatmapset.id, mode);
+        const mapName = `${bestPlay.beatmapset.title} [${bestPlay.beatmap.version}]`;
+        topPlayString =
+          `🏆 **[${mapName}](${mapUrl})**\n` +
+          `> **PP:** ${bestPlay.pp.toFixed(2)}pp | **${s.profile_acc}:** ${(bestPlay.accuracy * 100).toFixed(2)}%\n` +
+          `> **Rank:** ${bestPlay.rank} | **${s.profile_max_combo}:** ${bestPlay.max_combo !== null ? bestPlay.max_combo + 'x' : '-'}`;
+      }
+
+      const rankValue = user._private
+        ? `**${s.profile_global}:** ${stats.global_rank ? '#' + stats.global_rank.toLocaleString() : s.profile_unranked}`
+        : `**${s.profile_global}:** ${stats.global_rank ? '#' + stats.global_rank.toLocaleString() : s.profile_unranked}\n**${s.profile_regional(user.country_code)}:** ${stats.country_rank ? '#' + stats.country_rank.toLocaleString() : '-'}`;
+
+      const embed = new EmbedBuilder()
+        .setTitle(s.profile_title(user.username))
+        .setURL(osu.getUserUrl(user.id, mode))
+        .setThumbnail(user.avatar_url)
+        .setColor(user.is_online ? 0x99ff99 : 0xff66aa)
+        .addFields(
+          { name: s.profile_ranks,  value: rankValue,  inline: true },
+          {
+            name: s.profile_stats,
+            value: `**${s.profile_acc}:** ${stats.hit_accuracy.toFixed(2)}%\n**${s.profile_max_combo}:** ${stats.maximum_combo}x`,
+            inline: true,
+          },
+          {
+            name: s.profile_status,
+            value: user.is_online
+              ? s.profile_online
+              : s.profile_offline(toDiscordTimestamp(user.last_visit, 'R')),
+            inline: true,
+          },
+          { name: s.profile_top_play,   value: topPlayString,                           inline: false },
+          { name: s.profile_created_at, value: toDiscordTimestamp(user.join_date, 'D'), inline: false }
+        )
+        .setFooter({ text: s.profile_footer(osu.getModeLabel(mode)) });
+
+      await interaction.editReply({ embeds: [embed] });
+    } catch (error) {
+      console.error(error.response?.data || error);
+      if (error.response?.status === 404) return interaction.editReply(s.player_not_found);
+      interaction.editReply(s.error_generic);
+    }
+  },
+};
