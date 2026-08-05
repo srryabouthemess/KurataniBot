@@ -12,6 +12,8 @@ const center = (str, width) => {
 };
 
 module.exports = {
+  center,
+
   data: new SlashCommandBuilder()
     .setName('compare')
     .setDescription("Compare two players' statistics")
