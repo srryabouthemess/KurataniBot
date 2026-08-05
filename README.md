@@ -16,13 +16,19 @@ Simulação de PP (What If)
 
 Vinculação de contas Discord ↔ osu!
 
-Suporte a múltiplos idiomas
+Suporte a múltiplos idiomas (Português, English, Русский)
 
 Suporte a Bancho e servidores privados
+
+Navegação por páginas em `/topplays` (5 plays por página, até 100) e `/recent` (até 50 plays), com botões ◀️/▶️
+
+Judgments (300/100/50/miss) e combo máximo do mapa em `/topplays` e `/recent`
 
 O **PP por FC** é calculado localmente:
 - Bancho / Daycore vanilla → [`rosu-pp-js`](https://github.com/MaxOhn/rosu-pp-js) (algoritmo oficial osu!)
 - Daycore RX → [`akatsuki-pp-py`](https://github.com/osuAkatsuki/akatsuki-pp-py) via Python (oppai-2019, mesmo sistema do Daycore)
+
+Cache local de beatmaps (`beatmapCache.js`) para evitar rate limit da API do osu!
 
 ---
 
@@ -33,6 +39,18 @@ O **PP por FC** é calculado localmente:
 - [Git](https://git-scm.com/)
 - Uma aplicação no [Discord Developer Portal](https://discord.com/developers/applications)
 - Credenciais da [osu! API v2](https://osu.ppy.sh/home/account/edit#new-oauth-application) (para Bancho)
+
+---
+
+## Dependências
+
+| Pacote | Versão | Uso |
+|---|---|---|
+| [`discord.js`](https://discord.js.org/) | ^14.26.2 | Cliente da API do Discord |
+| [`axios`](https://axios-http.com/) | ^1.14.0 | Requisições HTTP às APIs do osu!/Daycore |
+| [`dotenv`](https://github.com/motdotla/dotenv) | ^17.4.0 | Carrega variáveis do `.env` |
+| [`rosu-pp-js`](https://github.com/MaxOhn/rosu-pp-js) | ^3.1.0 | Cálculo de PP por FC (Bancho/Daycore vanilla) |
+| [`akatsuki-pp-py`](https://github.com/osuAkatsuki/akatsuki-pp-py) | — | Cálculo de PP por FC no Daycore RX (via Python, instalado separadamente) |
 
 ---
 
@@ -98,17 +116,18 @@ node index.js
 
 | Comando | Descrição |
 |---|---|
-| `/recent [player] [servidor]` | Última play do jogador |
-| `/topplays [player] [servidor]` | Top 10 plays do jogador |
+| `/recent [player] [servidor]` | Última play do jogador, com judgments e combo máximo do mapa. Navegável (◀️/▶️) entre até 50 plays recentes |
+| `/topplays [player] [servidor]` | Top plays do jogador, 5 por página, com judgments e combo máximo do mapa. Navegável (◀️/▶️) entre até 100 plays |
 | `/profile [player] [servidor]` | Perfil do jogador |
 | `/compare [player1] [player2]` | Comparação entre dois jogadores |
 | `/whatif [pp] [player] [servidor]` | Simula alterações de PP em uma score |
 | `/wi [pp] [player] [servidor]` | Atalho para /whatif |
 | `/link [player] [servidor]` | Vincula uma conta osu!/Servidor privado ao usuário do Discord |
-| `/language [lang]` | Altera o idioma utilizado pelo bot |
-
+| `/language set/server/status [lang]` | Define ou consulta o idioma do bot — Português, English ou Русский |
 
 O parâmetro `servidor` aceita: `Bancho`, `Daycore` ou `Daycore RX`.
+
+Nos comandos com paginação, só quem executou o comando pode navegar entre as páginas (botões expiram após 2 minutos de inatividade).
 
 ---
 
@@ -117,55 +136,42 @@ O parâmetro `servidor` aceita: `Bancho`, `Daycore` ou `Daycore RX`.
 ```
 KurataniBot/
 ├── commands/
-│ ├── compare.js    
-│ ├── language.js         
-│ ├── link.js             
-│ ├── profile.js         
-│ ├── recent.js           
-│ ├── topplays.js         
-│ ├── whatif.js          
-│ └── wi.js               
-├── osuClient.js          
+│ ├── compare.js
+│ ├── language.js
+│ ├── link.js
+│ ├── profile.js
+│ ├── recent.js
+│ ├── topplays.js
+│ ├── whatif.js
+│ └── wi.js
+├── osuClient.js
+├── beatmapCache.js
 ├── userLink.js
 ├── db.js
 ├── i18n.js
-├── deploy-commands.js    
-├── index.js              
-├── pp_calc.py            
-├── .env.example           
+├── deploy-commands.js
+├── index.js
+├── pp_calc.py
+├── .env.example
 └── package.json
-
 ```
 
-Suporte a Servidores
+### Suporte a servidores
 
-O bot foi desenvolvido para funcionar tanto com o servidor oficial quanto com servidores privados compatíveis.
+O bot foi desenvolvido para funcionar tanto com o servidor oficial quanto com servidores privados compatíveis. Exemplos:
 
-Exemplos:
+- Bancho
+- Daycore
+- Daycore RX
+- Outros servidores que exponham endpoints compatíveis
 
-Bancho
-Daycore
-Daycore RX
-Outros servidores que exponham endpoints compatíveis
+### Configuração de idiomas
 
+O bot possui suporte a múltiplos idiomas (Português, English, Русский) através do sistema localizado em `i18n.js`. As preferências podem ser armazenadas por servidor ou usuário, dependendo da configuração utilizada (`/language set` para o seu idioma pessoal, `/language server` para o padrão do servidor).
 
-```
+### Vinculação de conta
 
-
-Configuração de Idiomas
-O bot possui suporte a múltiplos idiomas através do sistema localizado em i18n.js .
-As preferências podem ser armazenadas por servidor ou usuário, dependendo da configuração
-utilizada.
-
-
-```
-
-
-Vinculação de Conta
-O comando /link permite associar uma conta osu! a um usuário do Discord.
-Após a vinculação, diversos comandos podem utilizar automaticamente a conta associada sem exigir o
-nome do jogador em todas as consultas.
-
+O comando `/link` permite associar uma conta osu! a um usuário do Discord. Após a vinculação, diversos comandos podem utilizar automaticamente a conta associada sem exigir o nome do jogador em todas as consultas.
 
 ---
 
