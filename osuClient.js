@@ -10,6 +10,7 @@
  
 require('dotenv').config();
 const axios = require('axios');
+const beatmapCache = require('./beatmapCache');
  
 const DEFAULT_MODE = process.env.OSU_MODE || 'official';
 const DAYCORE_V1 = 'https://daycore.org/api/v1';
@@ -200,30 +201,56 @@ async function resolvePlayerId(username) {
  * @param {object[]} scores - scores normalizados (resultado de normalizeScoreDaycore)
  * @returns {Promise<object[]>} scores com beatmap.difficulty_rating e beatmap.max_combo preenchidos
  */
-async function enrichBeatmapData(scores) {
-  // Coleta IDs únicos para não fazer requisições duplicadas
-  const uniqueIds = [...new Set(scores.map(s => s.beatmap?.id).filter(Boolean))];
+// Busca um beatmap na API oficial, com 1 retry em caso de rate limit (429).
+async function fetchBeatmap(id) {
+  const cached = beatmapCache.get(id);
+  if (cached) return cached;
 
-  // Busca todos em paralelo
-  const beatmapCache = {};
-  await Promise.all(
-    uniqueIds.map(async (id) => {
-      try {
-        const token = await getOfficialToken();
-        const res = await axios.get(`https://osu.ppy.sh/api/v2/beatmaps/${id}`, {
-          headers: { Authorization: `Bearer ${token}` },
-          timeout: 6000,
-        });
-        beatmapCache[id] = res.data;
-      } catch {
-        beatmapCache[id] = null;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const token = await getOfficialToken();
+      const res = await axios.get(`https://osu.ppy.sh/api/v2/beatmaps/${id}`, {
+        headers: { Authorization: `Bearer ${token}` },
+        timeout: 6000,
+      });
+      beatmapCache.set(id, res.data);
+      return res.data;
+    } catch (err) {
+      if (err.response?.status === 429 && attempt === 0) {
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        continue;
       }
-    })
-  );
+      return null;
+    }
+  }
+  return null;
+}
+
+// Máximo de requisições simultâneas à API do osu! por chamada — evita
+// rajadas grandes (ex: uma página de topplays) estourarem o rate limit.
+const BEATMAP_BATCH_SIZE = 5;
+
+async function enrichBeatmapData(scores) {
+  // Pula mapas que já têm max_combo (ex: modo oficial já traz tudo pronto,
+  // ou o mapa já foi enriquecido antes) — evita requisição desnecessária.
+  const idsNeeded = [...new Set(
+    scores
+      .filter(s => !s.beatmap?.max_combo)
+      .map(s => s.beatmap?.id)
+      .filter(Boolean)
+  )];
+
+  const fetched = {};
+  for (let i = 0; i < idsNeeded.length; i += BEATMAP_BATCH_SIZE) {
+    const batch = idsNeeded.slice(i, i + BEATMAP_BATCH_SIZE);
+    const results = await Promise.all(batch.map(fetchBeatmap));
+    batch.forEach((id, idx) => { fetched[id] = results[idx]; });
+  }
 
   // Aplica os dados aos scores
   return scores.map(score => {
-    const bm = beatmapCache[score.beatmap?.id];
+    if (score.beatmap?.max_combo) return score;
+    const bm = fetched[score.beatmap?.id];
     if (!bm) return score;
     return {
       ...score,
@@ -414,8 +441,12 @@ async function getBestScores(userId, limit = 10, mode = DEFAULT_MODE) {
     limit,
   });
 
-  const scores = await enrichScores(res.scores ?? []);
-  return enrichBeatmapData(scores);
+  // Retorna os scores crus (v1), sem enriquecer com detalhes (v2) nem com
+  // dados de beatmap — isso dispararia uma rajada de requisições pra API
+  // pra TODAS as scores buscadas de uma vez (estourando rate limit quando o
+  // limit é alto). Quem chama enriquece só o que vai exibir (ex: a página
+  // atual) via enrichScores() + enrichBeatmapData().
+  return res.scores ?? [];
 }
  
 async function getRecentScores(userId, limit = 1, mode = DEFAULT_MODE) {
@@ -430,8 +461,9 @@ async function getRecentScores(userId, limit = 1, mode = DEFAULT_MODE) {
     limit,
   });
 
-  const scores = await enrichScores(res.scores ?? []);
-  return enrichBeatmapData(scores);
+  // Idem getBestScores: retorna cru, enriquecimento fica por conta de
+  // quem chama, aplicado só na página exibida.
+  return res.scores ?? [];
 }
  
 async function getAdjustedStars(beatmapId, mods, mode = DEFAULT_MODE) {
@@ -480,6 +512,8 @@ module.exports = {
   getRecentScores,
   getAdjustedStars,
   getFCpp,
+  enrichScores,
+  enrichBeatmapData,
   getUserUrl,
   getMapUrl,
   getModeLabel,

@@ -129,11 +129,21 @@ module.exports = {
         ? `Their pp would change by **+${gain.toFixed(2)}pp** to **${simulatedPP.toFixed(2)}pp**`
         : `Seu PP mudaria **+${gain.toFixed(2)}pp** para **${simulatedPP.toFixed(2)}pp**`;
 
-      // Top 5 plays para contexto, destacando onde a hipotética entraria
+      // Top 5 plays para contexto, destacando onde a hipotética entraria.
+      // Os títulos só precisam ser buscados pras 5 que realmente vão aparecer
+      // aqui, não pras 100 usadas no cálculo — evita requisições desnecessárias.
       let playsPreview = '';
-      const previewList = [...plays, { pp: hypotheticalPP, _hypothetical: true }]
+      let previewList = [...plays, { pp: hypotheticalPP, _hypothetical: true }]
         .sort((a, b) => b.pp - a.pp)
         .slice(0, 5);
+
+      if (mode !== 'official') {
+        const realOnes    = previewList.filter(p => !p._hypothetical);
+        const enrichedMap = new Map(
+          (await osu.enrichScores(realOnes)).map((p, i) => [realOnes[i], p])
+        );
+        previewList = previewList.map(p => p._hypothetical ? p : (enrichedMap.get(p) ?? p));
+      }
 
       previewList.forEach((play, i) => {
         if (play._hypothetical) {

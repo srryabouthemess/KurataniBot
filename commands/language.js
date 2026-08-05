@@ -19,6 +19,7 @@ module.exports = {
             .addChoices(
               { name: 'Português',  value: 'pt' },
               { name: 'English',    value: 'en' },
+              { name: 'Русский',    value: 'ru' },
             )
         )
     )
@@ -35,6 +36,7 @@ module.exports = {
             .addChoices(
               { name: 'Português',  value: 'pt' },
               { name: 'English',    value: 'en' },
+              { name: 'Русский',    value: 'ru' },
             )
         )
     )

@@ -49,7 +49,8 @@ module.exports = {
       if (!user) return interaction.editReply(s.player_not_found);
 
       const stats     = user.statistics;
-      const bestPlays = await osu.getBestScores(user.id, 1, mode);
+      const rawBest   = await osu.getBestScores(user.id, 1, mode);
+      const bestPlays = mode === 'official' ? rawBest : await osu.enrichScores(rawBest);
       const bestPlay  = bestPlays[0] || null;
 
       let topPlayString = s.profile_no_play;

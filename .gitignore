@@ -17,3 +17,12 @@ Thumbs.db
 # Editor
 .vscode/
 .idea/
+
+# Cache local de beatmaps (regenerável, não precisa versionar)
+beatmap_cache.json
+
+# Dados de usuários gerados em runtime (NUNCA commitar — contém IDs
+# do Discord e nomes de usuário reais vinculados por quem usa o bot)
+links.json
+langs.json
+languages.json
