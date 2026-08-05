@@ -53,15 +53,22 @@ def main():
         try:
             beatmap = Beatmap(path=tmp.name)
 
-            calc_kwargs = {
-                "mods":     mods,
-                "n_misses": 0,
-            }
+            calc_kwargs = {"mods": mods}
 
             if n300 >= 0 and n100 >= 0 and n50 >= 0:
-                calc_kwargs["n300"] = n300 + nmiss
-                calc_kwargs["n100"] = n100
-                calc_kwargs["n50"]  = n50
+                # Modo FC: hits reais conhecidos, misses são mesclados ao n300
+                # para estimar o PP "se tivesse sido FC" (usado por getFCpp).
+                calc_kwargs["n300"]     = n300 + nmiss
+                calc_kwargs["n100"]     = n100
+                calc_kwargs["n50"]      = n50
+                calc_kwargs["n_misses"] = 0
+            else:
+                # Modo simulação: n300 desconhecido (a lib completa
+                # automaticamente com o restante dos objetos do mapa), misses
+                # contam como misses reais.
+                if n100 >= 0: calc_kwargs["n100"] = n100
+                if n50  >= 0: calc_kwargs["n50"]  = n50
+                calc_kwargs["n_misses"] = nmiss
 
             if combo >= 0:
                 calc_kwargs["combo"] = combo

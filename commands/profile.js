@@ -1,7 +1,8 @@
-const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
+const { SlashCommandBuilder, EmbedBuilder, ApplicationIntegrationType, InteractionContextType } = require('discord.js');
 const osu = require('../osuClient');
 const { resolvePlayer } = require('../userLink');
 const { t } = require('../i18n');
+const { logError } = require('../logger');
 
 const toDiscordTimestamp = (dateString, format = 'R') => {
   if (!dateString) return 'Unknown';
@@ -14,6 +15,8 @@ module.exports = {
     .setName('profile')
     .setDescription("Show a player's osu! profile")
     .setDescriptionLocalizations({ 'pt-BR': 'Mostra o perfil de um jogador de osu!' })
+    .setIntegrationTypes([ApplicationIntegrationType.GuildInstall, ApplicationIntegrationType.UserInstall])
+    .setContexts([InteractionContextType.Guild, InteractionContextType.BotDM, InteractionContextType.PrivateChannel])
     .addStringOption(option =>
       option
         .setName('player')
@@ -93,7 +96,7 @@ module.exports = {
 
       await interaction.editReply({ embeds: [embed] });
     } catch (error) {
-      console.error(error.response?.data || error);
+      logError('profile', error);
       if (error.response?.status === 404) return interaction.editReply(s.player_not_found);
       interaction.editReply(s.error_generic);
     }

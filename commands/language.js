@@ -1,11 +1,14 @@
-const { SlashCommandBuilder, PermissionFlagsBits } = require('discord.js');
-const { setUserLang, setServerLang, loadLangData, SUPPORTED_LANGS, t } = require('../i18n');
+const { SlashCommandBuilder, PermissionFlagsBits, ApplicationIntegrationType, InteractionContextType } = require('discord.js');
+const { SUPPORTED_LANGS, t } = require('../i18n');
+const { setUserLang, setServerLang, getUserLang, getServerLang } = require('../db');
 
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('language')
     .setDescription('Set your language preference / Defina seu idioma')
     .setDescriptionLocalizations({ 'pt-BR': 'Defina seu idioma preferido' })
+    .setIntegrationTypes([ApplicationIntegrationType.GuildInstall, ApplicationIntegrationType.UserInstall])
+    .setContexts([InteractionContextType.Guild, InteractionContextType.BotDM, InteractionContextType.PrivateChannel])
     .addSubcommand(sub =>
       sub
         .setName('set')
@@ -53,9 +56,8 @@ module.exports = {
 
     // ── /language status ───────────────────────────────────────────────────────
     if (sub === 'status') {
-      const data       = loadLangData();
-      const userLang   = data.users?.[interaction.user.id];
-      const serverLang = interaction.guildId ? data.servers?.[interaction.guildId] : undefined;
+      const userLang   = getUserLang(interaction.user.id);
+      const serverLang = interaction.guildId ? getServerLang(interaction.guildId) : undefined;
 
       const userLine   = userLang
         ? s.lang_current_user(SUPPORTED_LANGS[userLang])

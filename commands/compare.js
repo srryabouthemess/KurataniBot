@@ -1,7 +1,8 @@
-const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
+const { SlashCommandBuilder, EmbedBuilder, ApplicationIntegrationType, InteractionContextType } = require('discord.js');
 const osu = require('../osuClient');
 const { getLink } = require('../db');
 const { t } = require('../i18n');
+const { logError } = require('../logger');
 
 const center = (str, width) => {
   str = String(str);
@@ -16,6 +17,11 @@ module.exports = {
     .setName('compare')
     .setDescription("Compare two players' statistics")
     .setDescriptionLocalizations({ 'pt-BR': 'Compara as estatísticas de dois jogadores' })
+    // Permite instalar o bot na própria conta (User Install) e usar os
+    // comandos em servidores, DM com o bot e DM/grupo entre outros usuários.
+    // Requer "User Install" habilitado em Installation no Developer Portal.
+    .setIntegrationTypes([ApplicationIntegrationType.GuildInstall, ApplicationIntegrationType.UserInstall])
+    .setContexts([InteractionContextType.Guild, InteractionContextType.BotDM, InteractionContextType.PrivateChannel])
     .addStringOption(option =>
       option
         .setName('user1')
@@ -100,7 +106,7 @@ module.exports = {
 
       await interaction.editReply({ embeds: [embed] });
     } catch (error) {
-      console.error(error);
+      logError('compare', error);
       interaction.editReply(s.compare_error);
     }
   },

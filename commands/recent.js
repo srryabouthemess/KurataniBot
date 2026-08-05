@@ -1,7 +1,8 @@
-const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ApplicationIntegrationType, InteractionContextType } = require('discord.js');
 const osu = require('../osuClient');
 const { resolvePlayer } = require('../userLink');
 const { t } = require('../i18n');
+const { logError } = require('../logger');
 
 const FETCH_LIMIT    = 50;
 const COLLECTOR_TIME = 120_000;
@@ -26,6 +27,8 @@ module.exports = {
     .setName('recent')
     .setDescription("Show a player's most recent plays (including fails)")
     .setDescriptionLocalizations({ 'pt-BR': 'Mostra as últimas plays (incluindo falhas) de um jogador' })
+    .setIntegrationTypes([ApplicationIntegrationType.GuildInstall, ApplicationIntegrationType.UserInstall])
+    .setContexts([InteractionContextType.Guild, InteractionContextType.BotDM, InteractionContextType.PrivateChannel])
     .addStringOption(option =>
       option
         .setName('player')
@@ -156,7 +159,7 @@ module.exports = {
         interaction.editReply({ components: [] }).catch(() => {});
       });
     } catch (error) {
-      console.error(error.response?.data || error);
+      logError('recent', error);
       interaction.editReply(s.recent_error);
     }
   },

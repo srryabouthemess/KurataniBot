@@ -4,12 +4,13 @@
  *
  * Idiomas suportados: 'pt' (Português BR), 'en' (English), 'ru' (Русский)
  * Prioridade de resolução: usuário > servidor > 'pt' (default)
+ *
+ * A persistência das preferências de idioma vive em db.js (SQLite), junto
+ * com as outras preferências do usuário (ex: link osu!) — este arquivo cuida
+ * só das strings e da resolução do idioma ativo.
  */
 
-const fs   = require('fs');
-const path = require('path');
-
-const LANG_PATH = path.join(__dirname, 'languages.json');
+const db = require('./db');
 
 // ─── Strings de tradução ──────────────────────────────────────────────────────
 
@@ -81,6 +82,15 @@ const translations = {
     lang_current_user:       (lang) => `🌐 Seu idioma atual: **${lang}**`,
     lang_current_server:     (lang) => `🌐 Idioma do servidor: **${lang}**`,
     lang_current_none:       '🌐 Nenhum idioma definido (usando padrão: Português).',
+
+    simulate_invalid_map:    '❌ Não consegui identificar o mapa. Use o ID do beatmap ou um link (ex: `https://osu.ppy.sh/beatmapsets/123#osu/456`).',
+    simulate_map_not_found:  '❌ Mapa não encontrado.',
+    simulate_calc_error:     '❌ Não consegui calcular o PP para essa simulação. Verifique se os valores fazem sentido para o mapa.',
+    simulate_error:          '❌ Ocorreu um erro ao simular a play.',
+    simulate_mods_none:      'Nenhum',
+    simulate_title:          'Simulação de PP',
+    simulate_combo_fc:       'Full Combo',
+    simulate_footer:         (label) => `Simulação • ${label}`,
   },
 
   en: {
@@ -150,6 +160,15 @@ const translations = {
     lang_current_user:       (lang) => `🌐 Your current language: **${lang}**`,
     lang_current_server:     (lang) => `🌐 Server language: **${lang}**`,
     lang_current_none:       '🌐 No language set (using default: English).',
+
+    simulate_invalid_map:    "❌ Couldn't identify the map. Use the beatmap ID or a link (e.g. `https://osu.ppy.sh/beatmapsets/123#osu/456`).",
+    simulate_map_not_found:  '❌ Map not found.',
+    simulate_calc_error:     "❌ Couldn't calculate pp for this simulation. Check if the values make sense for the map.",
+    simulate_error:          '❌ An error occurred while simulating the play.',
+    simulate_mods_none:      'None',
+    simulate_title:          'PP Simulation',
+    simulate_combo_fc:       'Full Combo',
+    simulate_footer:         (label) => `Simulation • ${label}`,
   },
 
   ru: {
@@ -219,40 +238,17 @@ const translations = {
     lang_current_user:       (lang) => `🌐 Ваш текущий язык: **${lang}**`,
     lang_current_server:     (lang) => `🌐 Язык сервера: **${lang}**`,
     lang_current_none:       '🌐 Язык не установлен (используется стандартный: Русский).',
+
+    simulate_invalid_map:    '❌ Не удалось определить карту. Укажите ID карты или ссылку (например: `https://osu.ppy.sh/beatmapsets/123#osu/456`).',
+    simulate_map_not_found:  '❌ Карта не найдена.',
+    simulate_calc_error:     '❌ Не удалось рассчитать PP для этой симуляции. Проверьте, подходят ли значения для карты.',
+    simulate_error:          '❌ Произошла ошибка при симуляции плея.',
+    simulate_mods_none:      'Нет',
+    simulate_title:          'Симуляция PP',
+    simulate_combo_fc:       'Full Combo',
+    simulate_footer:         (label) => `Симуляция • ${label}`,
   },
 };
-
-// ─── Persistência ─────────────────────────────────────────────────────────────
-
-function loadLangData() {
-  try {
-    return JSON.parse(fs.readFileSync(LANG_PATH, 'utf8'));
-  } catch {
-    return { users: {}, servers: {} };
-  }
-}
-
-function saveLangData(data) {
-  fs.writeFileSync(LANG_PATH, JSON.stringify(data, null, 2), 'utf8');
-}
-
-function setUserLang(discordId, lang) {
-  const data = loadLangData();
-  data.users = data.users ?? {};
-  data.users[discordId] = lang;
-  saveLangData(data);
-}
-
-function setServerLang(guildId, lang) {
-  const data = loadLangData();
-  data.servers = data.servers ?? {};
-  if (lang === null) {
-    delete data.servers[guildId];
-  } else {
-    data.servers[guildId] = lang;
-  }
-  saveLangData(data);
-}
 
 // ─── Resolução de idioma ──────────────────────────────────────────────────────
 
@@ -261,13 +257,12 @@ function setServerLang(guildId, lang) {
  * Prioridade: usuário > servidor > 'pt' (default)
  */
 function t(interaction) {
-  const data       = loadLangData();
-  const userLang   = data.users?.[interaction.user.id];
-  const serverLang = interaction.guildId ? data.servers?.[interaction.guildId] : undefined;
+  const userLang   = db.getUserLang(interaction.user.id);
+  const serverLang = interaction.guildId ? db.getServerLang(interaction.guildId) : null;
   const lang       = userLang ?? serverLang ?? 'pt';
   return translations[lang] ?? translations['pt'];
 }
 
 const SUPPORTED_LANGS = { pt: 'Português', en: 'English', ru: 'Русский' };
 
-module.exports = { t, setUserLang, setServerLang, loadLangData, SUPPORTED_LANGS };
+module.exports = { t, SUPPORTED_LANGS };

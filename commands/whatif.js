@@ -1,7 +1,8 @@
-const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
+const { SlashCommandBuilder, EmbedBuilder, ApplicationIntegrationType, InteractionContextType } = require('discord.js');
 const osu = require('../osuClient');
 const { resolvePlayer } = require('../userLink');
 const { t } = require('../i18n');
+const { logError } = require('../logger');
 
 /**
  * Calcula o PP total ponderado de uma lista de plays.
@@ -17,8 +18,13 @@ function calcWeightedPP(plays) {
  * Retorna null se a play hipotética não entraria no top (PP menor que a última).
  */
 function simulateWhatIf(currentPlays, hypotheticalPP) {
-  // Insere a play hipotética e reordena por PP decrescente
-  const simulated = [...currentPlays, { pp: hypotheticalPP }]
+  // Insere a play hipotética e reordena por PP decrescente. Usamos a mesma
+  // referência de objeto pra achar a posição depois — comparar por valor de
+  // pp (`p.pp === hypotheticalPP`) dava posição errada em caso de empate
+  // exato com uma play real, já que sort() é estável e o array espalhado
+  // deixa a hipotética depois das reais empatadas.
+  const hypothetical = { pp: hypotheticalPP };
+  const simulated = [...currentPlays, hypothetical]
     .sort((a, b) => b.pp - a.pp)
     .slice(0, 100); // mantém só as top 100
 
@@ -26,8 +32,8 @@ function simulateWhatIf(currentPlays, hypotheticalPP) {
   const simulatedPP = calcWeightedPP(simulated);
   const gain        = simulatedPP - currentPP;
 
-  // Posição que a play hipotética ocupa
-  const position = simulated.findIndex(p => p.pp === hypotheticalPP) + 1;
+  // Posição que a play hipotética ocupa (0 se foi cortada do top 100)
+  const position = simulated.indexOf(hypothetical) + 1;
 
   // Se não entrou (PP menor que todas as 100 plays atuais)
   const didEnter = position > 0 && position <= simulated.length;
@@ -40,6 +46,8 @@ module.exports = {
     .setName('whatif')
     .setDescription('Simulate how much pp you would gain from a hypothetical score')
     .setDescriptionLocalizations({ 'pt-BR': 'Simula quanto PP você ganharia com uma play hipotética' })
+    .setIntegrationTypes([ApplicationIntegrationType.GuildInstall, ApplicationIntegrationType.UserInstall])
+    .setContexts([InteractionContextType.Guild, InteractionContextType.BotDM, InteractionContextType.PrivateChannel])
     .addNumberOption(opt =>
       opt
         .setName('pp')
@@ -176,7 +184,7 @@ module.exports = {
 
       await interaction.editReply({ embeds: [embed] });
     } catch (error) {
-      console.error(error);
+      logError('whatif', error);
       interaction.editReply(s.error_generic);
     }
   },

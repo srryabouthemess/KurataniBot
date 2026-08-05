@@ -1,13 +1,16 @@
-const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
+const { SlashCommandBuilder, EmbedBuilder, ApplicationIntegrationType, InteractionContextType } = require('discord.js');
 const { setLink, getLink, removeLink } = require('../db');
 const { t } = require('../i18n');
 const osu = require('../osuClient');
+const { logError } = require('../logger');
 
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('link')
     .setDescription('Link your Discord account to an osu! profile')
     .setDescriptionLocalizations({ 'pt-BR': 'Vincula sua conta Discord a um perfil osu!' })
+    .setIntegrationTypes([ApplicationIntegrationType.GuildInstall, ApplicationIntegrationType.UserInstall])
+    .setContexts([InteractionContextType.Guild, InteractionContextType.BotDM, InteractionContextType.PrivateChannel])
     .addSubcommand(sub =>
       sub
         .setName('set')
@@ -87,7 +90,7 @@ module.exports = {
 
       await interaction.editReply({ embeds: [embed] });
     } catch (error) {
-      console.error(error);
+      logError('link', error);
       interaction.editReply(s.link_error);
     }
   },

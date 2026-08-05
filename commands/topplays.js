@@ -1,7 +1,8 @@
-const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ApplicationIntegrationType, InteractionContextType } = require('discord.js');
 const osu = require('../osuClient');
 const { resolvePlayer } = require('../userLink');
 const { t } = require('../i18n');
+const { logError } = require('../logger');
 
 const PAGE_SIZE     = 5;
 const FETCH_LIMIT    = 100;
@@ -33,6 +34,8 @@ module.exports = {
     .setName('topplays')
     .setDescription("Show a player's top plays")
     .setDescriptionLocalizations({ 'pt-BR': 'Mostra as melhores plays de um jogador' })
+    .setIntegrationTypes([ApplicationIntegrationType.GuildInstall, ApplicationIntegrationType.UserInstall])
+    .setContexts([InteractionContextType.Guild, InteractionContextType.BotDM, InteractionContextType.PrivateChannel])
     .addStringOption(option =>
       option
         .setName('player')
@@ -165,7 +168,7 @@ module.exports = {
         interaction.editReply({ components: [] }).catch(() => {});
       });
     } catch (error) {
-      console.error(error);
+      logError('topplays', error);
       interaction.editReply(s.topplays_error);
     }
   },

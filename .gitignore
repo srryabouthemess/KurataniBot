@@ -23,6 +23,10 @@ beatmap_cache.json
 
 # Dados de usuários gerados em runtime (NUNCA commitar — contém IDs
 # do Discord e nomes de usuário reais vinculados por quem usa o bot)
+bot.db
+bot.db-journal
 links.json
+links.json.migrated
 langs.json
 languages.json
+languages.json.migrated

@@ -89,15 +89,55 @@ function normalizeUserDaycore(playerData, statsData, mode, globalRank = null, co
 }
  
 // ─── Normalização: score ──────────────────────────────────────────────────────
+// Bitmask de mods — usado tanto para decodificar scores quanto para simulação
+const MOD_BITS = {
+  NF: 1, EZ: 2, HD: 8, HR: 16, SD: 32,
+  DT: 64, RX: 128, HT: 256, NC: 512, FL: 1024,
+  SO: 4096, PF: 16384,
+};
+const MOD_MAP = Object.fromEntries(Object.entries(MOD_BITS).map(([name, bit]) => [bit, name]));
+
+// CL (Classic) não tem bit legado — é um mod só-lazer que sinaliza que o
+// score foi jogado com a mecânica antiga (stable) de sliders. Não entra no
+// bitmask (MOD_BITS), mas precisa ser reconhecido como token válido.
+const KNOWN_MOD_TOKENS = new Set([...Object.keys(MOD_BITS), 'CL']);
+
 function decodeMods(bits) {
-  const MOD_MAP = {
-    1: 'NF', 2: 'EZ', 8: 'HD', 16: 'HR', 32: 'SD',
-    64: 'DT', 128: 'RX', 256: 'HT', 512: 'NC', 1024: 'FL',
-    4096: 'SO', 16384: 'PF',
-  };
   return Object.entries(MOD_MAP)
     .filter(([bit]) => Number(bits) & Number(bit))
     .map(([, name]) => name);
+}
+
+/**
+ * Converte uma string de mods (ex: "DT HR", "dthr", "hd,dt") em um array de
+ * acrônimos válidos (ex: ["DT", "HR"]). Ignora tokens desconhecidos.
+ */
+function parseModsString(input) {
+  if (!input) return [];
+  const clean = input.toUpperCase().replace(/[^A-Z]/g, '');
+  const found = [];
+  for (let i = 0; i < clean.length; i += 2) {
+    const token = clean.slice(i, i + 2);
+    if (KNOWN_MOD_TOKENS.has(token) && !found.includes(token)) found.push(token);
+  }
+  return found;
+}
+
+/**
+ * Decide se o cálculo deve usar a mecânica lazer (sliders novos) ou
+ * stable/classic (sliders antigos).
+ *
+ * - Daycore (private/private_rx): servidor não roda lazer, sempre stable.
+ * - Bancho (official): lazer por padrão, EXCETO se o mod CL (Classic)
+ *   estiver presente — nesse caso o score foi jogado com mecânica stable.
+ */
+function shouldUseLazer(mode, mods) {
+  if (mode !== 'official') return false;
+  return !(mods ?? []).includes('CL');
+}
+
+function modsToBits(mods) {
+  return (mods ?? []).reduce((acc, m) => acc | (MOD_BITS[m] ?? 0), 0);
 }
  
 // Mescla dados da v1 (map info) com dados da v2 (score detalhado)
@@ -180,7 +220,9 @@ async function enrichScores(v1Scores) {
  
 // ─── Busca ID do jogador pelo nome (via api v2) ──────────────────────────────
 async function resolvePlayerId(username) {
-  if (!isNaN(username)) return Number(username);
+  // /^\d+$/ em vez de !isNaN(): isNaN('   ') é false (Number('   ') === 0),
+  // então uma string só de espaços virava silenciosamente o ID 0.
+  if (/^\d+$/.test(username.trim())) return Number(username);
  
   const res = await daycoreV2Get('/players', { name: username });
   const results = res?.data ?? [];
@@ -271,12 +313,13 @@ async function enrichBeatmapData(scores) {
 
 
 /**
- * Chama pp_calc.py como processo filho e retorna o PP de FC calculado pelo
+ * Chama pp_calc.py como processo filho e retorna o PP calculado pelo
  * akatsuki-pp-py — o mesmo sistema que o Daycore usa internamente para RX.
  *
+ * @param {number} combo -1 = usar max_combo do mapa (assume FC)
  * Requer: pip install akatsuki-pp-py
  */
-function getFCppPython(beatmapId, modsBits, n300, n100, n50, nmiss) {
+function calcPPPython(beatmapId, modsBits, n300, n100, n50, nmiss, combo = -1) {
   return new Promise((resolve) => {
     const { spawn } = require('child_process');
     const path = require('path');
@@ -292,10 +335,15 @@ function getFCppPython(beatmapId, modsBits, n300, n100, n50, nmiss) {
       String(n100  ?? -1),
       String(n50   ?? -1),
       String(nmiss ?? 0),
-      String(-1),  // combo: -1 = usar max_combo do mapa
+      String(combo ?? -1),
     ];
 
-    const proc = spawn('python', args, { timeout: 12000 });
+    // No Windows o instalador do python.org cria o binário "python"; na
+    // maioria das distros Linux (PEP 394) só "python3" existe por padrão —
+    // sem isso o spawn falha silenciosamente e o RX nunca calcula PP.
+    // PYTHON_BIN no .env permite sobrescrever em qualquer plataforma.
+    const pythonBin = process.env.PYTHON_BIN || (process.platform === 'win32' ? 'python' : 'python3');
+    const proc = spawn(pythonBin, args, { timeout: 12000 });
 
     let output = '';
     proc.stdout.on('data', (d) => { output += d.toString(); });
@@ -303,7 +351,10 @@ function getFCppPython(beatmapId, modsBits, n300, n100, n50, nmiss) {
       const val = parseFloat(output.trim());
       resolve(isNaN(val) ? null : val);
     });
-    proc.on('error', () => resolve(null));
+    proc.on('error', (err) => {
+      console.error(`[calcPPPython] falha ao iniciar "${pythonBin}":`, err.message);
+      resolve(null);
+    });
   });
 }
 
@@ -344,19 +395,14 @@ async function getFCpp(score, mode = DEFAULT_MODE) {
   const n50  = stats.count_50  ?? stats.meh   ?? null;
 
   // Bitmask de mods — ambas as libs usam o mesmo formato
-  const MOD_BITS = {
-    NF: 1, EZ: 2, HD: 8, HR: 16, SD: 32,
-    DT: 64, RX: 128, HT: 256, NC: 512, FL: 1024,
-    SO: 4096, PF: 16384,
-  };
-  const modsBits = (score.mods ?? []).reduce((acc, m) => acc | (MOD_BITS[m] ?? 0), 0);
+  const modsBits = modsToBits(score.mods);
 
   try {
     // ── Relax: akatsuki-pp-py via Python (oppai-2019, mesmo sistema do Daycore) ─
     // O script Python baixa o .osu internamente, então não precisamos fazer
     // o download aqui — evita que uma falha de rede neste trecho mate o PPFC.
     if (mode === 'private_rx') {
-      return await getFCppPython(beatmapId, modsBits, n300, n100, n50, misses);
+      return await calcPPPython(beatmapId, modsBits, n300, n100, n50, misses);
     }
 
     // ── Bancho / Daycore vanilla: rosu-pp-js (algoritmo oficial) ──────────────
@@ -370,11 +416,13 @@ async function getFCpp(score, mode = DEFAULT_MODE) {
     let rosu;
     try { rosu = require('rosu-pp-js'); } catch { return null; }
 
+    const useLazer = shouldUseLazer(mode, score.mods);
+
     const beatmap    = new rosu.Beatmap(beatmapBytes);
-    const difficulty = new rosu.Difficulty({ mods: modsBits });
+    const difficulty = new rosu.Difficulty({ mods: modsBits, lazer: useLazer });
     const diffAttrs  = difficulty.calculate(beatmap);
 
-    const perfParams = { mods: modsBits, misses: 0 };
+    const perfParams = { mods: modsBits, misses: 0, lazer: useLazer };
     if (n300 !== null && n100 !== null && n50 !== null) {
       perfParams.n300 = n300 + misses;
       perfParams.n100 = n100;
@@ -393,8 +441,89 @@ async function getFCpp(score, mode = DEFAULT_MODE) {
   }
 }
 
+/**
+ * Simula o PP de um score hipotético em um mapa específico, dado mods e hits.
+ *
+ * - official / private  → rosu-pp-js (algoritmo oficial osu!lazer, via Wasm)
+ * - private_rx          → akatsuki-pp-py via Python (oppai-2019, mesmo sistema do Daycore)
+ *
+ * @param {number} beatmapId
+ * @param {string[]} mods       - acrônimos de mods, ex: ['DT', 'HR']
+ * @param {object} hits
+ * @param {number} [hits.n100=0]
+ * @param {number} [hits.n50=0]
+ * @param {number} [hits.misses=0]
+ * @param {number} [hits.combo]  - se omitido, assume full combo
+ * @param {string} mode
+ * @returns {Promise<{pp: number, stars: number, maxCombo: number}|null>}
+ */
+async function simulatePP(beatmapId, mods, hits, mode = DEFAULT_MODE) {
+  const modsBits = modsToBits(mods);
+  const n100     = hits.n100   ?? 0;
+  const n50      = hits.n50    ?? 0;
+  const misses   = hits.misses ?? 0;
+  const combo    = hits.combo  ?? -1;
+
+  try {
+    if (mode === 'private_rx') {
+      const bm = await fetchBeatmap(beatmapId);
+      const pp = await calcPPPython(beatmapId, modsBits, -1, n100, n50, misses, combo);
+      if (pp === null) return null;
+      return { pp, stars: bm?.difficulty_rating ?? null, maxCombo: bm?.max_combo ?? null };
+    }
+
+    const response = await axios.get(`https://osu.ppy.sh/osu/${beatmapId}`, {
+      responseType: 'arraybuffer',
+      timeout: 8000,
+    });
+    const beatmapBytes = new Uint8Array(response.data);
+
+    let rosu;
+    try { rosu = require('rosu-pp-js'); } catch { return null; }
+
+    const useLazer = shouldUseLazer(mode, mods);
+
+    const beatmap    = new rosu.Beatmap(beatmapBytes);
+    const difficulty = new rosu.Difficulty({ mods: modsBits, lazer: useLazer });
+    const diffAttrs  = difficulty.calculate(beatmap);
+
+    const perfParams = { mods: modsBits, n100, n50, misses, lazer: useLazer };
+    if (combo >= 0) perfParams.combo = combo;
+
+    const perf   = new rosu.Performance(perfParams);
+    const result = perf.calculate(diffAttrs);
+    const stars  = diffAttrs.stars;
+    const maxCombo = diffAttrs.maxCombo;
+    beatmap.free();
+
+    if (result.pp == null) return null;
+    return { pp: result.pp, stars, maxCombo };
+  } catch {
+    return null;
+  }
+}
+
+/** Extrai o ID numérico de um beatmap a partir de um link ou ID puro. */
+function parseBeatmapId(input) {
+  if (!input) return null;
+  const trimmed = String(input).trim();
+
+  if (/^\d+$/.test(trimmed)) return Number(trimmed);
+
+  // https://osu.ppy.sh/beatmapsets/123#osu/456  → 456
+  // https://osu.ppy.sh/b/456 ou /beatmaps/456     → 456
+  // https://daycore.org/b/456                     → 456
+  const hashMatch = trimmed.match(/#\w+\/(\d+)/);
+  if (hashMatch) return Number(hashMatch[1]);
+
+  const pathMatch = trimmed.match(/\/(?:b|beatmaps)\/(\d+)/);
+  if (pathMatch) return Number(pathMatch[1]);
+
+  return null;
+}
+
 // ─── API pública ──────────────────────────────────────────────────────────────
- 
+
 async function getUser(username, mode = DEFAULT_MODE) {
   if (mode === 'official') {
     return await officialGet(`/users/${username}/osu`);
@@ -517,5 +646,9 @@ module.exports = {
   getUserUrl,
   getMapUrl,
   getModeLabel,
+  getBeatmap: fetchBeatmap,
+  simulatePP,
+  parseBeatmapId,
+  parseModsString,
   DEFAULT_MODE,
 };
