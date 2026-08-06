@@ -105,9 +105,19 @@ module.exports = {
       }
 
       const maxCombo = result.maxCombo ?? beatmap.max_combo ?? null;
-      const comboText = comboOpt != null
-        ? `${comboOpt}x${maxCombo ? `/${maxCombo}x` : ''}`
-        : (maxCombo ? `${maxCombo}x/${maxCombo}x (${s.simulate_combo_fc})` : s.simulate_combo_fc);
+
+      // Um combo maior que o máximo do mapa é impossível; a lib de cálculo já
+      // trata como o máximo, então exibimos o valor real usado em vez de
+      // repetir de volta o número inválido que o usuário digitou.
+      const comboUsed = (comboOpt != null && maxCombo) ? Math.min(comboOpt, maxCombo) : comboOpt;
+
+      // Sem combo informado, o cálculo assume o combo máximo do mapa. Com
+      // misses isso não é um FC de verdade (não existe FC com miss), então o
+      // rótulo muda para deixar claro que é uma suposição.
+      const comboLabel = miss > 0 ? s.simulate_combo_assumed : s.simulate_combo_fc;
+      const comboText = comboUsed != null
+        ? `${comboUsed}x${maxCombo ? `/${maxCombo}x` : ''}`
+        : (maxCombo ? `${maxCombo}x/${maxCombo}x (${comboLabel})` : comboLabel);
 
       const modsText = mods.length > 0 ? `+${mods.join('')}` : s.simulate_mods_none;
       const stars = result.stars != null ? parseFloat(result.stars).toFixed(2) : '?';

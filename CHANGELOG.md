@@ -28,6 +28,10 @@ Registro técnico das mudanças feitas na sessão de 2026-08-05.
 
 - `resolvePlayerId()` tratava uma string só de espaços como ID `0` (`isNaN('   ')` é `false`). Trocado por regex `/^\d+$/`.
 
+- **`/simulate` dizia "Full Combo" mesmo com misses** — sem `combo` informado, o rótulo era sempre "Full Combo", inclusive quando o usuário passava misses (contraditório: não existe FC com miss). Agora vira "combo máximo assumido" nesse caso, deixando a suposição explícita. O PP em si já estava correto (a lib aplica a penalidade de miss mesmo com o combo no máximo).
+
+- **`/simulate` aceitava combo maior que o máximo do mapa** — passar `combo: 400` num mapa de 313 exibia `400x/313x`. A lib já trata como o máximo, então agora o embed mostra o valor efetivamente usado.
+
 - **Star rating errado no `/simulate` do Daycore RX** — o ramo do RX usava `difficulty_rating` da API oficial, que é sempre o valor **sem mods** (ex: mostrava 3.23★ para um mapa +DT que na prática é 4.64★). O ramo do rosu-pp já usava o valor ajustado. Agora o `pp_calc.py` devolve JSON (`{pp, stars, max_combo}`) com os atributos do próprio akatsuki-pp — mesmo algoritmo que calculou o PP, já ajustado pelos mods, e sem custo extra (o processo Python já era iniciado de qualquer forma). `calcPPPython()` passou a retornar objeto; `getFCpp()` continua devolvendo apenas o número.
 
 ## 🔒 Segurança

@@ -90,6 +90,7 @@ const translations = {
     simulate_mods_none:      'Nenhum',
     simulate_title:          'Simulação de PP',
     simulate_combo_fc:       'Full Combo',
+    simulate_combo_assumed:  'combo máximo assumido',
     simulate_footer:         (label) => `Simulação • ${label}`,
   },
 
@@ -168,6 +169,7 @@ const translations = {
     simulate_mods_none:      'None',
     simulate_title:          'PP Simulation',
     simulate_combo_fc:       'Full Combo',
+    simulate_combo_assumed:  'max combo assumed',
     simulate_footer:         (label) => `Simulation • ${label}`,
   },
 
@@ -246,6 +248,7 @@ const translations = {
     simulate_mods_none:      'Нет',
     simulate_title:          'Симуляция PP',
     simulate_combo_fc:       'Full Combo',
+    simulate_combo_assumed:  'предполагается макс. комбо',
     simulate_footer:         (label) => `Симуляция • ${label}`,
   },
 };
