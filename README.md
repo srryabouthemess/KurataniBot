@@ -4,45 +4,32 @@ Bot de Discord para exibir estatísticas do **osu!**, com suporte a **Bancho** (
 
 ## Funcionalidades
 
-Perfil de jogadores
+- Perfil, últimas plays, top plays e comparação entre jogadores (veja [Comandos](#comandos))
+- Vinculação de contas Discord ↔ osu! (`/link`), com preferências por usuário
+- Múltiplos idiomas: Português, English, Русский
+- Funciona em servidores **e** em DM/grupos, via User Install ([detalhes](#uso-em-dm--instalação-pessoal-user-install))
+- Paginação com botões ◀️/▶️ em `/topplays` (5 por página, até 100) e `/recent` (até 50)
+- Judgments (300/100/50/miss) e combo máximo do mapa em `/topplays` e `/recent`
+- Cache local de beatmaps (`beatmapCache.js`) para evitar rate limit da API do osu!
 
-Última play (recent)
+### Cálculo de PP
 
-Top plays
+O PP é calculado **localmente** — tanto o "PP se fosse FC" mostrado em `/topplays` e `/recent`, quanto as simulações do `/simulate`:
 
-Comparação entre jogadores
-
-Simulação de PP (What If)
-
-Simulação de PP num mapa específico a partir de hits hipotéticos (`/simulate`)
-
-Funciona em servidores, DM com o bot e DM/grupo entre outros usuários (User Install)
-
-Vinculação de contas Discord ↔ osu!
-
-Suporte a múltiplos idiomas (Português, English, Русский)
-
-Suporte a Bancho e servidores privados
-
-Navegação por páginas em `/topplays` (5 plays por página, até 100) e `/recent` (até 50 plays), com botões ◀️/▶️
-
-Judgments (300/100/50/miss) e combo máximo do mapa em `/topplays` e `/recent`
-
-O **PP por FC** é calculado localmente:
-- Bancho / Daycore vanilla → [`rosu-pp-js`](https://github.com/MaxOhn/rosu-pp-js) (algoritmo oficial osu!)
-- Daycore RX → [`akatsuki-pp-py`](https://github.com/osuAkatsuki/akatsuki-pp-py) via Python (oppai-2019, mesmo sistema do Daycore)
-
-Cache local de beatmaps (`beatmapCache.js`) para evitar rate limit da API do osu!
+| Servidor | Biblioteca | Observação |
+|---|---|---|
+| Bancho | [`rosu-pp-js`](https://github.com/MaxOhn/rosu-pp-js) | Mecânica lazer por padrão; usa stable quando o score tem o mod **CL** (Classic) |
+| Daycore vanilla | [`rosu-pp-js`](https://github.com/MaxOhn/rosu-pp-js) | Sempre stable/classic (o servidor não roda lazer) |
+| Daycore RX | [`akatsuki-pp-py`](https://github.com/osuAkatsuki/akatsuki-pp-py) via Python | oppai-2019, mesmo sistema que o Daycore usa internamente |
 
 ---
 
 ## Requisitos
 
-- [Node.js](https://nodejs.org/) v22.5+ (usa o módulo nativo `node:sqlite` para persistência)
-- [Python](https://www.python.org/) 3.9+
-- [Git](https://git-scm.com/)
+- [Node.js](https://nodejs.org/) **v22.13+** — usa o módulo nativo `node:sqlite`, que antes da v22.13 exigia a flag `--experimental-sqlite`
 - Uma aplicação no [Discord Developer Portal](https://discord.com/developers/applications)
-- Credenciais da [osu! API v2](https://osu.ppy.sh/home/account/edit#new-oauth-application) (para Bancho)
+- Credenciais da [osu! API v2](https://osu.ppy.sh/home/account/edit#new-oauth-application) — necessárias mesmo para o Daycore, já que os dados de beatmap vêm da API oficial
+- [Python](https://www.python.org/) 3.9+ **apenas se for usar o Daycore RX** (veja o passo 3 da instalação)
 
 ---
 
@@ -53,8 +40,10 @@ Cache local de beatmaps (`beatmapCache.js`) para evitar rate limit da API do osu
 | [`discord.js`](https://discord.js.org/) | ^14.26.2 | Cliente da API do Discord |
 | [`axios`](https://axios-http.com/) | ^1.14.0 | Requisições HTTP às APIs do osu!/Daycore |
 | [`dotenv`](https://github.com/motdotla/dotenv) | ^17.4.0 | Carrega variáveis do `.env` |
-| [`rosu-pp-js`](https://github.com/MaxOhn/rosu-pp-js) | ^3.1.0 | Cálculo de PP por FC (Bancho/Daycore vanilla) |
-| [`akatsuki-pp-py`](https://github.com/osuAkatsuki/akatsuki-pp-py) | — | Cálculo de PP por FC no Daycore RX (via Python, instalado separadamente) |
+| [`rosu-pp-js`](https://github.com/MaxOhn/rosu-pp-js) | ^3.1.0 | Cálculo de PP — FC e `/simulate` (Bancho/Daycore vanilla) |
+| [`akatsuki-pp-py`](https://github.com/osuAkatsuki/akatsuki-pp-py) | — | Cálculo de PP — FC e `/simulate` no Daycore RX (via Python, instalado separadamente) |
+
+> `node:sqlite` (persistência) e `child_process` (ponte com o Python) são módulos nativos do Node — não aparecem no `package.json`.
 
 ---
 
@@ -69,25 +58,22 @@ cd KurataniBot
 **2. Instale as dependências Node**
 ```bash
 npm install
-npm audit fix  # corrige vulnerabilidades conhecidas nas dependências
 ```
 
-**3. Instale a dependência Python** (necessária para FC PP no Daycore RX)
+**3. Instale a dependência Python** — *opcional, só para o Daycore RX*
+
+Sem isso o bot funciona normalmente no Bancho e no Daycore vanilla; apenas os cálculos de PP no **Daycore RX** ficam indisponíveis (`/simulate` retorna erro e o "FC: ~Xpp" não aparece).
+
 ```bash
 pip install akatsuki-pp-py
 ```
 
-> **Windows:** requer o **Visual Studio Build Tools** com o componente "Desenvolvimento para desktop com C++" instalado. Baixe em https://visualstudio.microsoft.com/visual-cpp-build-tools/
+> ⚠️ O `akatsuki-pp-py` é escrito em Rust e **não distribui wheels prontas** para todas as versões de Python — o `pip` costuma compilar do zero (backend `maturin`). Para isso é preciso ter:
 >
-> **Linux:** instale o gcc e as ferramentas de build antes:
-> ```bash
-> # Debian/Ubuntu
-> sudo apt install build-essential python3-dev
-> # Arch
-> sudo pacman -S base-devel python
-> # Fedora
-> sudo dnf install gcc python3-devel
-> ```
+> - **[Rust](https://rustup.rs/)** (`cargo`/`rustc`) — obrigatório, é o que compila a lib
+> - Um linker: **Visual Studio Build Tools** com "Desenvolvimento para desktop com C++" no Windows, ou `build-essential`/`base-devel`/`gcc` + headers do Python no Linux
+>
+> Se o `pip install` falhar com `Cannot import 'maturin'` ou erro de compilação, geralmente é o Rust que está faltando — ou a versão do Python é recente demais para ter wheel publicada. Nesse caso, usar uma versão de Python um pouco mais antiga costuma resolver.
 
 **4. Configure as variáveis de ambiente**
 ```bash
@@ -123,11 +109,12 @@ node index.js
 | `/recent [player] [servidor]` | Última play do jogador, com judgments e combo máximo do mapa. Navegável (◀️/▶️) entre até 50 plays recentes |
 | `/topplays [player] [servidor]` | Top plays do jogador, 5 por página, com judgments e combo máximo do mapa. Navegável (◀️/▶️) entre até 100 plays |
 | `/profile [player] [servidor]` | Perfil do jogador |
-| `/compare [player1] [player2]` | Comparação entre dois jogadores |
+| `/compare [user1] [user2] [servidor]` | Comparação entre dois jogadores (`user1` usa seu `/link` se omitido) |
 | `/whatif [pp] [player] [servidor]` | Simula quanto PP uma nova play de X pp renderia no perfil do jogador |
 | `/wi [pp] [player] [servidor]` | Atalho para /whatif |
 | `/simulate [map] [mods] [n100] [n50] [miss] [combo] [servidor]` | Simula o PP de uma play hipotética (hits específicos) num mapa específico |
-| `/link [player] [servidor]` | Vincula uma conta osu!/Servidor privado ao usuário do Discord |
+| `/link set [player] [servidor]` | Vincula sua conta Discord a um perfil osu!/Daycore |
+| `/link remove` / `/link status` | Remove ou consulta seu link atual |
 | `/language set/server/status [lang]` | Define ou consulta o idioma do bot — Português, English ou Русский |
 
 O parâmetro `servidor` aceita: `Bancho`, `Daycore` ou `Daycore RX`.
@@ -161,25 +148,23 @@ KurataniBot/
 ├── pp_calc.py
 ├── .env.example
 ├── CHANGELOG.md
+├── LICENSE
 └── package.json
 ```
 
+Arquivos gerados em runtime (não versionados): `bot.db` (dados de usuários) e `beatmap_cache.json` (cache de metadados de mapas).
+
 ### Suporte a servidores
 
-O bot foi desenvolvido para funcionar tanto com o servidor oficial quanto com servidores privados compatíveis. Exemplos:
+Os três servidores suportados são **Bancho**, **Daycore** e **Daycore RX**, selecionáveis pela opção `servidor` de cada comando (ou pelo padrão em `OSU_MODE`).
 
-- Bancho
-- Daycore
-- Daycore RX
-- Outros servidores que exponham endpoints compatíveis
+As URLs do Daycore são fixas no código (`osuClient.js`). A maior parte dos endpoints segue o padrão do [bancho.py](https://github.com/osuAkatsuki/bancho.py) (`get_player_scores`, `/players`, `/scores/{id}`), mas o rank global vem de `get_rank_cache`, que é específico do Daycore — ou seja, apontar o bot para outro servidor privado exige editar `osuClient.js`, não basta trocar uma variável de ambiente.
 
-### Configuração de idiomas
+### Preferências de usuário
 
-O bot possui suporte a múltiplos idiomas (Português, English, Русский) através do sistema localizado em `i18n.js`. As preferências podem ser armazenadas por servidor ou usuário, dependendo da configuração utilizada (`/language set` para o seu idioma pessoal, `/language server` para o padrão do servidor).
+Idioma (`/language`) e link de conta (`/link`) ficam guardados em `bot.db` (SQLite), gerenciado por `db.js`. O `i18n.js` cuida só das strings de tradução e da resolução do idioma ativo — a prioridade é **usuário > servidor > Português**.
 
-### Vinculação de conta
-
-O comando `/link` permite associar uma conta osu! a um usuário do Discord. Após a vinculação, diversos comandos podem utilizar automaticamente a conta associada sem exigir o nome do jogador em todas as consultas.
+Após vincular a conta com `/link set`, os comandos que aceitam `player` passam a usá-la automaticamente quando o parâmetro é omitido.
 
 ### Uso em DM / instalação pessoal (User Install)
 

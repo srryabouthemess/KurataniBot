@@ -18,8 +18,10 @@ let DatabaseSync;
 try {
   ({ DatabaseSync } = require('node:sqlite'));
 } catch {
+  // node:sqlite chegou no v22.5.0, mas até o v22.12 exigia a flag
+  // --experimental-sqlite; só a partir do v22.13/v23.4 funciona sem flag.
   console.error(
-    `❌ Este bot requer Node.js 22.5+ (módulo nativo "node:sqlite" indisponível).\n` +
+    `❌ Este bot requer Node.js 22.13+ (módulo nativo "node:sqlite" indisponível).\n` +
     `   Versão atual: ${process.version}. Atualize o Node.js e tente novamente.`
   );
   process.exit(1);
