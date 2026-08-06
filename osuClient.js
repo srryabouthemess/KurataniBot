@@ -313,10 +313,15 @@ async function enrichBeatmapData(scores) {
 
 
 /**
- * Chama pp_calc.py como processo filho e retorna o PP calculado pelo
+ * Chama pp_calc.py como processo filho e retorna os atributos calculados pelo
  * akatsuki-pp-py — o mesmo sistema que o Daycore usa internamente para RX.
  *
+ * O `stars` retornado já considera os mods e vem do mesmo algoritmo que
+ * calculou o PP, então é mais fiel ao RX do que o difficulty_rating da API
+ * oficial (que é sempre sem mods).
+ *
  * @param {number} combo -1 = usar max_combo do mapa (assume FC)
+ * @returns {Promise<{pp: number, stars: number, maxCombo: number}|null>}
  * Requer: pip install akatsuki-pp-py
  */
 function calcPPPython(beatmapId, modsBits, n300, n100, n50, nmiss, combo = -1) {
@@ -348,8 +353,14 @@ function calcPPPython(beatmapId, modsBits, n300, n100, n50, nmiss, combo = -1) {
     let output = '';
     proc.stdout.on('data', (d) => { output += d.toString(); });
     proc.on('close', () => {
-      const val = parseFloat(output.trim());
-      resolve(isNaN(val) ? null : val);
+      try {
+        const data = JSON.parse(output.trim());
+        // O script imprime `null` quando não consegue calcular
+        if (!data || typeof data.pp !== 'number') return resolve(null);
+        resolve({ pp: data.pp, stars: data.stars, maxCombo: data.max_combo });
+      } catch {
+        resolve(null);
+      }
     });
     proc.on('error', (err) => {
       console.error(`[calcPPPython] falha ao iniciar "${pythonBin}":`, err.message);
@@ -402,7 +413,8 @@ async function getFCpp(score, mode = DEFAULT_MODE) {
     // O script Python baixa o .osu internamente, então não precisamos fazer
     // o download aqui — evita que uma falha de rede neste trecho mate o PPFC.
     if (mode === 'private_rx') {
-      return await calcPPPython(beatmapId, modsBits, n300, n100, n50, misses);
+      const result = await calcPPPython(beatmapId, modsBits, n300, n100, n50, misses);
+      return result?.pp ?? null;
     }
 
     // ── Bancho / Daycore vanilla: rosu-pp-js (algoritmo oficial) ──────────────
@@ -466,10 +478,9 @@ async function simulatePP(beatmapId, mods, hits, mode = DEFAULT_MODE) {
 
   try {
     if (mode === 'private_rx') {
-      const bm = await fetchBeatmap(beatmapId);
-      const pp = await calcPPPython(beatmapId, modsBits, -1, n100, n50, misses, combo);
-      if (pp === null) return null;
-      return { pp, stars: bm?.difficulty_rating ?? null, maxCombo: bm?.max_combo ?? null };
+      // stars/maxCombo vêm do próprio akatsuki-pp (já ajustados pelos mods),
+      // então não precisamos consultar a API oficial aqui.
+      return await calcPPPython(beatmapId, modsBits, -1, n100, n50, misses, combo);
     }
 
     const response = await axios.get(`https://osu.ppy.sh/osu/${beatmapId}`, {

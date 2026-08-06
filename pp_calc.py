@@ -1,17 +1,25 @@
 #!/usr/bin/env python3
 """
-pp_calc.py - Calculador de FC PP para o KurataniBot
+pp_calc.py - Calculador de PP (algoritmo Akatsuki/oppai-2019) para o KurataniBot
 Uso: python pp_calc.py <beatmap_id> <mods_bits> <n300> <n100> <n50> <nmiss> <combo>
 
 Valores -1 indicam "não disponível":
   n300/n100/n50 = -1  → akatsuki-pp-py assume SS
   combo         = -1  → usa max_combo do mapa (FC)
 
-Retorna apenas o valor de PP no stdout, ou "null" em caso de erro.
-Requer: pip install akatsuki-pp-py
+Imprime no stdout um JSON com os atributos calculados:
+  {"pp": 247.1847, "stars": 4.6353, "max_combo": 730}
+ou `null` em caso de erro.
+
+O star rating vem do mesmo algoritmo que calculou o PP e já considera os
+mods — por isso é preferível ao difficulty_rating da API oficial, que é
+sempre o valor sem mods.
+
+Requer: pip install akatsuki-pp-py (use Python <= 3.11, veja o README)
 """
 
 import sys
+import json
 import urllib.request
 import tempfile
 import os
@@ -75,7 +83,11 @@ def main():
 
             calc   = Calculator(**calc_kwargs)
             result = calc.performance(beatmap)
-            print(f"{result.pp:.4f}")
+            print(json.dumps({
+                "pp":        round(result.pp, 4),
+                "stars":     round(result.difficulty.stars, 4),
+                "max_combo": result.difficulty.max_combo,
+            }))
 
         finally:
             os.unlink(tmp.name)
