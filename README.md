@@ -29,7 +29,7 @@ O PP é calculado **localmente** — tanto o "PP se fosse FC" mostrado em `/topp
 - [Node.js](https://nodejs.org/) **v22.13+** — usa o módulo nativo `node:sqlite`, que antes da v22.13 exigia a flag `--experimental-sqlite`
 - Uma aplicação no [Discord Developer Portal](https://discord.com/developers/applications)
 - Credenciais da [osu! API v2](https://osu.ppy.sh/home/account/edit#new-oauth-application) — necessárias mesmo para o Daycore, já que os dados de beatmap vêm da API oficial
-- [Python](https://www.python.org/) 3.9+ **apenas se for usar o Daycore RX** (veja o passo 3 da instalação)
+- [Python](https://www.python.org/) **3.9–3.11** — *apenas se for usar o Daycore RX*. A lib de PP do RX não tem wheel para 3.12+ (veja o passo 3 da instalação)
 
 ---
 
@@ -68,12 +68,23 @@ Sem isso o bot funciona normalmente no Bancho e no Daycore vanilla; apenas os c�
 pip install akatsuki-pp-py
 ```
 
-> ⚠️ O `akatsuki-pp-py` é escrito em Rust e **não distribui wheels prontas** para todas as versões de Python — o `pip` costuma compilar do zero (backend `maturin`). Para isso é preciso ter:
+> ⚠️ **Use Python 3.11 ou anterior para esta lib.** O `akatsuki-pp-py` (1.0.5) só publica wheels prontas até o **cp311**. Em Python 3.12+ o `pip` tenta compilar do zero, e a compilação **falha**: o pacote usa PyO3 0.17, que não suporta interpretadores mais novos. Instalar o Rust não resolve isso.
 >
-> - **[Rust](https://rustup.rs/)** (`cargo`/`rustc`) — obrigatório, é o que compila a lib
-> - Um linker: **Visual Studio Build Tools** com "Desenvolvimento para desktop com C++" no Windows, ou `build-essential`/`base-devel`/`gcc` + headers do Python no Linux
+> Se o seu Python padrão for mais novo, instale um 3.11 ao lado (ele não substitui o existente) e aponte o bot para ele:
 >
-> Se o `pip install` falhar com `Cannot import 'maturin'` ou erro de compilação, geralmente é o Rust que está faltando — ou a versão do Python é recente demais para ter wheel publicada. Nesse caso, usar uma versão de Python um pouco mais antiga costuma resolver.
+> ```bash
+> # Windows (winget) — ou baixe de python.org
+> winget install --id Python.Python.3.11 --exact
+> py -3.11 -m pip install akatsuki-pp-py
+> ```
+>
+> Depois defina no `.env` o caminho desse interpretador:
+>
+> ```
+> PYTHON_BIN=C:/caminho/para/Python311/python.exe
+> ```
+>
+> Sinais de que é este o problema: `pip` baixando um `.tar.gz` em vez de `.whl`, ou erros como `Cannot import 'maturin'` / `the configured Python interpreter version is newer than PyO3's maximum supported version`.
 
 **4. Configure as variáveis de ambiente**
 ```bash
