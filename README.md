@@ -63,22 +63,173 @@ node index.js             # inicia o bot
 
 O `deploy-commands.js` só precisa ser executado de novo quando algum comando mudar.
 
+### Instalando o Node no seu sistema
+
+<details>
+<summary><b>Windows</b></summary>
+
+```powershell
+winget install OpenJS.NodeJS.LTS
+```
+
+Ou baixe o instalador em [nodejs.org](https://nodejs.org/).
+
+</details>
+
+<details>
+<summary><b>Linux — Debian / Ubuntu</b></summary>
+
+O `apt` costuma trazer uma versão antiga demais. Use o [nvm](https://github.com/nvm-sh/nvm) ou o repositório do [NodeSource](https://github.com/nodesource/distributions):
+
+```bash
+# com nvm (não precisa de root)
+nvm install 22
+nvm use 22
+```
+
+</details>
+
+<details>
+<summary><b>Linux — Arch</b></summary>
+
+```bash
+sudo pacman -S nodejs npm
+```
+
+</details>
+
+<details>
+<summary><b>Linux — Fedora</b></summary>
+
+```bash
+sudo dnf install nodejs
+```
+
+</details>
+
+<details>
+<summary><b>macOS</b></summary>
+
+```bash
+brew install node
+```
+
+</details>
+
+Confira a versão com `node --version` — precisa ser **22.13 ou superior**.
+
 ---
 
 ## Cálculo de PP no Daycore RX (opcional)
 
 O Relax usa um sistema de PP diferente, calculado por uma biblioteca Python. **Sem esse passo o bot funciona normalmente** no Bancho e no Daycore vanilla — só os valores de PP do RX ficam indisponíveis.
 
-Para habilitar, use **Python 3.11 ou anterior** (a biblioteca não tem suporte para 3.12+):
+Para habilitar, você precisa de **Python 3.11 ou anterior** — a biblioteca não tem suporte para 3.12+. Como os sistemas atuais já vêm com versões mais novas, quase sempre é preciso instalar um 3.11 ao lado e apontar o bot para ele com a variável `PYTHON_BIN` no `.env`.
+
+<details>
+<summary><b>Windows</b></summary>
+
+```powershell
+winget install --id Python.Python.3.11 --exact
+py -3.11 -m pip install akatsuki-pp-py
+```
+
+No `.env`:
+
+```
+PYTHON_BIN=C:/Users/SEU_USUARIO/AppData/Local/Programs/Python/Python311/python.exe
+```
+
+</details>
+
+<details>
+<summary><b>Linux — Debian / Ubuntu</b></summary>
 
 ```bash
-pip install akatsuki-pp-py
+sudo add-apt-repository ppa:deadsnakes/ppa
+sudo apt update
+sudo apt install python3.11 python3.11-venv
+
+python3.11 -m venv ~/.kuratanibot-venv
+~/.kuratanibot-venv/bin/pip install akatsuki-pp-py
 ```
 
-Se o seu Python padrão for mais novo, instale um 3.11 ao lado e indique o caminho dele no `.env`:
+No `.env`:
 
 ```
-PYTHON_BIN=C:/caminho/para/Python311/python.exe
+PYTHON_BIN=/home/SEU_USUARIO/.kuratanibot-venv/bin/python
+```
+
+> O PPA `deadsnakes` é para Ubuntu. No Debian, instale o 3.11 pelo [pyenv](https://github.com/pyenv/pyenv).
+
+</details>
+
+<details>
+<summary><b>Linux — Arch</b></summary>
+
+O Arch só empacota o Python mais recente, então instale o 3.11 pelo AUR (pacote `python311`) ou pelo [pyenv](https://github.com/pyenv/pyenv). Depois:
+
+```bash
+python3.11 -m venv ~/.kuratanibot-venv
+~/.kuratanibot-venv/bin/pip install akatsuki-pp-py
+```
+
+No `.env`:
+
+```
+PYTHON_BIN=/home/SEU_USUARIO/.kuratanibot-venv/bin/python
+```
+
+</details>
+
+<details>
+<summary><b>Linux — Fedora</b></summary>
+
+```bash
+sudo dnf install python3.11
+
+python3.11 -m venv ~/.kuratanibot-venv
+~/.kuratanibot-venv/bin/pip install akatsuki-pp-py
+```
+
+No `.env`:
+
+```
+PYTHON_BIN=/home/SEU_USUARIO/.kuratanibot-venv/bin/python
+```
+
+</details>
+
+<details>
+<summary><b>macOS</b></summary>
+
+```bash
+brew install python@3.11
+
+python3.11 -m venv ~/.kuratanibot-venv
+~/.kuratanibot-venv/bin/pip install akatsuki-pp-py
+```
+
+No `.env`:
+
+```
+PYTHON_BIN=/Users/SEU_USUARIO/.kuratanibot-venv/bin/python
+```
+
+</details>
+
+**Por que o ambiente virtual (`venv`) no Linux e no macOS?** Nesses sistemas o `pip` costuma recusar instalações no Python do sistema. O `venv` cria uma instalação isolada e evita esse erro — e o `PYTHON_BIN` faz o bot usar exatamente esse Python.
+
+Para conferir se deu certo, rode o comando abaixo dentro da pasta do bot, trocando o caminho pelo seu:
+
+```bash
+/caminho/do/seu/python pp_calc.py 1103981 64 -1 5 0 0 -1
+```
+
+Deu certo se a saída for parecida com esta — se vier `null`, a biblioteca não está instalada nesse Python:
+
+```json
+{"pp": 88.7373, "stars": 4.5402, "max_combo": 313}
 ```
 
 ---
