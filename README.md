@@ -25,7 +25,7 @@ Alguns detalhes úteis:
 - Depois de usar `/link`, você não precisa mais digitar seu nome nos outros comandos.
 - Todos os comandos aceitam a opção **servidor** (`Bancho`, `Daycore` ou `Daycore RX`).
 - Em `/topplays` e `/recent` dá pra navegar com os botões ◀️ ▶️ (só quem usou o comando; expiram após 2 minutos **sem uso**, e o contador reinicia a cada clique).
-- O `/wi` é um atalho para o `/whatif`.
+- Atalhos: `/wi` para o `/whatif` e `/rs` para o `/recent`.
 
 ### Vinculando mais de um servidor
 

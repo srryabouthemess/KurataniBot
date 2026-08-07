@@ -22,6 +22,19 @@ const BUCKETS = {
   compute: { delay: 2, span: 20, limit: 5 },
 };
 
+/**
+ * Aliases → comando canônico.
+ *
+ * O bucket é escolhido pelo nome do comando invocado, então um alias que não
+ * estivesse mapeado caía no 'default' e driblava o cooldown mais rígido do
+ * comando original — era o caso do /wi, que custa o mesmo que o /whatif.
+ * Resolver aqui evita que o próximo alias repita o problema.
+ */
+const ALIASES = {
+  wi: 'whatif',
+  rs: 'recent',
+};
+
 /** Qual bucket cada comando usa. Ausente = 'default'. */
 const COMMAND_BUCKET = {
   topplays: 'heavy',
@@ -44,7 +57,8 @@ const state = new Map(Object.keys(BUCKETS).map(name => [name, new Map()]));
  * @returns {number} segundos de espera (0 = liberado)
  */
 function check(userId, commandName) {
-  const bucketName = COMMAND_BUCKET[commandName] ?? 'default';
+  const canonical  = ALIASES[commandName] ?? commandName;
+  const bucketName = COMMAND_BUCKET[canonical] ?? 'default';
   const { delay, span, limit } = BUCKETS[bucketName];
   const users = state.get(bucketName);
 
