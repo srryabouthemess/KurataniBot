@@ -7,46 +7,49 @@
  * isso gera rajadas de requisições paralelas que estouram o rate limit da API
  * (resultando em max_combo faltando aleatoriamente em /topplays e /recent).
  *
- * Persistido em disco (beatmap_cache.json) e mantido em memória durante a execução.
- * TTL longo (30 dias) — esses dados praticamente não mudam para mapas ranked.
+ * O armazenamento vive em bot.db (tabela beatmap_meta). Antes era um
+ * beatmap_cache.json reescrito por inteiro (JSON.stringify do objeto todo) a
+ * cada mapa novo, sem limite de tamanho nem evicção — tudo bem com 15 mapas,
+ * caro com alguns milhares. Este módulo continua existindo como fachada para
+ * não espalhar chamadas de db.* pelo osuClient.
  */
 
 const fs   = require('fs');
 const path = require('path');
+const db   = require('./db');
 
-const CACHE_PATH = path.join(__dirname, 'beatmap_cache.json');
-const TTL_MS      = 30 * 24 * 60 * 60 * 1000; // 30 dias
+const OLD_CACHE_PATH = path.join(__dirname, 'beatmap_cache.json');
 
-let cache = {};
-try {
-  cache = JSON.parse(fs.readFileSync(CACHE_PATH, 'utf8'));
-} catch {
-  cache = {};
-}
+// ─── Migração única do JSON antigo ────────────────────────────────────────────
+function migrateFromJsonIfNeeded() {
+  if (!fs.existsSync(OLD_CACHE_PATH)) return;
 
-// Debounce da escrita em disco — evita I/O a cada mapa individual quando
-// vários chegam juntos (ex: página de topplays com 5 mapas novos).
-let saveTimeout = null;
-function persist() {
-  clearTimeout(saveTimeout);
-  saveTimeout = setTimeout(() => {
-    fs.writeFile(CACHE_PATH, JSON.stringify(cache), () => {});
-  }, 500);
-}
-
-function get(beatmapId) {
-  const entry = cache[beatmapId];
-  if (!entry) return null;
-  if (Date.now() - entry.cachedAt > TTL_MS) {
-    delete cache[beatmapId];
-    return null;
+  let old;
+  try {
+    old = JSON.parse(fs.readFileSync(OLD_CACHE_PATH, 'utf8'));
+  } catch {
+    // Arquivo corrompido: não vale a pena migrar, o cache se reconstrói sozinho
+    fs.renameSync(OLD_CACHE_PATH, `${OLD_CACHE_PATH}.corrupt`);
+    return;
   }
-  return entry.data;
+
+  let migrated = 0;
+  for (const [mapId, entry] of Object.entries(old)) {
+    // O formato antigo era { data, cachedAt }; só migra o que ainda tem dado.
+    if (entry?.data) {
+      db.setBeatmapMeta(Number(mapId), entry.data);
+      migrated++;
+    }
+  }
+
+  // Renomeia em vez de apagar — fica como backup, igual à migração do db.js.
+  fs.renameSync(OLD_CACHE_PATH, `${OLD_CACHE_PATH}.migrated`);
+  console.log(`[beatmapCache] Migrados ${migrated} beatmap(s) de beatmap_cache.json para bot.db.`);
 }
 
-function set(beatmapId, data) {
-  cache[beatmapId] = { data, cachedAt: Date.now() };
-  persist();
-}
+migrateFromJsonIfNeeded();
+
+const get = (beatmapId) => db.getBeatmapMeta(beatmapId);
+const set = (beatmapId, data) => db.setBeatmapMeta(beatmapId, data);
 
 module.exports = { get, set };

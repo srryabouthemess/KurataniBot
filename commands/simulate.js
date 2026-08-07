@@ -1,4 +1,4 @@
-const { SlashCommandBuilder, EmbedBuilder, ApplicationIntegrationType, InteractionContextType } = require('discord.js');
+const { SlashCommandBuilder, EmbedBuilder, ApplicationIntegrationType, InteractionContextType, MessageFlags } = require('discord.js');
 const osu = require('../osuClient');
 const { t } = require('../i18n');
 const { logError } = require('../logger');
@@ -31,6 +31,9 @@ module.exports = {
         .setDescriptionLocalizations({ 'pt-BR': 'Quantidade de 100s' })
         .setRequired(false)
         .setMinValue(0)
+        // Nenhum mapa de osu! chega perto disso (os maiores têm ~40k objetos).
+        // O teto evita entregar um inteiro gigante à lib nativa de cálculo.
+        .setMaxValue(100000)
     )
     .addIntegerOption(opt =>
       opt
@@ -39,6 +42,7 @@ module.exports = {
         .setDescriptionLocalizations({ 'pt-BR': 'Quantidade de 50s' })
         .setRequired(false)
         .setMinValue(0)
+        .setMaxValue(100000)
     )
     .addIntegerOption(opt =>
       opt
@@ -47,6 +51,7 @@ module.exports = {
         .setDescriptionLocalizations({ 'pt-BR': 'Quantidade de misses' })
         .setRequired(false)
         .setMinValue(0)
+        .setMaxValue(100000)
     )
     .addIntegerOption(opt =>
       opt
@@ -55,6 +60,7 @@ module.exports = {
         .setDescriptionLocalizations({ 'pt-BR': 'Combo máximo atingido (padrão: full combo)' })
         .setRequired(false)
         .setMinValue(0)
+        .setMaxValue(100000)
     )
     .addStringOption(opt =>
       opt
@@ -82,7 +88,7 @@ module.exports = {
 
     const beatmapId = osu.parseBeatmapId(mapInput);
     if (!beatmapId) {
-      return interaction.reply({ content: s.simulate_invalid_map, ephemeral: true });
+      return interaction.reply({ content: s.simulate_invalid_map, flags: MessageFlags.Ephemeral });
     }
 
     const mods = osu.parseModsString(modsInput);

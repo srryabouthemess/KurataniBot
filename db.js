@@ -36,6 +36,11 @@ const OLD_LANGS_PATH = path.join(__dirname, 'languages.json');
 
 const db = new DatabaseSync(DB_PATH);
 
+// WAL melhora leitura concorrente e deixa a escrita mais barata; o bot lê o
+// cache de mapas com muito mais frequência do que escreve.
+db.exec('PRAGMA journal_mode = WAL');
+db.exec('PRAGMA synchronous = NORMAL');
+
 db.exec(`
   CREATE TABLE IF NOT EXISTS users (
     discord_id  TEXT PRIMARY KEY,
@@ -48,7 +53,125 @@ db.exec(`
     guild_id TEXT PRIMARY KEY,
     lang     TEXT
   );
+
+  -- Um link por CONTA, não por opção de servidor: 'private' (Daycore) e
+  -- 'private_rx' (Daycore RX) são o mesmo cadastro no Daycore, mudando só o
+  -- mode (0 vs 4). Guardar os dois separadamente obrigaria a pessoa a linkar
+  -- o mesmo nick duas vezes.
+  CREATE TABLE IF NOT EXISTS user_links (
+    discord_id TEXT    NOT NULL,
+    namespace  TEXT    NOT NULL,  -- 'official' | 'daycore'
+    osu_user   TEXT    NOT NULL,
+    osu_id     INTEGER,
+    PRIMARY KEY (discord_id, namespace)
+  );
+
+  -- Conteúdo bruto dos arquivos .osu. Antes eram baixados de novo (≈50KB cada)
+  -- a cada cálculo de PP — inclusive ao virar página no /topplays, que refaz o
+  -- cálculo das mesmas 5 plays. Equivale à osu_map_file_content do BathBot.
+  CREATE TABLE IF NOT EXISTS beatmap_files (
+    map_id     INTEGER PRIMARY KEY,
+    content    BLOB    NOT NULL,
+    fetched_at INTEGER NOT NULL
+  );
+
+  -- Metadados de beatmap (max_combo, difficulty_rating, título, artista).
+  -- Substitui o beatmap_cache.json, que reescrevia o arquivo inteiro a cada
+  -- mapa novo e não tinha limite de tamanho.
+  CREATE TABLE IF NOT EXISTS beatmap_meta (
+    map_id    INTEGER PRIMARY KEY,
+    data      TEXT    NOT NULL,
+    cached_at INTEGER NOT NULL
+  );
+
+  -- Atributos de dificuldade já calculados, por combinação mapa+mods+mecânica.
+  -- Espelha a osu_map_difficulty do BathBot (PRIMARY KEY (map_id, mods)) e
+  -- elimina o POST em /beatmaps/{id}/attributes que o getAdjustedStars fazia
+  -- a cada exibição.
+  CREATE TABLE IF NOT EXISTS map_difficulty (
+    map_id    INTEGER NOT NULL,
+    mods_bits INTEGER NOT NULL,
+    lazer     INTEGER NOT NULL,
+    stars     REAL    NOT NULL,
+    max_combo INTEGER,
+    PRIMARY KEY (map_id, mods_bits, lazer)
+  );
+
+  -- Estado interno do bot (ex: hash do conjunto de slash commands já
+  -- registrado no Discord).
+  CREATE TABLE IF NOT EXISTS meta (
+    key   TEXT PRIMARY KEY,
+    value TEXT
+  );
 `);
+
+// ─── Migração de schema: users.osu_id ─────────────────────────────────────────
+// O link guardava só o nome do jogador, então quem trocasse de nick no osu!
+// tinha o link quebrado silenciosamente (aparecia como "jogador não
+// encontrado"). O ID nunca muda — passamos a guardá-lo e a usá-lo como fonte
+// da verdade, mantendo o nome só para exibição.
+// SQLite não tem ADD COLUMN IF NOT EXISTS, então checamos antes.
+{
+  const columns = db.prepare('PRAGMA table_info(users)').all();
+  if (!columns.some(c => c.name === 'osu_id')) {
+    db.exec('ALTER TABLE users ADD COLUMN osu_id INTEGER');
+  }
+  // Servidor usado quando o comando não especifica um. Guarda o valor
+  // completo ('official' | 'private' | 'private_rx') para lembrar a
+  // preferência entre Daycore vanilla e RX, que compartilham a mesma conta.
+  if (!columns.some(c => c.name === 'preferred_server')) {
+    db.exec('ALTER TABLE users ADD COLUMN preferred_server TEXT');
+  }
+}
+
+// Marca de último uso, para a evicção do cache de .osu ser LRU e não FIFO —
+// sem ela um mapa popular baixado há muito tempo seria descartado antes de um
+// mapa recente que ninguém mais consulta.
+{
+  const columns = db.prepare('PRAGMA table_info(beatmap_files)').all();
+  if (columns.length > 0 && !columns.some(c => c.name === 'last_used')) {
+    db.exec('ALTER TABLE beatmap_files ADD COLUMN last_used INTEGER');
+    db.exec('UPDATE beatmap_files SET last_used = fetched_at WHERE last_used IS NULL');
+  }
+}
+
+/**
+ * Namespace de conta a que um servidor pertence.
+ * Daycore vanilla e RX são a mesma conta, então compartilham o link.
+ */
+function linkNamespace(server) {
+  return server === 'official' ? 'official' : 'daycore';
+}
+
+// ─── Migração: link único → link por conta ────────────────────────────────────
+// O modelo antigo guardava um só link em users(osu_user, osu_server, osu_id),
+// então linkar o Daycore apagava o link do Bancho. Move o link existente para
+// user_links e adota o servidor dele como preferido.
+{
+  const alreadyMigrated = db.prepare("SELECT value FROM meta WHERE key = 'links_migrated'").get();
+  if (!alreadyMigrated) {
+    const rows = db
+      .prepare('SELECT discord_id, osu_user, osu_server, osu_id FROM users WHERE osu_user IS NOT NULL')
+      .all();
+
+    const insert = db.prepare(`
+      INSERT INTO user_links (discord_id, namespace, osu_user, osu_id) VALUES (?, ?, ?, ?)
+      ON CONFLICT(discord_id, namespace) DO NOTHING
+    `);
+    const setPreferred = db.prepare('UPDATE users SET preferred_server = ? WHERE discord_id = ?');
+
+    for (const row of rows) {
+      const server = row.osu_server ?? 'official';
+      insert.run(row.discord_id, linkNamespace(server), row.osu_user, row.osu_id ?? null);
+      setPreferred.run(server, row.discord_id);
+    }
+
+    db.prepare("INSERT INTO meta (key, value) VALUES ('links_migrated', ?)").run(String(Date.now()));
+    if (rows.length > 0) {
+      console.log(`[db] Migrados ${rows.length} link(s) para o modelo por conta (user_links).`);
+    }
+  }
+}
 
 // ─── Migração única dos arquivos JSON antigos ─────────────────────────────────
 // Só roda se ainda houver arquivos antigos no disco e a tabela estiver vazia
@@ -106,24 +229,74 @@ migrateFromJsonIfNeeded();
 
 // ─── Links osu! ────────────────────────────────────────────────────────────────
 
-function setLink(discordId, osuUser, server) {
+/**
+ * Cria ou atualiza o link do usuário para a conta do servidor indicado e
+ * adota esse servidor como preferido (o último linkado vira o padrão).
+ */
+function setLink(discordId, server, osuUser, osuId = null) {
   db.prepare(`
-    INSERT INTO users (discord_id, osu_user, osu_server) VALUES (?, ?, ?)
-    ON CONFLICT(discord_id) DO UPDATE SET osu_user = excluded.osu_user, osu_server = excluded.osu_server
-  `).run(discordId, osuUser, server);
+    INSERT INTO user_links (discord_id, namespace, osu_user, osu_id) VALUES (?, ?, ?, ?)
+    ON CONFLICT(discord_id, namespace) DO UPDATE SET
+      osu_user = excluded.osu_user, osu_id = excluded.osu_id
+  `).run(discordId, linkNamespace(server), osuUser, osuId);
+
+  setPreferredServer(discordId, server);
 }
 
-function getLink(discordId) {
-  const row = db.prepare('SELECT osu_user, osu_server FROM users WHERE discord_id = ?').get(discordId);
-  if (!row || !row.osu_user) return null;
-  return { osu_user: row.osu_user, server: row.osu_server };
+/** Link do usuário para a conta do servidor indicado, ou null. */
+function getLink(discordId, server) {
+  const row = db
+    .prepare('SELECT osu_user, osu_id FROM user_links WHERE discord_id = ? AND namespace = ?')
+    .get(discordId, linkNamespace(server));
+  if (!row) return null;
+  return { osu_user: row.osu_user, osu_id: row.osu_id ?? null };
 }
 
-function removeLink(discordId) {
-  const existing = getLink(discordId);
-  if (!existing) return false;
-  db.prepare('UPDATE users SET osu_user = NULL, osu_server = NULL WHERE discord_id = ?').run(discordId);
-  return true;
+/** Todos os links do usuário: [{ namespace, osu_user, osu_id }] */
+function getAllLinks(discordId) {
+  return db
+    .prepare('SELECT namespace, osu_user, osu_id FROM user_links WHERE discord_id = ? ORDER BY namespace')
+    .all(discordId);
+}
+
+/**
+ * Remove o link de um servidor, ou todos se `server` for null.
+ * @returns {number} quantos links foram removidos
+ */
+function removeLink(discordId, server = null) {
+  if (server === null) {
+    const result = db.prepare('DELETE FROM user_links WHERE discord_id = ?').run(discordId);
+    db.prepare('UPDATE users SET preferred_server = NULL WHERE discord_id = ?').run(discordId);
+    return result.changes;
+  }
+
+  const namespace = linkNamespace(server);
+  const result = db
+    .prepare('DELETE FROM user_links WHERE discord_id = ? AND namespace = ?')
+    .run(discordId, namespace);
+
+  // Se o preferido apontava para a conta removida, cai para o que sobrou.
+  const preferred = getPreferredServer(discordId);
+  if (preferred && linkNamespace(preferred) === namespace) {
+    const remaining = getAllLinks(discordId)[0];
+    db.prepare('UPDATE users SET preferred_server = ? WHERE discord_id = ?')
+      .run(remaining ? (remaining.namespace === 'official' ? 'official' : 'private') : null, discordId);
+  }
+
+  return result.changes;
+}
+
+// ─── Servidor preferido ───────────────────────────────────────────────────────
+
+function setPreferredServer(discordId, server) {
+  db.prepare(`
+    INSERT INTO users (discord_id, preferred_server) VALUES (?, ?)
+    ON CONFLICT(discord_id) DO UPDATE SET preferred_server = excluded.preferred_server
+  `).run(discordId, server);
+}
+
+function getPreferredServer(discordId) {
+  return db.prepare('SELECT preferred_server FROM users WHERE discord_id = ?').get(discordId)?.preferred_server ?? null;
 }
 
 // ─── Idioma do usuário ──────────────────────────────────────────────────────────
@@ -164,8 +337,148 @@ function removeServerLang(guildId) {
   return result.changes > 0;
 }
 
+// ─── Cache: arquivos .osu ─────────────────────────────────────────────────────
+
+// Mapas ranked não mudam; os que mudam (loved/graveyard reupload) são raros o
+// bastante para um TTL longo resolver sem precisar de checksum.
+const MAP_FILE_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 dias
+
+/**
+ * Teto de mapas em cache. Cada .osu costuma ter ~50KB (mapas longos passam de
+ * 300KB), então 1500 ≈ 75–150MB.
+ *
+ * Sem teto, qualquer pessoa com acesso ao bot podia encher o disco: basta
+ * chamar /simulate com IDs de mapa diferentes em sequência, e cada um grava um
+ * arquivo novo permanentemente. O cooldown limita a taxa, não o total.
+ */
+const MAP_FILE_MAX_ROWS = Number(process.env.BEATMAP_CACHE_MAX || 1500);
+
+// Só reescreve last_used se a marca estiver velha, para um mapa lido em loop
+// (ex: virar página no /topplays) não gerar uma escrita por leitura.
+const LAST_USED_REFRESH_MS = 60 * 60 * 1000; // 1 hora
+
+/** @returns {Uint8Array|null} */
+function getBeatmapFile(mapId) {
+  const row = db
+    .prepare('SELECT content, fetched_at, last_used FROM beatmap_files WHERE map_id = ?')
+    .get(mapId);
+  if (!row) return null;
+
+  const now = Date.now();
+  if (now - row.fetched_at > MAP_FILE_TTL_MS) {
+    db.prepare('DELETE FROM beatmap_files WHERE map_id = ?').run(mapId);
+    return null;
+  }
+
+  if (now - (row.last_used ?? 0) > LAST_USED_REFRESH_MS) {
+    db.prepare('UPDATE beatmap_files SET last_used = ? WHERE map_id = ?').run(now, mapId);
+  }
+
+  return row.content;
+}
+
+function setBeatmapFile(mapId, bytes) {
+  const now = Date.now();
+  db.prepare(`
+    INSERT INTO beatmap_files (map_id, content, fetched_at, last_used) VALUES (?, ?, ?, ?)
+    ON CONFLICT(map_id) DO UPDATE SET
+      content = excluded.content, fetched_at = excluded.fetched_at, last_used = excluded.last_used
+  `).run(mapId, bytes, now, now);
+
+  evictBeatmapFilesIfNeeded();
+}
+
+/** Descarta os menos usados recentemente até voltar ao teto. */
+function evictBeatmapFilesIfNeeded() {
+  const count = db.prepare('SELECT COUNT(*) AS c FROM beatmap_files').get().c;
+  if (count <= MAP_FILE_MAX_ROWS) return 0;
+
+  const excess = count - MAP_FILE_MAX_ROWS;
+  const result = db.prepare(`
+    DELETE FROM beatmap_files WHERE map_id IN (
+      SELECT map_id FROM beatmap_files
+      ORDER BY COALESCE(last_used, fetched_at) ASC
+      LIMIT ?
+    )
+  `).run(excess);
+
+  return result.changes;
+}
+
+// ─── Cache: metadados de beatmap ──────────────────────────────────────────────
+
+const MAP_META_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 dias
+
+function getBeatmapMeta(mapId) {
+  const row = db.prepare('SELECT data, cached_at FROM beatmap_meta WHERE map_id = ?').get(mapId);
+  if (!row) return null;
+  if (Date.now() - row.cached_at > MAP_META_TTL_MS) {
+    db.prepare('DELETE FROM beatmap_meta WHERE map_id = ?').run(mapId);
+    return null;
+  }
+  try {
+    return JSON.parse(row.data);
+  } catch {
+    return null;
+  }
+}
+
+function setBeatmapMeta(mapId, data) {
+  db.prepare(`
+    INSERT INTO beatmap_meta (map_id, data, cached_at) VALUES (?, ?, ?)
+    ON CONFLICT(map_id) DO UPDATE SET data = excluded.data, cached_at = excluded.cached_at
+  `).run(mapId, JSON.stringify(data), Date.now());
+}
+
+// ─── Cache: atributos de dificuldade ──────────────────────────────────────────
+
+/** @returns {{stars: number, maxCombo: number|null}|null} */
+function getMapDifficulty(mapId, modsBits, lazer) {
+  const row = db
+    .prepare('SELECT stars, max_combo FROM map_difficulty WHERE map_id = ? AND mods_bits = ? AND lazer = ?')
+    .get(mapId, modsBits, lazer ? 1 : 0);
+  return row ? { stars: row.stars, maxCombo: row.max_combo ?? null } : null;
+}
+
+function setMapDifficulty(mapId, modsBits, lazer, stars, maxCombo) {
+  db.prepare(`
+    INSERT INTO map_difficulty (map_id, mods_bits, lazer, stars, max_combo) VALUES (?, ?, ?, ?, ?)
+    ON CONFLICT(map_id, mods_bits, lazer) DO UPDATE SET
+      stars = excluded.stars, max_combo = excluded.max_combo
+  `).run(mapId, modsBits, lazer ? 1 : 0, stars, maxCombo ?? null);
+}
+
+// ─── Estado interno ───────────────────────────────────────────────────────────
+
+function getMeta(key) {
+  return db.prepare('SELECT value FROM meta WHERE key = ?').get(key)?.value ?? null;
+}
+
+function setMeta(key, value) {
+  db.prepare(`
+    INSERT INTO meta (key, value) VALUES (?, ?)
+    ON CONFLICT(key) DO UPDATE SET value = excluded.value
+  `).run(key, value);
+}
+
+// ─── Encerramento ─────────────────────────────────────────────────────────────
+
+function close() {
+  try {
+    db.close();
+  } catch {
+    // já fechado
+  }
+}
+
 module.exports = {
-  setLink, getLink, removeLink,
+  setLink, getLink, getAllLinks, removeLink, linkNamespace,
+  setPreferredServer, getPreferredServer,
   setUserLang, getUserLang, removeUserLang,
   setServerLang, getServerLang, removeServerLang,
+  getBeatmapFile, setBeatmapFile, evictBeatmapFilesIfNeeded,
+  getBeatmapMeta, setBeatmapMeta,
+  getMapDifficulty, setMapDifficulty,
+  getMeta, setMeta,
+  close,
 };

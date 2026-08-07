@@ -1,6 +1,6 @@
-const { SlashCommandBuilder, EmbedBuilder, ApplicationIntegrationType, InteractionContextType } = require('discord.js');
+const { SlashCommandBuilder, EmbedBuilder, ApplicationIntegrationType, InteractionContextType, MessageFlags } = require('discord.js');
 const osu = require('../osuClient');
-const { getLink } = require('../db');
+const { getLink, getPreferredServer } = require('../db');
 const { t } = require('../i18n');
 const { logError } = require('../logger');
 
@@ -39,8 +39,8 @@ module.exports = {
     .addStringOption(option =>
       option
         .setName('server')
-        .setDescription('Which server to use? (default: official)')
-        .setDescriptionLocalizations({ 'pt-BR': 'Qual servidor usar? (padrão: oficial)' })
+        .setDescription('Which server to use? (default: your linked server)')
+        .setDescriptionLocalizations({ 'pt-BR': 'Qual servidor usar? (padrão: o do seu link)' })
         .setRequired(false)
         .addChoices(
           { name: 'Bancho',     value: 'official'   },
@@ -53,17 +53,21 @@ module.exports = {
     const s        = t(interaction);
     const manualU1 = interaction.options.getString('user1');
     const manualU2 = interaction.options.getString('user2');
-    const mode     = interaction.options.getString('server') || osu.DEFAULT_MODE;
-    const link     = getLink(interaction.user.id);
+    // Mesma prioridade do resolvePlayer: opção do comando > preferido > padrão
+    const mode     = interaction.options.getString('server')
+                     || getPreferredServer(interaction.user.id)
+                     || osu.DEFAULT_MODE;
+    const link     = getLink(interaction.user.id, mode);
 
-    let u1Name = manualU1 ?? (link ? link.osu_user : null);
+    // Prefere o ID numérico: sobrevive a troca de nick no osu!.
+    let u1Name = manualU1 ?? (link ? (link.osu_id ?? link.osu_user) : null);
     let u2Name = manualU2;
 
     if (!u1Name) {
-      return interaction.reply({ content: s.compare_need_user1, ephemeral: true });
+      return interaction.reply({ content: s.compare_need_user1, flags: MessageFlags.Ephemeral });
     }
     if (!u2Name) {
-      return interaction.reply({ content: s.compare_need_user2, ephemeral: true });
+      return interaction.reply({ content: s.compare_need_user2, flags: MessageFlags.Ephemeral });
     }
 
     await interaction.deferReply();

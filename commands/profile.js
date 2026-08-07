@@ -1,4 +1,4 @@
-const { SlashCommandBuilder, EmbedBuilder, ApplicationIntegrationType, InteractionContextType } = require('discord.js');
+const { SlashCommandBuilder, EmbedBuilder, ApplicationIntegrationType, InteractionContextType, MessageFlags } = require('discord.js');
 const osu = require('../osuClient');
 const { resolvePlayer } = require('../userLink');
 const { t } = require('../i18n');
@@ -27,8 +27,8 @@ module.exports = {
     .addStringOption(option =>
       option
         .setName('server')
-        .setDescription('Which server to use? (default: official)')
-        .setDescriptionLocalizations({ 'pt-BR': 'Qual servidor usar? (padrão: oficial)' })
+        .setDescription('Which server to use? (default: your linked server)')
+        .setDescriptionLocalizations({ 'pt-BR': 'Qual servidor usar? (padrão: o do seu link)' })
         .setRequired(false)
         .addChoices(
           { name: 'Bancho',     value: 'official'   },
@@ -40,8 +40,8 @@ module.exports = {
   async execute(interaction) {
     const s        = t(interaction);
     const resolved = resolvePlayer(interaction, 'player', 'server');
-    if (!resolved) {
-      return interaction.reply({ content: s.no_link_set, ephemeral: true });
+    if (resolved.error) {
+      return interaction.reply({ content: resolved.error, flags: MessageFlags.Ephemeral });
     }
 
     const { username, mode } = resolved;

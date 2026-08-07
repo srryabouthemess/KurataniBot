@@ -1,8 +1,23 @@
-const { SlashCommandBuilder, EmbedBuilder, ApplicationIntegrationType, InteractionContextType } = require('discord.js');
-const { setLink, getLink, removeLink } = require('../db');
+const { SlashCommandBuilder, EmbedBuilder, ApplicationIntegrationType, InteractionContextType, MessageFlags } = require('discord.js');
+const { setLink, getLink, getAllLinks, removeLink, setPreferredServer, getPreferredServer, linkNamespace } = require('../db');
 const { t } = require('../i18n');
 const osu = require('../osuClient');
 const { logError } = require('../logger');
+
+const SERVER_CHOICES = [
+  { name: 'Bancho',     value: 'official'   },
+  { name: 'Daycore',    value: 'private'     },
+  { name: 'Daycore RX', value: 'private_rx'  },
+];
+
+/**
+ * Rótulo a exibir para uma conta linkada. Daycore vanilla e RX compartilham o
+ * mesmo cadastro, então o link é listado como "Daycore" — não faria sentido
+ * mostrar duas linhas com o mesmo nick.
+ */
+function namespaceLabel(namespace) {
+  return namespace === 'official' ? 'Bancho' : 'Daycore';
+}
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -14,8 +29,8 @@ module.exports = {
     .addSubcommand(sub =>
       sub
         .setName('set')
-        .setDescription('Set or update your link')
-        .setDescriptionLocalizations({ 'pt-BR': 'Define ou atualiza seu link' })
+        .setDescription('Set or update your link for a server')
+        .setDescriptionLocalizations({ 'pt-BR': 'Define ou atualiza seu link em um servidor' })
         .addStringOption(opt =>
           opt
             .setName('player')
@@ -29,24 +44,42 @@ module.exports = {
             .setDescription('Profile server (default: Bancho)')
             .setDescriptionLocalizations({ 'pt-BR': 'Servidor do perfil (padrão: Bancho)' })
             .setRequired(false)
-            .addChoices(
-              { name: 'Bancho',     value: 'official'   },
-              { name: 'Daycore',    value: 'private'     },
-              { name: 'Daycore RX', value: 'private_rx'  }
-            )
+            .addChoices(...SERVER_CHOICES)
         )
     )
     .addSubcommand(sub =>
       sub
         .setName('remove')
-        .setDescription('Remove your current link')
-        .setDescriptionLocalizations({ 'pt-BR': 'Remove seu link atual' })
+        .setDescription('Remove a link (or all of them)')
+        .setDescriptionLocalizations({ 'pt-BR': 'Remove um link (ou todos)' })
+        .addStringOption(opt =>
+          opt
+            .setName('server')
+            .setDescription('Which link to remove (default: all)')
+            .setDescriptionLocalizations({ 'pt-BR': 'Qual link remover (padrão: todos)' })
+            .setRequired(false)
+            .addChoices(...SERVER_CHOICES)
+        )
     )
     .addSubcommand(sub =>
       sub
         .setName('status')
-        .setDescription('Show your current link')
-        .setDescriptionLocalizations({ 'pt-BR': 'Mostra seu link atual' })
+        .setDescription('Show your links')
+        .setDescriptionLocalizations({ 'pt-BR': 'Mostra seus links' })
+    )
+    .addSubcommand(sub =>
+      sub
+        .setName('default')
+        .setDescription('Choose which server commands use by default')
+        .setDescriptionLocalizations({ 'pt-BR': 'Escolhe qual servidor os comandos usam por padrão' })
+        .addStringOption(opt =>
+          opt
+            .setName('server')
+            .setDescription('Server to use by default')
+            .setDescriptionLocalizations({ 'pt-BR': 'Servidor a usar por padrão' })
+            .setRequired(true)
+            .addChoices(...SERVER_CHOICES)
+        )
     ),
 
   async execute(interaction) {
@@ -54,33 +87,72 @@ module.exports = {
     const sub = interaction.options.getSubcommand();
 
     if (sub === 'status') {
-      const link = getLink(interaction.user.id);
-      if (!link) return interaction.reply({ content: s.link_no_link, ephemeral: true });
+      const links = getAllLinks(interaction.user.id);
+      if (links.length === 0) {
+        return interaction.reply({ content: s.link_no_link, flags: MessageFlags.Ephemeral });
+      }
+
+      const preferred = getPreferredServer(interaction.user.id) ?? osu.DEFAULT_MODE;
+      const preferredNs = linkNamespace(preferred);
+
+      const lines = links.map(l =>
+        s.link_status_line(
+          // Se o preferido é RX, mostra "Daycore RX" na linha do Daycore para
+          // a pessoa saber qual modo vai ser usado por padrão.
+          l.namespace === preferredNs ? osu.getModeLabel(preferred) : namespaceLabel(l.namespace),
+          l.osu_user,
+          l.namespace === preferredNs
+        )
+      );
+
       return interaction.reply({
-        content: s.link_status_msg(link.osu_user, osu.getModeLabel(link.server)),
-        ephemeral: true,
+        content: `${s.link_status_header}\n${lines.join('\n')}\n\n-# ${s.link_status_hint}`,
+        flags: MessageFlags.Ephemeral,
       });
     }
 
     if (sub === 'remove') {
-      const removed = removeLink(interaction.user.id);
+      const server = interaction.options.getString('server');
+
+      if (!server) {
+        const count = removeLink(interaction.user.id, null);
+        return interaction.reply({
+          content: count > 0 ? s.link_removed_all(count) : s.link_nothing_to_remove,
+          flags: MessageFlags.Ephemeral,
+        });
+      }
+
+      const count = removeLink(interaction.user.id, server);
       return interaction.reply({
-        content: removed ? s.link_removed : s.link_nothing_to_remove,
-        ephemeral: true,
+        content: count > 0 ? s.link_removed_server(namespaceLabel(linkNamespace(server))) : s.link_nothing_to_remove,
+        flags: MessageFlags.Ephemeral,
       });
+    }
+
+    if (sub === 'default') {
+      const server = interaction.options.getString('server');
+
+      // Só faz sentido apontar o padrão para um servidor onde há link.
+      if (!getLink(interaction.user.id, server)) {
+        return interaction.reply({ content: s.link_default_missing(osu.getModeLabel(server)), flags: MessageFlags.Ephemeral });
+      }
+
+      setPreferredServer(interaction.user.id, server);
+      return interaction.reply({ content: s.link_default_set(osu.getModeLabel(server)), flags: MessageFlags.Ephemeral });
     }
 
     // set
     const username = interaction.options.getString('player');
     const server   = interaction.options.getString('server') || osu.DEFAULT_MODE;
 
-    await interaction.deferReply({ ephemeral: true });
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
     try {
       const user = await osu.getUser(username, server);
       if (!user) return interaction.editReply(s.link_not_found);
 
-      setLink(interaction.user.id, user.username, server);
+      // Guarda também o ID numérico: o nome do osu! pode mudar, o ID não.
+      setLink(interaction.user.id, server, user.username, user.id);
 
       const embed = new EmbedBuilder()
         .setColor(0x99ff99)

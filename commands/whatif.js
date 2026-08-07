@@ -1,4 +1,4 @@
-const { SlashCommandBuilder, EmbedBuilder, ApplicationIntegrationType, InteractionContextType } = require('discord.js');
+const { SlashCommandBuilder, EmbedBuilder, ApplicationIntegrationType, InteractionContextType, MessageFlags } = require('discord.js');
 const osu = require('../osuClient');
 const { resolvePlayer } = require('../userLink');
 const { t } = require('../i18n');
@@ -67,8 +67,8 @@ module.exports = {
     .addStringOption(opt =>
       opt
         .setName('server')
-        .setDescription('Which server to use? (default: official)')
-        .setDescriptionLocalizations({ 'pt-BR': 'Qual servidor usar? (padrão: oficial)' })
+        .setDescription('Which server to use? (default: your linked server)')
+        .setDescriptionLocalizations({ 'pt-BR': 'Qual servidor usar? (padrão: o do seu link)' })
         .setRequired(false)
         .addChoices(
           { name: 'Bancho',     value: 'official'   },
@@ -82,8 +82,8 @@ module.exports = {
     const hypotheticalPP = interaction.options.getNumber('pp');
     const resolved       = resolvePlayer(interaction, 'player', 'server');
 
-    if (!resolved) {
-      return interaction.reply({ content: s.no_link_set, ephemeral: true });
+    if (resolved.error) {
+      return interaction.reply({ content: resolved.error, flags: MessageFlags.Ephemeral });
     }
 
     const { username, mode } = resolved;
@@ -96,11 +96,7 @@ module.exports = {
       // Busca até 100 top plays para o cálculo ser preciso
       const plays = await osu.getBestScores(user.id, 100, mode);
       if (plays.length === 0) {
-        return interaction.editReply(
-          mode === 'official'
-            ? `**${user.username}** has no ranked plays.`
-            : `**${user.username}** has no plays on ${osu.getModeLabel(mode)}.`
-        );
+        return interaction.editReply(s.no_plays(user.username, osu.getModeLabel(mode)));
       }
 
       const { currentPP, simulatedPP, gain, position, didEnter } = simulateWhatIf(plays, hypotheticalPP);
@@ -114,28 +110,19 @@ module.exports = {
       // Melhor play atual para comparação
       const bestPlay    = plays[0];
       const isBestPlay  = hypotheticalPP > bestPlay.pp;
-      const isInTop     = position <= plays.length;
 
       // Linha descritiva da posição
       let positionLine;
       if (isBestPlay) {
-        positionLine = mode === 'official'
-          ? `A **${hypotheticalPP}pp** play would be **${user.username}**'s new #1 best play! 🎉`
-          : `Uma play de **${hypotheticalPP}pp** seria a nova melhor play de **${user.username}**! 🎉`;
+        positionLine = s.whatif_pos_best(user.username, hypotheticalPP);
       } else if (didEnter) {
-        positionLine = mode === 'official'
-          ? `A **${hypotheticalPP}pp** play would be **${user.username}**'s **#${position}** best play.`
-          : `Uma play de **${hypotheticalPP}pp** seria a **#${position}ª** melhor play de **${user.username}**.`;
+        positionLine = s.whatif_pos_n(user.username, hypotheticalPP, position);
       } else {
-        positionLine = mode === 'official'
-          ? `A **${hypotheticalPP}pp** play wouldn't enter **${user.username}**'s top 100.`
-          : `Uma play de **${hypotheticalPP}pp** não entraria no top 100 de **${user.username}**.`;
+        positionLine = s.whatif_pos_none(user.username, hypotheticalPP);
       }
 
       // Linha de ganho de PP
-      const gainLine = mode === 'official'
-        ? `Their pp would change by **+${gain.toFixed(2)}pp** to **${simulatedPP.toFixed(2)}pp**`
-        : `Seu PP mudaria **+${gain.toFixed(2)}pp** para **${simulatedPP.toFixed(2)}pp**`;
+      const gainLine = s.whatif_gain(gain.toFixed(2), simulatedPP.toFixed(2));
 
       // Top 5 plays para contexto, destacando onde a hipotética entraria.
       // Os títulos só precisam ser buscados pras 5 que realmente vão aparecer
@@ -155,7 +142,7 @@ module.exports = {
 
       previewList.forEach((play, i) => {
         if (play._hypothetical) {
-          playsPreview += `**#${i + 1}** → \`${hypotheticalPP}pp\` *(hypothetical)* ✨\n`;
+          playsPreview += `**#${i + 1}** → \`${hypotheticalPP}pp\` *(${s.whatif_hypothetical})* ✨\n`;
         } else {
           const title = play.beatmapset?.title ?? '???';
           playsPreview += `**#${i + 1}** \`${play.pp.toFixed(2)}pp\` — ${title}\n`;
@@ -170,17 +157,13 @@ module.exports = {
           url:     osu.getUserUrl(user.id, mode),
         })
         .setThumbnail(user.avatar_url)
-        .setTitle(
-          mode === 'official'
-            ? `What if ${user.username} got a new ${hypotheticalPP}pp score?`
-            : `E se ${user.username} fizesse uma play de ${hypotheticalPP}pp?`
-        )
+        .setTitle(s.whatif_title(user.username, hypotheticalPP))
         .setDescription(
           `${positionLine}\n\n` +
           `${gainLine}\n\n` +
-          `**Top 5 (with simulation):**\n${playsPreview}`
+          `**${s.whatif_top5}**\n${playsPreview}`
         )
-        .setFooter({ text: `${osu.getModeLabel(mode)} • based on top ${plays.length} plays` });
+        .setFooter({ text: s.footer_based_on(osu.getModeLabel(mode), plays.length) });
 
       await interaction.editReply({ embeds: [embed] });
     } catch (error) {

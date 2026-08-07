@@ -3,6 +3,12 @@
 pp_calc.py - Calculador de PP (algoritmo Akatsuki/oppai-2019) para o KurataniBot
 Uso: python pp_calc.py <beatmap_id> <mods_bits> <n300> <n100> <n50> <nmiss> <combo>
 
+O conteúdo do arquivo .osu é lido da ENTRADA PADRÃO (stdin), não baixado aqui.
+Antes este script fazia o próprio download, o que contornava o rate limiter e o
+cache de mapas do bot: cada cálculo de RX gerava uma requisição extra e não
+controlada a osu.ppy.sh, arriscando throttling/ban do IP. Agora o Node envia os
+bytes que já tem em cache.
+
 Valores -1 indicam "não disponível":
   n300/n100/n50 = -1  → akatsuki-pp-py assume SS
   combo         = -1  → usa max_combo do mapa (FC)
@@ -20,7 +26,6 @@ Requer: pip install akatsuki-pp-py (use Python <= 3.11, veja o README)
 
 import sys
 import json
-import urllib.request
 import tempfile
 import os
 
@@ -49,9 +54,12 @@ def main():
         return
 
     try:
-        url = f"https://osu.ppy.sh/osu/{beatmap_id}"
-        with urllib.request.urlopen(url, timeout=8) as response:
-            osu_bytes = response.read()
+        # O Node envia o .osu por stdin (já veio do cache dele).
+        osu_bytes = sys.stdin.buffer.read()
+        if not osu_bytes:
+            sys.stderr.write(f"stdin vazio para o mapa {beatmap_id}\n")
+            print("null")
+            return
 
         # Salva em arquivo temporário — forma mais compatível com akatsuki-pp-py
         tmp = tempfile.NamedTemporaryFile(suffix='.osu', delete=False)

@@ -1,11 +1,12 @@
-const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ApplicationIntegrationType, InteractionContextType } = require('discord.js');
+const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ApplicationIntegrationType, InteractionContextType, MessageFlags } = require('discord.js');
 const osu = require('../osuClient');
 const { resolvePlayer } = require('../userLink');
 const { t } = require('../i18n');
 const { logError } = require('../logger');
 
 const FETCH_LIMIT    = 50;
-const COLLECTOR_TIME = 120_000;
+// Inatividade, não tempo absoluto: reinicia a cada clique.
+const COLLECTOR_IDLE = 120_000;
 
 function buildRow(page, totalPages) {
   return new ActionRowBuilder().addComponents(
@@ -39,8 +40,8 @@ module.exports = {
     .addStringOption(option =>
       option
         .setName('server')
-        .setDescription('Which server to use? (default: official)')
-        .setDescriptionLocalizations({ 'pt-BR': 'Qual servidor usar? (padrão: oficial)' })
+        .setDescription('Which server to use? (default: your linked server)')
+        .setDescriptionLocalizations({ 'pt-BR': 'Qual servidor usar? (padrão: o do seu link)' })
         .setRequired(false)
         .addChoices(
           { name: 'Bancho',     value: 'official'   },
@@ -52,8 +53,8 @@ module.exports = {
   async execute(interaction) {
     const s        = t(interaction);
     const resolved = resolvePlayer(interaction, 'player', 'server');
-    if (!resolved) {
-      return interaction.reply({ content: s.no_link_set, ephemeral: true });
+    if (resolved.error) {
+      return interaction.reply({ content: resolved.error, flags: MessageFlags.Ephemeral });
     }
 
     const { username, mode } = resolved;
@@ -131,8 +132,16 @@ module.exports = {
           });
       }
 
+      // Memoiza a play já montada: voltar para uma anterior não deve refazer o
+      // enriquecimento nem o cálculo de PP de FC.
+      const embedCache = new Map();
+      async function getEmbed(page) {
+        if (!embedCache.has(page)) embedCache.set(page, await buildEmbed(page));
+        return embedCache.get(page);
+      }
+
       let page = 0;
-      const embed = await buildEmbed(page);
+      const embed = await getEmbed(page);
       const message = await interaction.editReply({
         embeds: [embed],
         components: totalPages > 1 ? [buildRow(page, totalPages)] : [],
@@ -140,18 +149,18 @@ module.exports = {
 
       if (totalPages <= 1) return;
 
-      const collector = message.createMessageComponentCollector({ time: COLLECTOR_TIME });
+      const collector = message.createMessageComponentCollector({ idle: COLLECTOR_IDLE });
 
       collector.on('collect', async (i) => {
         if (i.user.id !== interaction.user.id) {
-          return i.reply({ content: s.pagination_not_yours, ephemeral: true }).catch(() => {});
+          return i.reply({ content: s.pagination_not_yours, flags: MessageFlags.Ephemeral }).catch(() => {});
         }
 
         if (i.customId === 'recent_prev' && page > 0) page--;
         if (i.customId === 'recent_next' && page < totalPages - 1) page++;
 
         await i.deferUpdate();
-        const newEmbed = await buildEmbed(page);
+        const newEmbed = await getEmbed(page);
         await interaction.editReply({ embeds: [newEmbed], components: [buildRow(page, totalPages)] });
       });
 

@@ -1,7 +1,9 @@
 const { REST, Routes } = require('discord.js');
 const fs = require('node:fs');
 const path = require('node:path');
+const crypto = require('node:crypto');
 require('dotenv').config();
+const db = require('./db');
 
 const commands = [];
 // Ajuste 'commands' para o nome da sua pasta onde estão os arquivos .js dos comandos
@@ -31,8 +33,19 @@ const rest = new REST().setToken(process.env.DISCORD_TOKEN);
             { body: commands },
         );
 
+        // Grava o mesmo hash que o index.js usa para decidir se precisa
+        // registrar no boot — sem isso, o próximo start faria um registro
+        // redundante logo depois deste.
+        // Mesma ordenação do index.js, para os dois gerarem o mesmo hash.
+        const sorted = [...commands].sort((a, b) => a.name.localeCompare(b.name));
+        const hash = crypto.createHash('sha256').update(JSON.stringify(sorted)).digest('hex');
+        db.setMeta('commands_hash', hash);
+        db.close();
+
         console.log('✅ Sucesso! Comandos registrados globalmente.');
         console.log('💡 Dica: Pode levar até 1 hora para aparecer em todos os servidores devido ao cache do Discord.');
+        console.log('ℹ️  O bot agora também registra sozinho no boot quando os comandos mudam;');
+        console.log('   este script continua útil para forçar um registro manual.');
     } catch (error) {
         console.error('❌ Erro ao registrar comandos:', error);
     }

@@ -1,4 +1,4 @@
-const { SlashCommandBuilder, PermissionFlagsBits, ApplicationIntegrationType, InteractionContextType } = require('discord.js');
+const { SlashCommandBuilder, PermissionFlagsBits, ApplicationIntegrationType, InteractionContextType, MessageFlags } = require('discord.js');
 const { SUPPORTED_LANGS, t } = require('../i18n');
 const { setUserLang, setServerLang, getUserLang, getServerLang } = require('../db');
 
@@ -67,7 +67,7 @@ module.exports = {
         : '';
 
       const msg = serverLine ? `${userLine}\n${serverLine}` : userLine;
-      return interaction.reply({ content: msg, ephemeral: true });
+      return interaction.reply({ content: msg, flags: MessageFlags.Ephemeral });
     }
 
     // ── /language set ──────────────────────────────────────────────────────────
@@ -78,27 +78,27 @@ module.exports = {
       const newS = t(interaction);
       return interaction.reply({
         content: newS.lang_set(SUPPORTED_LANGS[lang]),
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
     }
 
     // ── /language server ───────────────────────────────────────────────────────
     if (sub === 'server') {
       if (!interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
-        return interaction.reply({ content: s.lang_no_permission, ephemeral: true });
+        return interaction.reply({ content: s.lang_no_permission, flags: MessageFlags.Ephemeral });
       }
 
       const lang = interaction.options.getString('lang');
 
       if (!lang) {
         setServerLang(interaction.guildId, null);
-        return interaction.reply({ content: s.lang_reset_server, ephemeral: true });
+        return interaction.reply({ content: s.lang_reset_server, flags: MessageFlags.Ephemeral });
       }
 
       setServerLang(interaction.guildId, lang);
       return interaction.reply({
         content: s.lang_set_server(SUPPORTED_LANGS[lang]),
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
     }
   },

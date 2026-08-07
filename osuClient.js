@@ -11,7 +11,10 @@
 require('dotenv').config();
 const axios = require('axios');
 const beatmapCache = require('./beatmapCache');
- 
+const db = require('./db');
+const rateLimiter = require('./rateLimiter');
+const { withRetry } = require('./retry');
+
 const DEFAULT_MODE = process.env.OSU_MODE || 'official';
 const DAYCORE_V1 = 'https://daycore.org/api/v1';
 const DAYCORE_V2 = 'https://api.daycore.org/v2';
@@ -25,37 +28,103 @@ const DAYCORE_MODE = {
 // ─── Token cache (oficial) ────────────────────────────────────────────────────
 let _token = null;
 let _tokenExpiry = 0;
- 
+// Promise da renovação em andamento. Sem isso, N requisições que encontram o
+// token expirado ao mesmo tempo disparam N POSTs em /oauth/token — todas
+// esperam a mesma renovação agora.
+let _tokenPromise = null;
+
 async function getOfficialToken() {
   if (_token && Date.now() < _tokenExpiry) return _token;
-  const res = await axios.post('https://osu.ppy.sh/oauth/token', {
-    client_id: process.env.OSU_CLIENT_ID,
-    client_secret: process.env.OSU_CLIENT_SECRET,
-    grant_type: 'client_credentials',
-    scope: 'public',
-  });
-  _token = res.data.access_token;
-  _tokenExpiry = Date.now() + (res.data.expires_in - 60) * 1000;
-  return _token;
+  if (_tokenPromise) return _tokenPromise;
+
+  _tokenPromise = (async () => {
+    const res = await withRetry(async () => {
+      await rateLimiter.acquire('osuOAuth');
+      return axios.post('https://osu.ppy.sh/oauth/token', {
+        client_id: process.env.OSU_CLIENT_ID,
+        client_secret: process.env.OSU_CLIENT_SECRET,
+        grant_type: 'client_credentials',
+        scope: 'public',
+      }, { timeout: 10000 });
+    });
+    _token = res.data.access_token;
+    _tokenExpiry = Date.now() + (res.data.expires_in - 60) * 1000;
+    return _token;
+  })();
+
+  try {
+    return await _tokenPromise;
+  } finally {
+    _tokenPromise = null;
+  }
 }
- 
+
+// ─── Sanitização de segmentos de URL ──────────────────────────────────────────
+/**
+ * Escapa um valor antes de interpolá-lo num caminho de URL.
+ *
+ * Sem isso, um nome de jogador como `../../../wiki/pt` fazia a requisição
+ * escapar do prefixo /api/v2 e ir para outro caminho de osu.ppy.sh — levando
+ * junto o header Authorization. O host é fixo, então o token não vazava para
+ * terceiros, mas o usuário conseguia fazer o bot emitir requisições
+ * autenticadas para endpoints arbitrários da API.
+ */
+function urlSegment(value) {
+  return encodeURIComponent(String(value));
+}
+
+/**
+ * Escapa um identificador que deveria ser numérico. Lança se não for — um ID
+ * não-numérico aqui significa que algo já corrompeu o fluxo antes.
+ */
+function idSegment(value) {
+  const str = String(value);
+  if (!/^\d+$/.test(str)) throw new Error(`identificador inválido em caminho de URL: ${str}`);
+  return str;
+}
+
 // ─── Helpers de requisição ────────────────────────────────────────────────────
+// Todos passam pelo rate limiter (rateLimiter.js) antes de sair e têm retry
+// com backoff (retry.js). O token é obtido dentro do withRetry para que uma
+// tentativa após um 401 pegue um token renovado.
 async function officialGet(path, params = {}) {
-  const token = await getOfficialToken();
-  const res = await axios.get(`https://osu.ppy.sh/api/v2${path}`, {
-    headers: { Authorization: `Bearer ${token}` },
-    params,
+  const res = await withRetry(async () => {
+    const token = await getOfficialToken();
+    await rateLimiter.acquire('osuApi');
+    return axios.get(`https://osu.ppy.sh/api/v2${path}`, {
+      headers: { Authorization: `Bearer ${token}` },
+      params,
+      timeout: 10000,
+    });
   });
   return res.data;
 }
- 
-async function daycoreV1Get(endpoint, params = {}) {
-  const res = await axios.get(`${DAYCORE_V1}/${endpoint}`, { params });
+
+async function officialPost(path, body = {}) {
+  const res = await withRetry(async () => {
+    const token = await getOfficialToken();
+    await rateLimiter.acquire('osuApi');
+    return axios.post(`https://osu.ppy.sh/api/v2${path}`, body, {
+      headers: { Authorization: `Bearer ${token}` },
+      timeout: 10000,
+    });
+  });
   return res.data;
 }
- 
+
+async function daycoreV1Get(endpoint, params = {}) {
+  const res = await withRetry(async () => {
+    await rateLimiter.acquire('daycore');
+    return axios.get(`${DAYCORE_V1}/${endpoint}`, { params, timeout: 10000 });
+  });
+  return res.data;
+}
+
 async function daycoreV2Get(path, params = {}) {
-  const res = await axios.get(`${DAYCORE_V2}${path}`, { params });
+  const res = await withRetry(async () => {
+    await rateLimiter.acquire('daycore');
+    return axios.get(`${DAYCORE_V2}${path}`, { params, timeout: 10000 });
+  });
   return res.data;
 }
  
@@ -209,7 +278,7 @@ async function enrichScores(v1Scores) {
   return Promise.all(
     v1Scores.map(async (s) => {
       try {
-        const res = await daycoreV2Get(`/scores/${s.score_id}`);
+        const res = await daycoreV2Get(`/scores/${idSegment(s.score_id)}`);
         return normalizeScoreDaycore(s, res?.data ?? null);
       } catch {
         return normalizeScoreDaycore(s, null);
@@ -220,17 +289,23 @@ async function enrichScores(v1Scores) {
  
 // ─── Busca ID do jogador pelo nome (via api v2) ──────────────────────────────
 async function resolvePlayerId(username) {
+  // Pode chegar como número (ID vindo do link salvo) ou string (nome digitado
+  // no comando). Normalizamos antes de qualquer operação de string — sem isso
+  // um ID numérico estourava em `username.trim()`.
+  const raw = String(username).trim();
+
   // /^\d+$/ em vez de !isNaN(): isNaN('   ') é false (Number('   ') === 0),
   // então uma string só de espaços virava silenciosamente o ID 0.
-  if (/^\d+$/.test(username.trim())) return Number(username);
- 
-  const res = await daycoreV2Get('/players', { name: username });
+  if (/^\d+$/.test(raw)) return Number(raw);
+
+  const res = await daycoreV2Get('/players', { name: raw });
   const results = res?.data ?? [];
+  const lower = raw.toLowerCase();
   const match = results.find(
-    u => u.name.toLowerCase() === username.toLowerCase() ||
-         u.safe_name === username.toLowerCase().replace(/ /g, '_')
+    u => u.name.toLowerCase() === lower ||
+         u.safe_name === lower.replace(/ /g, '_')
   ) ?? results[0];
- 
+
   return match?.id ?? null;
 }
 
@@ -243,29 +318,123 @@ async function resolvePlayerId(username) {
  * @param {object[]} scores - scores normalizados (resultado de normalizeScoreDaycore)
  * @returns {Promise<object[]>} scores com beatmap.difficulty_rating e beatmap.max_combo preenchidos
  */
-// Busca um beatmap na API oficial, com 1 retry em caso de rate limit (429).
+// ─── Deduplicação de requisições em voo ───────────────────────────────────────
+/**
+ * Duas plays da mesma página (ou dois usuários ao mesmo tempo) pedem o mesmo
+ * mapa com frequência. O cache só ajuda depois que a primeira requisição
+ * termina — enquanto ela está em voo, as demais disparavam requisições
+ * idênticas. Aqui todas compartilham a mesma promise.
+ */
+const _inFlight = new Map();
+
+function dedupe(key, fn) {
+  const existing = _inFlight.get(key);
+  if (existing) return existing;
+
+  const promise = fn().finally(() => _inFlight.delete(key));
+  _inFlight.set(key, promise);
+  return promise;
+}
+
+// Busca os metadados de um beatmap na API oficial (rate-limited + retry).
 async function fetchBeatmap(id) {
   const cached = beatmapCache.get(id);
   if (cached) return cached;
 
-  for (let attempt = 0; attempt < 2; attempt++) {
+  return dedupe(`meta:${id}`, async () => {
     try {
-      const token = await getOfficialToken();
-      const res = await axios.get(`https://osu.ppy.sh/api/v2/beatmaps/${id}`, {
-        headers: { Authorization: `Bearer ${token}` },
-        timeout: 6000,
-      });
-      beatmapCache.set(id, res.data);
-      return res.data;
-    } catch (err) {
-      if (err.response?.status === 429 && attempt === 0) {
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        continue;
-      }
+      const data = await officialGet(`/beatmaps/${idSegment(id)}`);
+      beatmapCache.set(id, data);
+      return data;
+    } catch {
       return null;
     }
+  });
+}
+
+// ─── Arquivo .osu ─────────────────────────────────────────────────────────────
+/**
+ * Retorna os bytes do arquivo .osu, servindo do cache em disco quando possível.
+ *
+ * Antes, todo cálculo de PP (getFCpp, simulatePP) baixava o arquivo de novo —
+ * ~50KB por chamada. No /topplays isso acontecia para as 5 plays da página, e
+ * de novo a cada clique de botão, já que o embed é reconstruído do zero.
+ * Equivale à tabela osu_map_file_content do BathBot.
+ *
+ * @returns {Promise<Uint8Array>}
+ * @throws se o download falhar em todas as tentativas
+ */
+async function getBeatmapFile(mapId) {
+  const cached = db.getBeatmapFile(mapId);
+  if (cached) return new Uint8Array(cached);
+
+  return dedupe(`file:${mapId}`, async () => {
+    const bytes = await withRetry(async () => {
+      await rateLimiter.acquire('osuMapFile');
+      const res = await axios.get(`https://osu.ppy.sh/osu/${idSegment(mapId)}`, {
+        responseType: 'arraybuffer',
+        timeout: 15000,
+      });
+      const arr = new Uint8Array(res.data);
+      if (arr.length === 0) {
+        // Acontece logo após reupload de mapa; costuma resolver na retentativa.
+        const err = new Error(`arquivo .osu vazio para o mapa ${mapId}`);
+        err.retryable = true;
+        throw err;
+      }
+      return arr;
+    }, { attempts: 5, baseMs: 500, maxMs: 10000 });
+
+    db.setBeatmapFile(mapId, bytes);
+    return bytes;
+  });
+}
+
+// ─── Atributos de dificuldade (locais) ────────────────────────────────────────
+let _rosu;
+let _rosuTried = false;
+
+function loadRosu() {
+  if (!_rosuTried) {
+    _rosuTried = true;
+    try { _rosu = require('rosu-pp-js'); } catch { _rosu = null; }
   }
-  return null;
+  return _rosu;
+}
+
+/**
+ * Calcula estrelas e combo máximo de um mapa com um dado conjunto de mods,
+ * localmente via rosu-pp, e persiste o resultado.
+ *
+ * Isto substitui o POST em /beatmaps/{id}/attributes que o getAdjustedStars
+ * fazia a cada exibição: o rosu-pp já estava no projeto e o simulatePP já
+ * lia diffAttrs.stars daqui. Cacheado por (mapa, mods, mecânica), como a
+ * osu_map_difficulty do BathBot.
+ *
+ * @returns {Promise<{stars: number, maxCombo: number|null}|null>}
+ */
+async function getDifficultyAttrs(mapId, modsBits, lazer) {
+  const cached = db.getMapDifficulty(mapId, modsBits, lazer);
+  if (cached) return cached;
+
+  const rosu = loadRosu();
+  if (!rosu) return null;
+
+  try {
+    const bytes = await getBeatmapFile(mapId);
+    const beatmap = new rosu.Beatmap(bytes);
+    try {
+      const attrs = new rosu.Difficulty({ mods: modsBits, lazer }).calculate(beatmap);
+      const result = { stars: attrs.stars, maxCombo: attrs.maxCombo ?? null };
+      db.setMapDifficulty(mapId, modsBits, lazer, result.stars, result.maxCombo);
+      return result;
+    } finally {
+      // free() em finally: se o calculate lançar, o buffer Wasm vazava.
+      beatmap.free();
+    }
+  } catch {
+    return null;
+  }
 }
 
 // Máximo de requisições simultâneas à API do osu! por chamada — evita
@@ -324,7 +493,17 @@ async function enrichBeatmapData(scores) {
  * @returns {Promise<{pp: number, stars: number, maxCombo: number}|null>}
  * Requer: pip install akatsuki-pp-py
  */
-function calcPPPython(beatmapId, modsBits, n300, n100, n50, nmiss, combo = -1) {
+async function calcPPPython(beatmapId, modsBits, n300, n100, n50, nmiss, combo = -1) {
+  // Os bytes do mapa vão por stdin. O script baixava o .osu por conta própria,
+  // o que escapava do rate limiter e do cache — cada cálculo de RX fazia uma
+  // requisição extra e não controlada a osu.ppy.sh.
+  let beatmapBytes;
+  try {
+    beatmapBytes = await getBeatmapFile(beatmapId);
+  } catch {
+    return null;
+  }
+
   return new Promise((resolve) => {
     const { spawn } = require('child_process');
     const path = require('path');
@@ -349,6 +528,11 @@ function calcPPPython(beatmapId, modsBits, n300, n100, n50, nmiss, combo = -1) {
     // PYTHON_BIN no .env permite sobrescrever em qualquer plataforma.
     const pythonBin = process.env.PYTHON_BIN || (process.platform === 'win32' ? 'python' : 'python3');
     const proc = spawn(pythonBin, args, { timeout: 12000 });
+
+    // Se o processo morrer antes de ler tudo (ex: akatsuki-pp-py ausente), a
+    // escrita no stdin lança EPIPE — que sem handler viraria uncaughtException.
+    proc.stdin.on('error', () => {});
+    proc.stdin.end(Buffer.from(beatmapBytes));
 
     let output = '';
     proc.stdout.on('data', (d) => { output += d.toString(); });
@@ -418,36 +602,35 @@ async function getFCpp(score, mode = DEFAULT_MODE) {
     }
 
     // ── Bancho / Daycore vanilla: rosu-pp-js (algoritmo oficial) ──────────────
-    // Baixa o arquivo .osu (público no Bancho, mesmo para mapas do Daycore)
-    const response = await axios.get(`https://osu.ppy.sh/osu/${beatmapId}`, {
-      responseType: 'arraybuffer',
-      timeout: 8000,
-    });
-    const beatmapBytes = new Uint8Array(response.data);
+    // O arquivo .osu (público no Bancho, mesmo para mapas do Daycore) vem do
+    // cache em disco quando já foi baixado antes.
+    const rosu = loadRosu();
+    if (!rosu) return null;
 
-    let rosu;
-    try { rosu = require('rosu-pp-js'); } catch { return null; }
+    const beatmapBytes = await getBeatmapFile(beatmapId);
+    const useLazer     = shouldUseLazer(mode, score.mods);
 
-    const useLazer = shouldUseLazer(mode, score.mods);
+    const beatmap = new rosu.Beatmap(beatmapBytes);
+    try {
+      const difficulty = new rosu.Difficulty({ mods: modsBits, lazer: useLazer });
+      const diffAttrs  = difficulty.calculate(beatmap);
 
-    const beatmap    = new rosu.Beatmap(beatmapBytes);
-    const difficulty = new rosu.Difficulty({ mods: modsBits, lazer: useLazer });
-    const diffAttrs  = difficulty.calculate(beatmap);
+      const perfParams = { mods: modsBits, misses: 0, lazer: useLazer };
+      if (n300 !== null && n100 !== null && n50 !== null) {
+        perfParams.n300 = n300 + misses;
+        perfParams.n100 = n100;
+        perfParams.n50  = n50;
+      } else {
+        perfParams.accuracy = score.accuracy * 100;
+      }
 
-    const perfParams = { mods: modsBits, misses: 0, lazer: useLazer };
-    if (n300 !== null && n100 !== null && n50 !== null) {
-      perfParams.n300 = n300 + misses;
-      perfParams.n100 = n100;
-      perfParams.n50  = n50;
-    } else {
-      perfParams.accuracy = score.accuracy * 100;
+      const perf   = new rosu.Performance(perfParams);
+      const result = perf.calculate(diffAttrs);
+
+      return result.pp ?? null;
+    } finally {
+      beatmap.free();
     }
-
-    const perf   = new rosu.Performance(perfParams);
-    const result = perf.calculate(diffAttrs);
-    beatmap.free();
-
-    return result.pp ?? null;
   } catch {
     return null;
   }
@@ -483,32 +666,30 @@ async function simulatePP(beatmapId, mods, hits, mode = DEFAULT_MODE) {
       return await calcPPPython(beatmapId, modsBits, -1, n100, n50, misses, combo);
     }
 
-    const response = await axios.get(`https://osu.ppy.sh/osu/${beatmapId}`, {
-      responseType: 'arraybuffer',
-      timeout: 8000,
-    });
-    const beatmapBytes = new Uint8Array(response.data);
+    const rosu = loadRosu();
+    if (!rosu) return null;
 
-    let rosu;
-    try { rosu = require('rosu-pp-js'); } catch { return null; }
+    const beatmapBytes = await getBeatmapFile(beatmapId);
+    const useLazer     = shouldUseLazer(mode, mods);
 
-    const useLazer = shouldUseLazer(mode, mods);
+    const beatmap = new rosu.Beatmap(beatmapBytes);
+    try {
+      const difficulty = new rosu.Difficulty({ mods: modsBits, lazer: useLazer });
+      const diffAttrs  = difficulty.calculate(beatmap);
 
-    const beatmap    = new rosu.Beatmap(beatmapBytes);
-    const difficulty = new rosu.Difficulty({ mods: modsBits, lazer: useLazer });
-    const diffAttrs  = difficulty.calculate(beatmap);
+      const perfParams = { mods: modsBits, n100, n50, misses, lazer: useLazer };
+      if (combo >= 0) perfParams.combo = combo;
 
-    const perfParams = { mods: modsBits, n100, n50, misses, lazer: useLazer };
-    if (combo >= 0) perfParams.combo = combo;
+      const perf     = new rosu.Performance(perfParams);
+      const result   = perf.calculate(diffAttrs);
+      const stars    = diffAttrs.stars;
+      const maxCombo = diffAttrs.maxCombo;
 
-    const perf   = new rosu.Performance(perfParams);
-    const result = perf.calculate(diffAttrs);
-    const stars  = diffAttrs.stars;
-    const maxCombo = diffAttrs.maxCombo;
-    beatmap.free();
-
-    if (result.pp == null) return null;
-    return { pp: result.pp, stars, maxCombo };
+      if (result.pp == null) return null;
+      return { pp: result.pp, stars, maxCombo };
+    } finally {
+      beatmap.free();
+    }
   } catch {
     return null;
   }
@@ -535,19 +716,65 @@ function parseBeatmapId(input) {
 
 // ─── API pública ──────────────────────────────────────────────────────────────
 
-async function getUser(username, mode = DEFAULT_MODE) {
-  if (mode === 'official') {
-    return await officialGet(`/users/${username}/osu`);
+// ─── Cache de usuário ─────────────────────────────────────────────────────────
+/**
+ * TTL curto e em memória. O ganho está em rajadas — a mesma pessoa rodando
+ * /profile e depois /topplays, ou várias pessoas consultando o mesmo jogador
+ * conhecido. O BathBot usa 10 min (Redis); aqui 60s, porque exibir PP
+ * desatualizado logo depois de uma play nova confunde mais do que a economia
+ * de uma requisição compensa.
+ */
+const USER_CACHE_TTL_MS = 60_000;
+const _userCache = new Map(); // key → { data, at }
+
+function _userCacheGet(key) {
+  const entry = _userCache.get(key);
+  if (!entry) return null;
+  if (Date.now() - entry.at > USER_CACHE_TTL_MS) {
+    _userCache.delete(key);
+    return null;
   }
- 
+  return entry.data;
+}
+
+function _userCacheSet(key, data) {
+  _userCache.set(key, { data, at: Date.now() });
+  // Poda preguiçosa: só corre a lista quando ela cresce, evitando timer extra.
+  if (_userCache.size > 500) {
+    const cutoff = Date.now() - USER_CACHE_TTL_MS;
+    for (const [k, v] of _userCache) {
+      if (v.at < cutoff) _userCache.delete(k);
+    }
+  }
+}
+
+async function getUser(username, mode = DEFAULT_MODE) {
+  const cacheKey = `${mode}:${String(username).toLowerCase()}`;
+  const cached = _userCacheGet(cacheKey);
+  if (cached) return cached;
+
+  const user = await _fetchUser(username, mode);
+  if (user) {
+    _userCacheSet(cacheKey, user);
+    // Indexa também pelo ID, para quem resolve via link já com o osu_id.
+    _userCacheSet(`${mode}:#${user.id}`, user);
+  }
+  return user;
+}
+
+async function _fetchUser(username, mode = DEFAULT_MODE) {
+  if (mode === 'official') {
+    return await officialGet(`/users/${urlSegment(username)}/osu`);
+  }
+
   const playerId = await resolvePlayerId(username);
   if (!playerId) return null;
  
   const modeNum = DAYCORE_MODE[mode] ?? 0;
  
   const [playerRes, statsRes] = await Promise.all([
-    daycoreV2Get(`/players/${playerId}`),
-    daycoreV2Get(`/players/${playerId}/stats/${modeNum}`),
+    daycoreV2Get(`/players/${idSegment(playerId)}`),
+    daycoreV2Get(`/players/${idSegment(playerId)}/stats/${idSegment(modeNum)}`),
   ]);
  
   const playerData = playerRes?.data ?? null;
@@ -571,7 +798,7 @@ async function getUser(username, mode = DEFAULT_MODE) {
  
 async function getBestScores(userId, limit = 10, mode = DEFAULT_MODE) {
   if (mode === 'official') {
-    return await officialGet(`/users/${userId}/scores/best`, { limit });
+    return await officialGet(`/users/${idSegment(userId)}/scores/best`, { limit });
   }
  
   const res = await daycoreV1Get('get_player_scores', {
@@ -591,7 +818,7 @@ async function getBestScores(userId, limit = 10, mode = DEFAULT_MODE) {
  
 async function getRecentScores(userId, limit = 1, mode = DEFAULT_MODE) {
   if (mode === 'official') {
-    return await officialGet(`/users/${userId}/scores/recent`, { limit, include_fails: 1 });
+    return await officialGet(`/users/${idSegment(userId)}/scores/recent`, { limit, include_fails: 1 });
   }
  
   const res = await daycoreV1Get('get_player_scores', {
@@ -610,19 +837,18 @@ async function getAdjustedStars(beatmapId, mods, mode = DEFAULT_MODE) {
   // Sem mods: o enrichBeatmapData já trouxe o difficulty_rating base, não precisa recalcular
   if (!mods || mods.length === 0) return null;
 
-  // Com mods: usa o endpoint oficial do Bancho para ambos os modos —
-  // os IDs de beatmap são os mesmos no Daycore e no Bancho
-  try {
-    const token = await getOfficialToken();
-    const res = await axios.post(
-      `https://osu.ppy.sh/api/v2/beatmaps/${beatmapId}/attributes`,
-      { mods, ruleset: 'osu' },
-      { headers: { Authorization: `Bearer ${token}` } }
-    );
-    return res.data.attributes.star_rating.toFixed(2);
-  } catch {
-    return null;
-  }
+  // Com mods: calculado localmente pelo rosu-pp a partir do .osu em cache, em
+  // vez de um POST em /beatmaps/{id}/attributes por play a cada exibição.
+  //
+  // Também corrige uma inconsistência: as estrelas vinham sempre da API
+  // oficial (lazer), enquanto o PP de FC exibido ao lado é calculado com a
+  // mecânica do servidor (shouldUseLazer). Agora os dois usam a mesma base.
+  const attrs = await getDifficultyAttrs(
+    beatmapId,
+    modsToBits(mods),
+    shouldUseLazer(mode, mods)
+  );
+  return attrs ? attrs.stars.toFixed(2) : null;
 }
  
 function getUserUrl(userId, mode = DEFAULT_MODE) {
@@ -658,6 +884,8 @@ module.exports = {
   getMapUrl,
   getModeLabel,
   getBeatmap: fetchBeatmap,
+  getBeatmapFile,
+  getDifficultyAttrs,
   simulatePP,
   parseBeatmapId,
   parseModsString,
