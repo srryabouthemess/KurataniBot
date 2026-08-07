@@ -15,6 +15,7 @@ Funciona no **Bancho** (servidor oficial), no **Daycore** e no **Daycore RX**.
 | `/topplays` | Melhores plays, 5 por página |
 | `/compare` | Compara as estatísticas de dois jogadores |
 | `/whatif <pp>` | Quanto PP você ganharia com uma nova play de X pp |
+| `/pp <alvo>` | Quanto PP uma única play precisa valer para você chegar a um total |
 | `/simulate <mapa>` | Quanto PP daria uma play específica num mapa (mods, 100s, misses, combo) |
 | `/link` | Vincula sua conta do osu! ao Discord |
 | `/language` | Muda o idioma — Português, English ou Русский |
@@ -23,8 +24,28 @@ Alguns detalhes úteis:
 
 - Depois de usar `/link`, você não precisa mais digitar seu nome nos outros comandos.
 - Todos os comandos aceitam a opção **servidor** (`Bancho`, `Daycore` ou `Daycore RX`).
-- Em `/topplays` e `/recent` dá pra navegar com os botões ◀️ ▶️ (só quem usou o comando, por 2 minutos).
+- Em `/topplays` e `/recent` dá pra navegar com os botões ◀️ ▶️ (só quem usou o comando; expiram após 2 minutos **sem uso**, e o contador reinicia a cada clique).
 - O `/wi` é um atalho para o `/whatif`.
+
+### Vinculando mais de um servidor
+
+Dá pra ter um nick diferente em cada servidor — útil se seu nome no Daycore não é o mesmo do Bancho:
+
+```
+/link set kuratani                  → vincula no Bancho
+/link set pudim2 server:Daycore     → vincula no Daycore
+```
+
+Os dois convivem. Comandos sem a opção `server` usam o seu **servidor padrão**, que é o do último `/link set`.
+
+| Subcomando | O que faz |
+|---|---|
+| `/link set <nick> [server]` | Vincula (ou atualiza) o nick daquele servidor e o torna o padrão |
+| `/link default <server>` | Troca o padrão sem precisar vincular de novo |
+| `/link status` | Lista todos os seus vínculos, marcando o padrão com ⭐ |
+| `/link remove [server]` | Remove o vínculo de um servidor — ou todos, se omitir |
+
+> Daycore e Daycore RX são a mesma conta (muda só o modo de jogo), então vincular em um vale para o outro.
 
 ---
 
@@ -53,15 +74,24 @@ Depois abra o `.env` e preencha:
 | `CLIENT_ID` | ID do bot (General Information) |
 | `OSU_CLIENT_ID` e `OSU_CLIENT_SECRET` | Credenciais da osu! API v2 |
 | `OSU_MODE` | Servidor padrão: `official`, `private` ou `private_rx` |
+| `PYTHON_BIN` | *(opcional)* Caminho do Python usado no cálculo de PP do Daycore RX — veja a seção mais abaixo |
+| `BEATMAP_CACHE_MAX` | *(opcional)* Quantos arquivos `.osu` manter em cache; padrão `1500` (~75–150 MB) |
 
 Por fim:
 
 ```bash
-node deploy-commands.js   # registra os comandos no Discord
-node index.js             # inicia o bot
+node index.js
 ```
 
-O `deploy-commands.js` só precisa ser executado de novo quando algum comando mudar.
+Só isso. O bot registra os comandos no Discord sozinho, na primeira vez e sempre que algum comando mudar — ele compara um hash do conjunto com o último registrado, então reinícios normais não gastam chamada de API.
+
+Se precisar forçar um registro manual (raro), ainda dá:
+
+```bash
+node deploy-commands.js
+```
+
+> A primeira execução também cria o `bot.db` (SQLite) e migra automaticamente qualquer dado de versões antigas.
 
 ### Instalando o Node no seu sistema
 
@@ -220,17 +250,21 @@ PYTHON_BIN=/Users/SEU_USUARIO/.kuratanibot-venv/bin/python
 
 **Por que o ambiente virtual (`venv`) no Linux e no macOS?** Nesses sistemas o `pip` costuma recusar instalações no Python do sistema. O `venv` cria uma instalação isolada e evita esse erro — e o `PYTHON_BIN` faz o bot usar exatamente esse Python.
 
-Para conferir se deu certo, rode o comando abaixo dentro da pasta do bot, trocando o caminho pelo seu:
+Para conferir se deu certo, rode o comando abaixo dentro da pasta do bot (depois de preencher o `.env`):
 
 ```bash
-/caminho/do/seu/python pp_calc.py 1103981 64 -1 5 0 0 -1
+node -e "require('./osuClient').simulatePP(1103981, ['DT'], { n100: 5 }, 'private_rx').then(r => console.log(r))"
 ```
 
-Deu certo se a saída for parecida com esta — se vier `null`, a biblioteca não está instalada nesse Python:
+Deu certo se a saída for esta:
 
-```json
-{"pp": 88.7373, "stars": 4.5402, "max_combo": 313}
 ```
+{ pp: 88.7373, stars: 4.5402, maxCombo: 313 }
+```
+
+Se vier `null`, a biblioteca não está instalada no Python que o `PYTHON_BIN` aponta.
+
+> O teste passa pelo mesmo caminho que o bot usa de verdade — baixa o mapa, guarda em cache e entrega ao Python. Chamar o `pp_calc.py` direto no terminal não funciona: ele lê o conteúdo do `.osu` da entrada padrão, e quem envia isso é o bot.
 
 ---
 
