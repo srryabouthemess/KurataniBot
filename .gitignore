@@ -6,6 +6,10 @@
 # Dependências
 node_modules/
 
+# Bytecode do Python (gerado ao importar/compilar o pp_calc.py)
+__pycache__/
+*.pyc
+
 # Logs
 *.log
 npm-debug.log*
@@ -20,11 +24,19 @@ Thumbs.db
 
 # Cache local de beatmaps (regenerável, não precisa versionar)
 beatmap_cache.json
+beatmap_cache.json.migrated
+beatmap_cache.json.corrupt
 
 # Dados de usuários gerados em runtime (NUNCA commitar — contém IDs
 # do Discord e nomes de usuário reais vinculados por quem usa o bot)
+#
+# O banco roda em modo WAL, que mantém as transações recentes em arquivos
+# separados (-wal e -shm). Ignorar só bot.db deixaria os dados de usuário
+# vazarem por eles: o -wal chega a centenas de KB de escritas recentes.
 bot.db
 bot.db-journal
+bot.db-wal
+bot.db-shm
 links.json
 links.json.migrated
 langs.json
