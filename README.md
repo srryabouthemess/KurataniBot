@@ -32,8 +32,8 @@ Alguns detalhes úteis:
 Dá pra ter um nick diferente em cada servidor — útil se seu nome no Daycore não é o mesmo do Bancho:
 
 ```
-/link set kuratani                  → vincula no Bancho
-/link set pudim2 server:Daycore     → vincula no Daycore
+/link set desgracadogames          → vincula no Bancho
+/link set desgrasa server:Daycore  → vincula no Daycore
 ```
 
 Os dois convivem. Comandos sem a opção `server` usam o seu **servidor padrão**, que é o do último `/link set`.
