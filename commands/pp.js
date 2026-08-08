@@ -33,14 +33,26 @@ function simulateInsert(currentPlays, x) {
  * hipotética necessário para que o PP ponderado total atinja `targetWeighted`.
  * O PP ponderado é monotonicamente não-decrescente em função de `x`, então
  * a busca binária é segura. O limite superior dobra até "passar" do alvo.
+ *
+ * O teto acompanha o alvo em vez de ser fixo: uma play de x pp entra como #1 e
+ * contribui o próprio x com peso 1, então o valor procurado nunca passa muito
+ * de `targetWeighted` — um teto fixo só limitaria alvos altos, devolvendo em
+ * silêncio um número que não alcança o pedido.
+ *
+ * @returns {number|null} null quando o alvo não é alcançável nem no teto
  */
 function findRequiredPP(currentPlays, targetWeighted) {
+  const ceiling = Math.max(1e6, targetWeighted * 4);
   let lo = 0;
   let hi = 1000;
 
-  while (simulateInsert(currentPlays, hi).weightedPP < targetWeighted && hi < 1e7) {
+  while (simulateInsert(currentPlays, hi).weightedPP < targetWeighted && hi < ceiling) {
     hi *= 2;
   }
+
+  // Nem no teto o alvo é atingido: só acontece com valor absurdo ou não
+  // finito. Devolver `hi` aqui seria mentir — o número não alcança o pedido.
+  if (simulateInsert(currentPlays, hi).weightedPP < targetWeighted) return null;
 
   for (let i = 0; i < 60; i++) {
     const mid = (lo + hi) / 2;
@@ -156,8 +168,12 @@ module.exports = {
         .setDescription('Target pp total (e.g. 10000)')
         .setDescriptionLocalizations({ 'pt-BR': 'PP total desejado (ex: 10000)' })
         .setRequired(true)
+        // Sem teto: o antigo era 30.000 e já barrava caso real — o #1 do osu!
+        // passa disso. Os dois modos de cálculo são limitados por dentro
+        // (teto proporcional ao alvo na busca binária, MAX_SIMULATED_PLAYS na
+        // simulação), então um valor absurdo devolve "inalcançável" em vez de
+        // travar ou de inventar um número.
         .setMinValue(1)
-        .setMaxValue(30000)
     )
     .addNumberOption(opt =>
       opt
@@ -295,6 +311,8 @@ module.exports = {
       }
 
       const requiredPP = findRequiredPP(plays, targetWeighted);
+      if (requiredPP === null) return interaction.editReply(s.pp_target_unreachable(targetLabel));
+
       const { position } = simulateInsert(plays, requiredPP);
 
       const bestPlay   = plays[0];

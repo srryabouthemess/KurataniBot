@@ -122,6 +122,7 @@ const translations = {
       `**${required}pp**, que seria sua **#${position}ª** melhor jogada.`,
 
     pp_howmany_title:        (name, target) => `Quantas plays ${name} precisa para chegar a ${target}pp?`,
+    pp_target_unreachable:   (target) => `❌ **${target}pp** é alto demais para calcular — nem uma play absurda chegaria lá. Tente um alvo menor.`,
     pp_howmany_desc_progressive: (name, target, count, value, last, step) =>
       `Para chegar aos **${target}pp**, **${name}** precisaria de aproximadamente **${count}** play(s), ` +
       `começando em **${value}pp** e subindo **${step}pp** por play até **${last}pp**.`,
@@ -314,6 +315,7 @@ Cargo atual no Daycore: **${role}**
       `**${required}pp**, which would be their **#${position}** best play.`,
 
     pp_howmany_title:        (name, target) => `How many plays does ${name} need to reach ${target}pp?`,
+    pp_target_unreachable:   (target) => `❌ **${target}pp** is too high to compute — not even an absurd play would get there. Try a lower target.`,
     pp_howmany_desc_progressive: (name, target, count, value, last, step) =>
       `To reach **${target}pp**, **${name}** would need approximately **${count}** play(s), ` +
       `starting at **${value}pp** and climbing **${step}pp** per play up to **${last}pp**.`,
@@ -506,6 +508,7 @@ Current Daycore role: **${role}**
       `**${required}pp** — это был бы **#${position}** топ плей.`,
 
     pp_howmany_title:        (name, target) => `Сколько плеев нужно ${name}, чтобы достичь ${target}pp?`,
+    pp_target_unreachable:   (target) => `❌ **${target}pp** слишком много для расчёта — даже невероятный плей не дотянет. Возьмите цель поменьше.`,
     pp_howmany_desc_progressive: (name, target, count, value, last, step) =>
       `Чтобы достичь **${target}pp**, **${name}** понадобится примерно **${count}** плей(ев): ` +
       `начиная с **${value}pp** и повышаясь на **${step}pp** за плей до **${last}pp**.`,
