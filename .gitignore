@@ -1,7 +1,12 @@
 # Variáveis de ambiente (NUNCA commitar isso!)
+#
+# Ignora qualquer variação (.env.local, .env.prod, .env.backup, .env.old...) e
+# libera só o exemplo. O padrão antigo era `.env.*.local`, que pegava apenas o
+# que terminasse em `.local` — um `.env.backup` feito na pressa durante uma
+# configuração escaparia e levaria junto o token do bot e as credenciais.
 .env
-.env.local
-.env.*.local
+.env.*
+!.env.example
 
 # Dependências
 node_modules/

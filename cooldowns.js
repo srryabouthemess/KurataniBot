@@ -43,6 +43,12 @@ const COMMAND_BUCKET = {
   simulate: 'compute',
   whatif:   'compute',
   pp:       'compute',
+  // Administrativos: uma nomeação publica uma mensagem por dificuldade e
+  // depois relê cada uma até 3 vezes para confirmar — um set grande são
+  // dezenas de chamadas. São comandos de staff, mas o custo justifica o
+  // bucket mais rígido.
+  nominate: 'heavy',
+  moderate: 'heavy',
 };
 
 // Map<bucketName, Map<userId, { lastUse, windowStart, tickets }>>

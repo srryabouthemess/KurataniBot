@@ -4,12 +4,24 @@ const { getLink, getPreferredServer } = require('../db');
 const { t } = require('../i18n');
 const { logError } = require('../logger');
 
-const center = (str, width) => {
-  str = String(str);
-  if (str.length >= width) return str;
-  const left  = Math.floor((width - str.length) / 2);
-  const right = width - str.length - left;
-  return ' '.repeat(left) + str + ' '.repeat(right);
+// O Discord mobile NÃO rola code block na horizontal: ele quebra a linha, e
+// uma tabela monoespaçada quebrada fica ilegível. A versão antiga tinha 40
+// colunas (duas colunas de nome centralizadas em 12 + a de rótulos) e
+// quebrava em qualquer celular. Medindo no print de um aparelho real, cabiam
+// ~25 colunas — daí o orçamento abaixo.
+//
+// A economia vem de três lugares: os nomes saíram das colunas (viraram uma
+// linha de texto normal, que quebra bem), a coluna da direita não recebe
+// preenchimento (nada vem depois dela) e os rótulos foram encurtados.
+const MOBILE_WIDTH_BUDGET = 26;
+
+// Nome no cabeçalho da tabela serve só para identificar a coluna; o nome
+// completo aparece na linha acima, fora do bloco.
+const NAME_COL_MAX = 8;
+
+const short = (str, max) => {
+  const value = String(str);
+  return value.length <= max ? value : value.slice(0, max - 1) + '…';
 };
 
 module.exports = {
@@ -79,31 +91,65 @@ module.exports = {
       const s1 = u1.statistics;
       const s2 = u2.statistics;
 
-      let table = '```arm\n';
-      table += `${center(u1.username, 12)} | ${center(s.compare_header_label, 10)} | ${center(u2.username, 12)}\n`;
-      table += `${'-'.repeat(13)}+${'-'.repeat(12)}+${'-'.repeat(13)}\n`;
-
-      const rows = [
-        [s1.global_rank,                            'Rank',      s2.global_rank,                            true ],
-        [s1.pp.toFixed(2),                          'PP',        s2.pp.toFixed(2)                                ],
-        [s1.hit_accuracy.toFixed(2) + '%',          'Accuracy',  s2.hit_accuracy.toFixed(2) + '%'               ],
-        [s1.level.current,                          'Level',     s2.level.current                               ],
-        [s1.maximum_combo + 'x',                    'Max Combo', s2.maximum_combo + 'x'                         ],
-        [s1.play_count,                             'Playcount', s2.play_count                                  ],
+      // Rótulos curtos ('Acc' em vez de 'Accuracy') porque cada caractere aqui
+      // sai do orçamento de largura. Continuam em inglês, como já eram: são
+      // jargão de osu! e aparecem iguais em qualquer idioma do jogo.
+      const statRows = [
+        ['Rank',  s1.global_rank,    s2.global_rank,    'rank' ],
+        ['PP',    s1.pp,             s2.pp,             'pp'   ],
+        ['Acc',   s1.hit_accuracy,   s2.hit_accuracy,   'acc'  ],
+        ['Level', s1.level.current,  s2.level.current,  'int'  ],
+        ['Combo', s1.maximum_combo,  s2.maximum_combo,  'combo'],
+        ['Plays', s1.play_count,     s2.play_count,     'int'  ],
       ];
 
-      rows.forEach(row => {
-        const val1 = row[3] ? (row[0] ? `#${row[0].toLocaleString()}` : s.profile_unranked) : row[0];
-        const val2 = row[3] ? (row[2] ? `#${row[2].toLocaleString()}` : s.profile_unranked) : row[2];
-        table += `${center(val1, 12)} | ${center(row[1], 10)} | ${center(val2, 12)}\n`;
-      });
+      const name1 = short(u1.username, NAME_COL_MAX);
+      const name2 = short(u2.username, NAME_COL_MAX);
 
-      table += '```';
+      /**
+       * Monta a tabela. `grouping` liga o separador de milhar: ele ajuda a ler
+       * número grande, mas custa 2-3 colunas num rank de 7 dígitos — o que
+       * estoura o orçamento justamente nas contas do Bancho. Tentamos com ele
+       * e só desligamos se não couber.
+       */
+      const render = (grouping) => {
+        const num = (n) => (grouping ? Number(n).toLocaleString(s.locale) : String(n));
+        const fmt = (raw, kind) => {
+          switch (kind) {
+            case 'rank':  return raw ? `#${num(raw)}` : s.profile_unranked;
+            case 'pp':    return Number(raw).toFixed(2);
+            case 'acc':   return Number(raw).toFixed(2) + '%';
+            case 'combo': return num(raw) + 'x';
+            default:      return num(raw);
+          }
+        };
+
+        const cells  = statRows.map(([label, a, b, kind]) => [label, fmt(a, kind), fmt(b, kind)]);
+        const labelW = Math.max(...cells.map(c => c[0].length));
+        const col1W  = Math.max(name1.length, ...cells.map(c => c[1].length));
+        const col2W  = Math.max(name2.length, ...cells.map(c => c[2].length));
+
+        const lines = [
+          `${' '.repeat(labelW)} ${name1.padStart(col1W)} | ${name2}`,
+          `${'-'.repeat(labelW)}-${'-'.repeat(col1W)}-+-${'-'.repeat(col2W)}`,
+          // A coluna da direita não é preenchida: espaço no fim da linha só
+          // gastaria largura sem alinhar nada.
+          ...cells.map(c => `${c[0].padEnd(labelW)} ${c[1].padStart(col1W)} | ${c[2]}`),
+        ];
+
+        return { text: lines.join('\n'), width: Math.max(...lines.map(l => l.length)) };
+      };
+
+      let table = render(true);
+      if (table.width > MOBILE_WIDTH_BUDGET) table = render(false);
 
       const embed = new EmbedBuilder()
         .setColor(0x313338)
         .setTitle(s.compare_title)
-        .setDescription(table)
+        // Nomes completos fora do bloco: como texto normal eles quebram linha
+        // sem estragar o alinhamento, e assim um nick de 15 caracteres não
+        // alarga a tabela inteira.
+        .setDescription(`**${u1.username}**  ·  **${u2.username}**\n\`\`\`arm\n${table.text}\n\`\`\``)
         .setFooter({ text: s.compare_footer(interaction.user.username, osu.getModeLabel(mode)) });
 
       if (u1.avatar_url) embed.setThumbnail(u1.avatar_url);

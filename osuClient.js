@@ -16,7 +16,14 @@ const rateLimiter = require('./rateLimiter');
 const { withRetry } = require('./retry');
 
 const DEFAULT_MODE = process.env.OSU_MODE || 'official';
+// Atenção: são APIs de serviços DIFERENTES, apesar dos nomes parecidos.
+//   DAYCORE_V1        → API do Shiina-Web (o front-end). Tem get_rank_cache,
+//                       get_player_scores e outras coisas que o bancho não expõe.
+//   DAYCORE_BANCHO_V1 → API v1 do próprio bancho.py-ex. É a única com busca
+//                       exata por nome (get_player_info?name=).
+//   DAYCORE_V2        → API v2 do bancho.py-ex, somente leitura.
 const DAYCORE_V1 = 'https://daycore.org/api/v1';
+const DAYCORE_BANCHO_V1 = 'https://api.daycore.org/v1';
 const DAYCORE_V2 = 'https://api.daycore.org/v2';
  
 // Mapeamento de modo interno → mode_arg numérico do Daycore
@@ -118,6 +125,25 @@ async function daycoreV1Get(endpoint, params = {}) {
     return axios.get(`${DAYCORE_V1}/${endpoint}`, { params, timeout: 10000 });
   });
   return res.data;
+}
+
+/**
+ * GET na API v1 do bancho.py-ex.
+ *
+ * `validateStatus` aceita 404 e 422 como respostas normais em vez de erro:
+ * "jogador não existe" e "nome fora do formato aceito" são resultados
+ * legítimos de uma busca, não falhas de rede que valha a pena relançar.
+ */
+async function banchoV1Get(endpoint, params = {}) {
+  const res = await withRetry(async () => {
+    await rateLimiter.acquire('daycore');
+    return axios.get(`${DAYCORE_BANCHO_V1}/${endpoint}`, {
+      params,
+      timeout: 10000,
+      validateStatus: (s) => (s >= 200 && s < 300) || s === 404 || s === 422,
+    });
+  });
+  return res.status === 200 ? res.data : null;
 }
 
 async function daycoreV2Get(path, params = {}) {
@@ -298,15 +324,20 @@ async function resolvePlayerId(username) {
   // então uma string só de espaços virava silenciosamente o ID 0.
   if (/^\d+$/.test(raw)) return Number(raw);
 
-  const res = await daycoreV2Get('/players', { name: raw });
-  const results = res?.data ?? [];
-  const lower = raw.toLowerCase();
-  const match = results.find(
-    u => u.name.toLowerCase() === lower ||
-         u.safe_name === lower.replace(/ /g, '_')
-  ) ?? results[0];
-
-  return match?.id ?? null;
+  // Busca exata pelo nome. Usa a v1 do bancho porque o endpoint /players da
+  // v2 NÃO aceita filtro por nome — os parâmetros dele são priv, country,
+  // clan_id, clan_priv, preferred_mode, play_style e paginação. Passar `name`
+  // ali é silenciosamente ignorado pelo FastAPI: a chamada devolvia a primeira
+  // página de TODOS os jogadores, e o código caía no primeiro resultado
+  // (`?? results[0]`) quando não achava correspondência.
+  //
+  // Isso funcionava por acidente enquanto o servidor coubesse numa página de
+  // 50: qualquer nome inexistente resolvia para o primeiro usuário da tabela
+  // (o BanchoBot, id 1), e a partir de 51 contas qualquer jogador fora da
+  // primeira página resolveria para ele também — linkando ou consultando a
+  // conta errada sem nenhum aviso.
+  const res = await banchoV1Get('get_player_info', { name: raw, scope: 'info' });
+  return res?.player?.info?.id ?? null;
 }
 
 // ─── Enriquece scores do Daycore com dados do beatmap (stars + max_combo) ─────
@@ -872,6 +903,37 @@ function getModeLabel(mode = DEFAULT_MODE) {
   return labels[mode] ?? 'Bancho';
 }
  
+// ─── Daycore: leitura para ações administrativas ──────────────────────────────
+// A API v2 do bancho.py-ex é somente leitura, então ela serve para *consultar*
+// o estado (privilégios de quem mandou o comando, status atual de um mapa) —
+// as escritas vão por outro caminho, via Redis pub/sub (ver daycoreAdmin.js).
+
+/**
+ * Dados crus do jogador no Daycore, incluindo o bitfield `priv` — é ele que
+ * diz se a pessoa é NOMINATOR/ADMINISTRATOR lá, e não no Discord.
+ */
+async function getDaycorePlayerRaw(playerId) {
+  const res = await daycoreV2Get(`/players/${idSegment(playerId)}`);
+  return res?.data ?? null;
+}
+
+/** Um beatmap (dificuldade única) pelo ID. */
+async function getDaycoreMap(mapId) {
+  const res = await daycoreV2Get(`/maps/${idSegment(mapId)}`);
+  return res?.data ?? null;
+}
+
+/**
+ * Todas as dificuldades de um beatmapset.
+ * Necessário porque o canal `rank` do bancho age sobre UMA dificuldade por
+ * mensagem — para rankear o set inteiro é preciso publicar uma vez por diff.
+ */
+async function getDaycoreMapsBySet(setId) {
+  const res = await daycoreV2Get('/maps', { set_id: setId, page_size: 100 });
+  const data = res?.data;
+  return Array.isArray(data) ? data : [];
+}
+
 module.exports = {
   getUser,
   getBestScores,
@@ -889,5 +951,9 @@ module.exports = {
   simulatePP,
   parseBeatmapId,
   parseModsString,
+  resolvePlayerId,
+  getDaycorePlayerRaw,
+  getDaycoreMap,
+  getDaycoreMapsBySet,
   DEFAULT_MODE,
 };

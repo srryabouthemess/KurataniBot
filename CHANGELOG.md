@@ -2,6 +2,66 @@
 
 ---
 
+# Sessão de 2026-08-08
+
+## ✨ Novos recursos
+
+- **`/pp` ganhou o modo "quantas plays"** — `/pp target:<meta> value_per_play:<pp> [randomize]` responde quantas plays de um dado valor são necessárias para atingir a meta, simulando a inserção uma a uma no top 100 ponderado. [`commands/pp.js`](commands/pp.js)
+  - O valor base de cada play sobe **+1pp** em relação à anterior (700, 701, 702...). Sem isso a média fica presa e o PP trava num teto: plays de 700pp fixos nunca passam de ~13.917pp, então metas acima disso eram inalcançáveis por mais plays que se fizesse.
+  - `randomize` varia cada play por uma **fração** do valor dela, não por um número fixo de pp. Medindo as top plays reais de 21 jogadores do #1 ao #10.000, a dispersão relativa fica em ~5% independente do nível — ela escala proporcional ao valor da play, não exponencialmente com o skill. Um ±50 fixo seria 10% para quem joga 480pp e só 3,7% para o mrekk.
+  - A amplitude é medida do **próprio perfil** via MAD/mediana (desvio absoluto mediano), não desvio padrão: uma única top play muito destacada do resto inflava a estimativa ao dobro do devido (10% contra ~5% de todo mundo). Limitada a 2,5%–10%, a faixa observada nos perfis reais.
+
+- **`/nominate` — fila de nomeação de mapas do Daycore** (staff). [`commands/nominate.js`](commands/nominate.js)
+  - Rankear/lovear exige `NOMINATION_THRESHOLD` nomeações de pessoas distintas (padrão 2, como o osu! oficial); desqualificar é imediato, e `force` ignora a fila com privilégio de Administrator.
+  - A fila, os votos e o histórico ficam no `bot.db` — o bancho.py-ex não tem conceito de nomeação pendente, só sabe aplicar status final. Novas tabelas `map_nominations`, `nomination_maps` e `admin_actions`.
+  - Um mapa é tratado como set inteiro: o canal `rank` age sobre uma dificuldade por mensagem, então o bot publica uma vez por diff e relata quantas confirmaram.
+
+- **`/moderate` — moderação do Daycore** (staff): `restrict`, `unrestrict`, `check` e `log`. [`commands/moderate.js`](commands/moderate.js)
+
+- **Integração com o bancho.py-ex via Redis pub/sub.** [`daycoreAdmin.js`](daycoreAdmin.js)
+  - A API v2 do bancho.py-ex é somente leitura — não existe rota HTTP administrativa. O caminho de escrita é pub/sub: ele assina `rank`, `restrict` e `unrestrict` no boot e aplica o que for publicado. Mesmo mecanismo do admin panel do Shiina-Web, então nada precisa mudar no servidor.
+  - Como publicar é **fire-and-forget** (o bancho não responde ao publisher), toda ação é confirmada relendo o estado pela API v2. Quando não dá para confirmar, a resposta avisa em vez de reportar sucesso.
+  - Conexão preguiçosa e opcional: sem `REDIS_HOST` o bot sobe normal e só os comandos administrativos ficam indisponíveis, com mensagem clara.
+
+- **`/staff` — registro de identidade para fins de permissão.** [`commands/staff.js`](commands/staff.js)
+  - `register`, `remove` e `list`, exigindo **Administrador no Discord do Daycore** — uma autoridade real, já que aquele servidor é controlado por quem administra o Daycore.
+  - Tabela `staff_links`, separada de `user_links` de propósito (ver a correção de segurança abaixo).
+
+- **Autorização em três camadas.** [`staffGuard.js`](staffGuard.js)
+  - **Escopo**: os comandos administrativos só funcionam no Discord do Daycore (`DAYCORE_GUILD_ID`). Como o bot é instalável por qualquer pessoa (`UserInstall`/`GuildInstall`), sem essa trava bastaria adicioná-lo ao próprio servidor — onde qualquer um é administrador — para tentar usá-los.
+  - **Identidade**: qual conta do Daycore é a pessoa, vinda de `staff_links`.
+  - **Autoridade**: o que ela pode fazer, vindo do `priv` lido do Daycore a cada comando — então tirar o cargo de alguém lá revoga o acesso no bot na hora.
+  - Todas falham fechado.
+
+## 🔒 Segurança
+
+- **CRÍTICO — escalonamento de privilégio pelo `/link`.** A primeira versão do `staffGuard` usava o link comum (`user_links`) para descobrir a conta Daycore de quem rodava o comando. Mas `/link set` nunca verificou posse: ele só confere que a conta **existe** ([`commands/link.js`](commands/link.js)). Isso é correto no propósito original — os comandos de consulta mostram dados públicos, e fingir ser outro não dá nada — e desastroso como base de permissão.
+  - **Ataque**: entrar no Discord do Daycore, rodar `/link set <nick_de_um_admin> server:Daycore` e usar `/moderate` ou `/nominate`. O bot leria o `priv` do admin e autorizaria. No teste, a conta usada tinha `priv=31895` — `DEVELOPER + ADMINISTRATOR + MODERATOR + NOMINATOR`, ou seja, controle total do servidor. Pior: o `userId` enviado ao bancho é o do dono do `priv`, então o log de auditoria do Daycore registraria o **admin real** como autor da ação.
+  - **Correção**: identidade passou a vir de `staff_links`, alimentada só por `/staff register` (Administrador no Discord do Daycore). O `/link` comum não concede mais nada. Coberto por teste que reproduz o ataque.
+
+- **Senha do Redis podia vazar no log.** A conexão era montada como `redis://user:senha@host` e um erro de conexão do client leva a URL para a mensagem de erro, que o `logError` imprime. Credenciais passaram a ir como campos separados de `createClient`. [`daycoreAdmin.js`](daycoreAdmin.js)
+
+- **`allowedMentions: { parse: [] }` no client.** O bot ecoa texto de terceiro (nome de jogador, metadados de mapa, motivo de moderação); barrar menção na origem é mais seguro que confiar que todo call site futuro use embed em vez de `content`. [`index.js`](index.js)
+
+- **Tetos nas entradas de texto livre** (`setMaxLength`) e truncagem do que é renderizado a partir do banco. Sem isso, um motivo de até 6000 caracteres estouraria o limite de 4096 do embed e o comando falharia ao responder — possivelmente depois de a ação já ter sido aplicada no Daycore. [`commands/nominate.js`](commands/nominate.js), [`commands/moderate.js`](commands/moderate.js)
+
+- **`/nominate` e `/moderate` no bucket `heavy` de cooldown.** Uma nomeação publica uma mensagem por dificuldade e relê cada uma até 3 vezes; um set grande são dezenas de chamadas. [`cooldowns.js`](cooldowns.js)
+
+## 🐛 Correções de bugs
+
+- **O embed do `/compare` quebrava no celular.** A tabela tinha 40 colunas (duas colunas de nome centralizadas em 12, mais a de rótulos), e o Discord mobile não rola code block na horizontal — ele quebra a linha, deixando a tabela monoespaçada ilegível. No desktop passava despercebido. [`commands/compare.js`](commands/compare.js)
+  - Reestruturada para rótulo à esquerda e os dois valores lado a lado. A economia vem de três lugares: os nomes saíram das colunas (viraram uma linha de texto normal acima, que quebra sem estragar alinhamento e não deixa um nick de 15 caracteres alargar tudo), a coluna da direita não recebe preenchimento, e os rótulos encurtaram (`Acc`, `Combo`, `Plays`).
+  - As larguras são calculadas a partir dos dados, e o separador de milhar é desligado automaticamente quando a linha não caberia — ele ajuda a ler número grande, mas custa 2-3 colunas num rank de 7 dígitos, justamente nas contas do Bancho.
+  - Resultado: 40 → 23-25 colunas nos cenários testados (Daycore, Bancho com rank de 7 dígitos, nicks de 15 caracteres, jogador sem rank). A string `compare_header_label`, que rotulava a coluna do meio, ficou sem uso e foi removida dos três idiomas.
+
+- **A busca de jogador no Daycore nunca filtrou por nome.** `resolvePlayerId` chamava `GET /v2/players?name=X`, mas esse endpoint **não aceita** `name` — os parâmetros dele são `priv`, `country`, `clan_id`, `clan_priv`, `preferred_mode`, `play_style` e paginação. O FastAPI ignora query param desconhecido em silêncio, então a chamada devolvia a primeira página de **todos** os jogadores e o código caía no primeiro resultado (`?? results[0]`) quando não achava correspondência. [`osuClient.js`](osuClient.js)
+  - Confirmado na API real: `?name=BanchoBot` devolve os 16 jogadores do servidor, não um.
+  - Funcionava por acidente porque o Daycore cabe numa página de 50: o match exato achava todo mundo, e só nome inexistente caía no fallback — resolvendo para o **BanchoBot** (id 1, primeiro da tabela). A partir de 51 contas, qualquer jogador fora da primeira página resolveria para ele também, fazendo `/link set` vincular a conta errada e `/pp player:<nick>` mostrar outra pessoa, sem nenhum aviso.
+  - Corrigido para usar `GET /v1/get_player_info?name=X&scope=info` da API v1 do bancho.py-ex, que faz busca exata de verdade (`users_repo.fetch_one(name=...)`). 404 e 422 passaram a ser tratados como "não encontrado" em vez de erro de rede.
+  - Fica registrado que `daycore.org/api/v1` (Shiina-Web) e `api.daycore.org/v1` (bancho.py-ex) são APIs de serviços diferentes apesar do nome — a busca por nome só existe na segunda.
+
+---
+
 # Sessão de 2026-08-07
 
 ## ✨ Novos recursos

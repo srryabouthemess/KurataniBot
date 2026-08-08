@@ -54,6 +54,95 @@ function findRequiredPP(currentPlays, targetWeighted) {
   return hi;
 }
 
+const MAX_SIMULATED_PLAYS = 5000;
+const PROGRESSION_STEP    = 1;  // pp a mais por play
+
+// O randomize varia cada play por uma FRAÇÃO do valor dela, não por um número
+// fixo de pp. Medindo as top plays reais de 21 jogadores do #1 ao #10.000, a
+// dispersão relativa fica em ~5% independente do nível — ou seja, ela escala
+// proporcional ao valor da play, não exponencialmente com o skill. Um ±50 fixo
+// seria 10% pra quem joga 480pp mas só 3,7% pro mrekk (plays de ~1350pp).
+const DEFAULT_SPREAD_RATIO = 0.050;
+const SPREAD_RATIO_MIN     = 0.025;
+const SPREAD_RATIO_MAX     = 0.10;
+const SPREAD_SAMPLE_SIZE   = 20;
+// Fator que põe o MAD na mesma escala do desvio padrão numa normal.
+const MAD_TO_SD            = 1.4826;
+
+function median(values) {
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid    = Math.floor(sorted.length / 2);
+  return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+}
+
+/**
+ * Mede a dispersão relativa das melhores plays do jogador, pra usar como
+ * amplitude do randomize.
+ *
+ * Usa MAD/mediana em vez de desvio padrão/média porque uma única top play
+ * muito destacada do resto inflava a estimativa — na amostra real isso levava
+ * um perfil a 10% de dispersão contra ~5% de todo mundo, o dobro do devido.
+ * O MAD ignora o outlier e devolve 6,7% pro mesmo perfil.
+ *
+ * Cai no padrão quando há poucas plays pra amostrar, e é limitada à faixa
+ * observada nos perfis reais (2,6%–8,7%) com uma folga.
+ */
+function measureSpreadRatio(plays) {
+  const sample = plays.slice(0, SPREAD_SAMPLE_SIZE).map(p => p.pp).filter(pp => pp > 0);
+  if (sample.length < 5) return DEFAULT_SPREAD_RATIO;
+
+  const med = median(sample);
+  if (med <= 0) return DEFAULT_SPREAD_RATIO;
+
+  const mad   = median(sample.map(pp => Math.abs(pp - med)));
+  const ratio = (MAD_TO_SD * mad) / med;
+
+  return Math.min(SPREAD_RATIO_MAX, Math.max(SPREAD_RATIO_MIN, ratio));
+}
+
+/**
+ * Simula quantas novas plays com valor ~`valuePerPlay` são necessárias para
+ * o PP ponderado total (mais o `bonus`) atingir `targetPP`.
+ *
+ * Cada play "nova" é inserida na lista (mantendo só o top 100, como o osu!
+ * faz de verdade), reordenada, e o PP ponderado é recalculado — por isso
+ * plays adicionais valem cada vez menos (efeito do peso 0.95^i), igual ao
+ * comportamento real do ranking.
+ *
+ * O valor base de cada play sobe PROGRESSION_STEP pp em relação à anterior
+ * (700, 701, 702...), simulando o jogador melhorando aos poucos. Sem isso a
+ * média ficaria presa em `valuePerPlay` e o PP travaria num teto — metas
+ * acima dele seriam inalcançáveis por mais plays que se fizesse.
+ *
+ * Se `randomize` for true, cada play ainda varia aleatoriamente dentro de
+ * +/- `spreadRatio` do próprio valor base (nunca abaixo de 1pp), então a
+ * progressão continua valendo e as plays saem em valores irregulares — com
+ * uma amplitude proporcional ao nível das plays, não fixa em pp.
+ */
+function simulatePlaysNeeded(currentPlays, bonus, targetPP, valuePerPlay, randomize, spreadRatio) {
+  let list = [...currentPlays].sort((a, b) => b.pp - a.pp).slice(0, 100);
+  const generated = [];
+  let count = 0;
+
+  while (calcWeightedPP(list) + bonus < targetPP) {
+    if (count >= MAX_SIMULATED_PLAYS) {
+      return { possible: false, count, generated, finalPP: calcWeightedPP(list) + bonus };
+    }
+
+    let pp = valuePerPlay + count * PROGRESSION_STEP;
+    if (randomize) {
+      const offset = (Math.random() * 2 - 1) * pp * spreadRatio;
+      pp = Math.max(1, pp + offset);
+    }
+
+    generated.push(pp);
+    list = [...list, { pp }].sort((a, b) => b.pp - a.pp).slice(0, 100);
+    count++;
+  }
+
+  return { possible: true, count, generated, finalPP: calcWeightedPP(list) + bonus };
+}
+
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('pp')
@@ -69,6 +158,22 @@ module.exports = {
         .setRequired(true)
         .setMinValue(1)
         .setMaxValue(30000)
+    )
+    .addNumberOption(opt =>
+      opt
+        .setName('value_per_play')
+        .setDescription('If set, calculates how many plays of this pp value are needed instead')
+        .setDescriptionLocalizations({ 'pt-BR': 'Se definido, calcula quantas plays desse valor de pp são necessárias' })
+        .setRequired(false)
+        .setMinValue(1)
+        .setMaxValue(3000)
+    )
+    .addBooleanOption(opt =>
+      opt
+        .setName('randomize')
+        .setDescription('Also vary each play, using the spread measured from the player\'s own top plays')
+        .setDescriptionLocalizations({ 'pt-BR': 'Variar cada play usando a dispersão medida nas top plays do próprio jogador' })
+        .setRequired(false)
     )
     .addStringOption(opt =>
       opt
@@ -91,9 +196,11 @@ module.exports = {
     ),
 
   async execute(interaction) {
-    const s         = t(interaction);
-    const targetPP  = interaction.options.getNumber('target');
-    const resolved  = resolvePlayer(interaction, 'player', 'server');
+    const s             = t(interaction);
+    const targetPP      = interaction.options.getNumber('target');
+    const valuePerPlay  = interaction.options.getNumber('value_per_play');
+    const randomize     = interaction.options.getBoolean('randomize') ?? false;
+    const resolved      = resolvePlayer(interaction, 'player', 'server');
 
     if (resolved.error) {
       return interaction.reply({ content: resolved.error, flags: MessageFlags.Ephemeral });
@@ -138,6 +245,54 @@ module.exports = {
       const currentWeighted = calcWeightedPP(plays);
       const bonus           = currentPP - currentWeighted;
       const targetWeighted  = targetPP - bonus;
+
+      // Modo "quantas plays de X pp": em vez de achar uma única play que
+      // resolve tudo, simula quantas plays de ~valuePerPlay pp são
+      // necessárias, uma a uma, respeitando a ponderação do top 100.
+      if (valuePerPlay != null) {
+        const spreadRatio = measureSpreadRatio(plays);
+        const result = simulatePlaysNeeded(plays, bonus, targetPP, valuePerPlay, randomize, spreadRatio);
+
+        const embed = new EmbedBuilder()
+          .setColor(result.possible ? 0x99ccff : 0xff9999)
+          .setAuthor({
+            name:    `${user.username}: ${stats.pp.toFixed(2)}pp (${rankDisplay}${countryPart})`,
+            iconURL: `https://flagcdn.com/w20/${user.country_code.toLowerCase()}.png`,
+            url:     osu.getUserUrl(user.id, mode),
+          })
+          .setThumbnail(user.avatar_url)
+          .setTitle(s.pp_howmany_title(user.username, targetLabel))
+          .setFooter({ text: s.footer_based_on(osu.getModeLabel(mode), plays.length) });
+
+        // Valor base da última play — em ambos os modos a base sobe
+        // PROGRESSION_STEP por play; o randomize só sacode em cima dela.
+        const lastBase = valuePerPlay + (result.count - 1) * PROGRESSION_STEP;
+
+        if (!result.possible) {
+          embed.setDescription(
+            s.pp_howmany_impossible(user.username, valuePerPlay.toFixed(2), MAX_SIMULATED_PLAYS)
+          );
+        } else if (randomize) {
+          const min = Math.min(...result.generated);
+          const max = Math.max(...result.generated);
+          embed.setDescription(
+            s.pp_howmany_desc_randomized(
+              user.username, targetLabel, result.count,
+              valuePerPlay.toFixed(2), lastBase.toFixed(2), PROGRESSION_STEP,
+              min.toFixed(2), max.toFixed(2), (spreadRatio * 100).toFixed(1)
+            )
+          );
+        } else {
+          embed.setDescription(
+            s.pp_howmany_desc_progressive(
+              user.username, targetLabel, result.count,
+              valuePerPlay.toFixed(2), lastBase.toFixed(2), PROGRESSION_STEP
+            )
+          );
+        }
+
+        return interaction.editReply({ embeds: [embed] });
+      }
 
       const requiredPP = findRequiredPP(plays, targetWeighted);
       const { position } = simulateInsert(plays, requiredPP);

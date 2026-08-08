@@ -1,0 +1,280 @@
+/**
+ * daycoreAdmin.js
+ * Ações administrativas no Daycore (rankear mapa, restringir jogador).
+ *
+ * ── Por que Redis e não HTTP ──────────────────────────────────────────────────
+ * O bancho.py-ex expõe uma API v2 **somente leitura** (app/api/v2/) — não há
+ * nenhuma rota POST/PUT para ações administrativas. O caminho de escrita que
+ * ele oferece é Redis pub/sub: no boot ele roda `start_pubsub_recievers()`
+ * (app/api/start.py) e fica escutando canais, aplicando a ação em quem
+ * publicar. É o mesmo mecanismo que o admin panel do Shiina-Web usa.
+ *
+ * Consequência importante: **publicar é fire-and-forget**. O bancho não
+ * responde ao publisher — ele loga o resultado no console dele e pronto. Por
+ * isso todo comando que publica deve confirmar o efeito relendo o estado pela
+ * API v2 (ver `verifyMapStatus` e `verifyRestricted`), em vez de assumir que
+ * deu certo.
+ *
+ * ── Rede ──────────────────────────────────────────────────────────────────────
+ * No docker-compose do onl-docker o serviço `redis` não publica porta nenhuma:
+ * só é alcançável de dentro da rede do compose. Para o bot (que roda no host
+ * da mesma VPS) chegar nele, o compose precisa bindar em localhost:
+ *
+ *     redis:
+ *       ports:
+ *         - "127.0.0.1:6379:6379"
+ *
+ * Isso não expõe nada para a internet. O próprio compose já usa esse padrão
+ * para o Prometheus do bancho.
+ */
+
+require('dotenv').config();
+const { createClient } = require('redis');
+const osu = require('./osuClient');
+const { logError } = require('./logger');
+
+// ─── Constantes espelhadas do bancho.py-ex ────────────────────────────────────
+// Fonte: app/constants/privileges.py. Mantenha em sincronia se o fork mudar.
+const Privileges = {
+  UNRESTRICTED:    1 << 0,   // 1     — não banido
+  VERIFIED:        1 << 1,   // 2     — já logou in-game
+  WHITELISTED:     1 << 2,   // 4     — bypass de anticheat
+  SUPPORTER:       1 << 4,   // 16
+  PREMIUM:         1 << 5,   // 32
+  ALUMNI:          1 << 7,   // 128
+  TOURNEY_MANAGER: 1 << 10,  // 1024
+  NOMINATOR:       1 << 11,  // 2048  — gerencia status de mapas
+  MODERATOR:       1 << 12,  // 4096  — gerencia usuários (nível 1)
+  ADMINISTRATOR:   1 << 13,  // 8192  — gerencia usuários (nível 2)
+  DEVELOPER:       1 << 14,  // 16384 — controle total
+};
+
+// Valores aceitos pelo comando !map do bancho, e portanto pelo canal `rank`.
+const RankedStatus = {
+  UNRANK: 0,
+  RANK:   2,
+  LOVE:   5,
+};
+
+const STATUS_LABELS = {
+  [RankedStatus.UNRANK]: 'unranked',
+  [RankedStatus.RANK]:   'ranked',
+  [RankedStatus.LOVE]:   'loved',
+};
+
+const CHANNELS = {
+  RANK:       'rank',
+  RESTRICT:   'restrict',
+  UNRESTRICT: 'unrestrict',
+};
+
+// ─── Conexão com o Redis ──────────────────────────────────────────────────────
+// Lazy e opcional: o bot precisa subir normalmente numa máquina de
+// desenvolvimento sem Redis nenhum — só os comandos administrativos ficam
+// indisponíveis, com mensagem clara, em vez de derrubar o processo no boot.
+
+let _client     = null;
+let _connecting = null;
+
+function isConfigured() {
+  return Boolean(process.env.REDIS_HOST);
+}
+
+async function getRedis() {
+  if (!isConfigured()) return null;
+  if (_client?.isOpen) return _client;
+  if (_connecting) return _connecting;
+
+  _connecting = (async () => {
+    // Credenciais como campos separados, e não embutidas numa URL
+    // `redis://user:senha@host`: a URL aparece em mensagem de erro de conexão
+    // do client, que vai parar no log — e o log do bot é lido por gente que
+    // não precisa ter a senha do Redis do servidor.
+    const client = createClient({
+      socket: {
+        host: process.env.REDIS_HOST,
+        port: Number(process.env.REDIS_PORT || 6379),
+        connectTimeout: 5000,
+        // Sem isso o client tenta reconectar para sempre e cada comando fica
+        // pendurado; três tentativas e falha com erro que o comando trata.
+        reconnectStrategy: (retries) => (retries > 3 ? false : Math.min(retries * 200, 1000)),
+      },
+      username: process.env.REDIS_USER || undefined,
+      password: process.env.REDIS_PASS || undefined,
+      database: Number(process.env.REDIS_DB || 0),
+    });
+
+    // O client emite 'error' em queda de conexão; sem listener o Node derruba
+    // o processo inteiro com unhandled 'error' event.
+    client.on('error', (err) => logError('daycoreAdmin:redis', err));
+
+    await client.connect();
+    _client = client;
+    return client;
+  })();
+
+  try {
+    return await _connecting;
+  } finally {
+    _connecting = null;
+  }
+}
+
+async function closeRedis() {
+  if (_client?.isOpen) await _client.quit();
+  _client = null;
+}
+
+/**
+ * Testa se dá para falar com o Redis agora.
+ * @returns {Promise<{ok: true} | {ok: false, reason: 'unconfigured'|'unreachable', error?: string}>}
+ */
+async function checkConnection() {
+  if (!isConfigured()) return { ok: false, reason: 'unconfigured' };
+  try {
+    const client = await getRedis();
+    await client.ping();
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, reason: 'unreachable', error: err.message };
+  }
+}
+
+async function publish(channel, payload) {
+  const client = await getRedis();
+  if (!client) throw new Error('Redis não configurado (defina REDIS_HOST no .env).');
+  // O bancho faz orjson.loads(message["data"]) — precisa ser JSON puro.
+  await client.publish(channel, JSON.stringify(payload));
+}
+
+// ─── Ações ────────────────────────────────────────────────────────────────────
+
+/**
+ * Muda o status de UMA dificuldade.
+ *
+ * `frozen` impede o bancho de sobrescrever o status depois com o valor oficial
+ * do osu!; o comando !map sempre marca como frozen ao mudar status, então
+ * fazemos o mesmo para o resultado não ser revertido sozinho.
+ */
+async function rankBeatmap(beatmapId, status, frozen = true) {
+  await publish(CHANNELS.RANK, {
+    beatmap_id: Number(beatmapId),
+    status:     Number(status),
+    frozen:     Boolean(frozen),
+  });
+}
+
+/**
+ * `id` é o alvo e `userId` é quem está aplicando — o bancho registra o segundo
+ * como `admin` no log de auditoria dele, então precisa ser o osu! ID real do
+ * staff que rodou o comando no Discord, não o do bot.
+ */
+async function restrictPlayer(targetOsuId, actorOsuId, reason) {
+  await publish(CHANNELS.RESTRICT, {
+    id:     Number(targetOsuId),
+    userId: Number(actorOsuId),
+    reason: String(reason),
+  });
+}
+
+async function unrestrictPlayer(targetOsuId, actorOsuId, reason) {
+  await publish(CHANNELS.UNRESTRICT, {
+    id:     Number(targetOsuId),
+    userId: Number(actorOsuId),
+    reason: String(reason),
+  });
+}
+
+// ─── Permissões ───────────────────────────────────────────────────────────────
+
+function hasPriv(priv, flag) {
+  return (Number(priv) & flag) === flag;
+}
+
+/** Rótulo do cargo mais alto, só para exibição. */
+function privLabel(priv) {
+  if (hasPriv(priv, Privileges.DEVELOPER))     return 'Developer';
+  if (hasPriv(priv, Privileges.ADMINISTRATOR)) return 'Administrator';
+  if (hasPriv(priv, Privileges.MODERATOR))     return 'Moderator';
+  if (hasPriv(priv, Privileges.NOMINATOR))     return 'Nominator';
+  return 'Player';
+}
+
+/**
+ * Privilégios de um jogador no Daycore, lidos da API v2.
+ * @returns {Promise<{id: number, name: string, priv: number} | null>}
+ */
+async function getPlayerPrivileges(osuId) {
+  const player = await osu.getDaycorePlayerRaw(osuId);
+  if (!player) return null;
+  return { id: player.id, name: player.name, priv: Number(player.priv ?? 0) };
+}
+
+// ─── Verificação pós-publicação ───────────────────────────────────────────────
+// Como o pub/sub não devolve resultado, relemos o estado pela API v2 para
+// confirmar. O bancho processa em milissegundos, mas damos uma folga porque a
+// ação envolve I/O (ele baixa o .osu se não tiver em disco).
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * Confirma que as dificuldades chegaram no status esperado.
+ * @returns {Promise<{confirmed: number[], pending: number[]}>}
+ */
+async function verifyMapStatus(beatmapIds, expectedStatus, { attempts = 3, delayMs = 1200 } = {}) {
+  let pending = [...beatmapIds];
+  const confirmed = [];
+
+  for (let i = 0; i < attempts && pending.length > 0; i++) {
+    await sleep(delayMs);
+
+    const still = [];
+    for (const id of pending) {
+      try {
+        const map = await osu.getDaycoreMap(id);
+        if (map && Number(map.status) === Number(expectedStatus)) confirmed.push(id);
+        else still.push(id);
+      } catch {
+        still.push(id);
+      }
+    }
+    pending = still;
+  }
+
+  return { confirmed, pending };
+}
+
+/** Confirma se o jogador ficou (ou deixou de estar) restrito. */
+async function verifyRestricted(osuId, expectRestricted, { attempts = 3, delayMs = 1200 } = {}) {
+  for (let i = 0; i < attempts; i++) {
+    await sleep(delayMs);
+    try {
+      const player = await osu.getDaycorePlayerRaw(osuId);
+      if (player) {
+        const restricted = !hasPriv(player.priv, Privileges.UNRESTRICTED);
+        if (restricted === expectRestricted) return true;
+      }
+    } catch {
+      // tenta de novo
+    }
+  }
+  return false;
+}
+
+module.exports = {
+  Privileges,
+  RankedStatus,
+  STATUS_LABELS,
+  CHANNELS,
+  isConfigured,
+  checkConnection,
+  closeRedis,
+  rankBeatmap,
+  restrictPlayer,
+  unrestrictPlayer,
+  hasPriv,
+  privLabel,
+  getPlayerPrivileges,
+  verifyMapStatus,
+  verifyRestricted,
+};

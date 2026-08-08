@@ -9,7 +9,13 @@ const db = require('./db');
 const cooldowns = require('./cooldowns');
 
 const client = new Client({
-  intents: [GatewayIntentBits.Guilds]
+  intents: [GatewayIntentBits.Guilds],
+  // O bot nunca precisa mencionar ninguém: as respostas são embeds e texto.
+  // Sem isso, qualquer texto de terceiro que o bot ecoe (nome de jogador,
+  // metadados de mapa, motivo de moderação) poderia disparar @everyone se um
+  // dia passasse por `content` em vez de embed. Barrar na origem é mais
+  // seguro do que confiar que todo call site futuro use embed.
+  allowedMentions: { parse: [] },
 });
 
 client.commands = new Collection();

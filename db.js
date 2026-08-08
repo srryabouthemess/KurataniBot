@@ -103,6 +103,71 @@ db.exec(`
     key   TEXT PRIMARY KEY,
     value TEXT
   );
+
+  -- ── Vínculo de staff do Daycore ────────────────────────────────────────────
+  -- SEPARADA de user_links de propósito, e não é a mesma coisa.
+  --
+  -- user_links é auto-declarado: /link set só confere que a conta existe, não
+  -- que você é dono dela. Isso é inofensivo no propósito original (os comandos
+  -- de consulta só mostram dados públicos — fingir ser outro não dá nada), e
+  -- seria desastroso como base de permissão: bastaria linkar o nick de um
+  -- admin para herdar os poderes dele.
+  --
+  -- Aqui o vínculo só entra por quem tem Administrator no Discord do Daycore,
+  -- que é uma autoridade real: aquele servidor é controlado por quem manda no
+  -- Daycore. O priv continua sendo lido do Daycore a cada comando, então
+  -- tirar o cargo de alguém lá revoga o acesso no bot na hora.
+  CREATE TABLE IF NOT EXISTS staff_links (
+    discord_id  TEXT    PRIMARY KEY,
+    osu_id      INTEGER NOT NULL,
+    osu_name    TEXT,
+    added_by    TEXT    NOT NULL,
+    added_at    INTEGER NOT NULL
+  );
+
+  -- ── Nomeação de mapas do Daycore ───────────────────────────────────────────
+  -- O bancho.py-ex não tem conceito de "fila de nomeação": ele só sabe aplicar
+  -- um status final num mapa. Todo o processo social (quem nomeou, quantos
+  -- faltam, histórico) vive aqui, e o Daycore só é tocado na decisão final.
+  --
+  -- A chave inclui o status alvo para que nomear um set para "ranked" e para
+  -- "loved" sejam filas independentes.
+  CREATE TABLE IF NOT EXISTS map_nominations (
+    set_id        INTEGER NOT NULL,
+    target_status INTEGER NOT NULL,
+    discord_id    TEXT    NOT NULL,
+    osu_id        INTEGER NOT NULL,
+    osu_name      TEXT,
+    created_at    INTEGER NOT NULL,
+    PRIMARY KEY (set_id, target_status, discord_id)
+  );
+
+  -- Cache do que o mapa é, para a fila poder ser listada sem uma chamada de
+  -- API por linha.
+  CREATE TABLE IF NOT EXISTS nomination_maps (
+    set_id     INTEGER PRIMARY KEY,
+    artist     TEXT,
+    title      TEXT,
+    creator    TEXT,
+    diff_count INTEGER,
+    cached_at  INTEGER NOT NULL
+  );
+
+  -- Log local de tudo que o bot mandou o Daycore fazer. O bancho tem o log de
+  -- auditoria dele (e recebe o osu! ID de quem pediu), mas ele não sabe que a
+  -- ação veio do Discord nem de qual conta do Discord — isso só existe aqui.
+  CREATE TABLE IF NOT EXISTS admin_actions (
+    id                INTEGER PRIMARY KEY AUTOINCREMENT,
+    action            TEXT    NOT NULL,  -- 'rank' | 'restrict' | 'unrestrict'
+    target            TEXT    NOT NULL,  -- set_id ou osu_id do alvo
+    detail            TEXT,
+    actor_discord_id  TEXT    NOT NULL,
+    actor_osu_id      INTEGER NOT NULL,
+    actor_osu_name    TEXT,
+    created_at        INTEGER NOT NULL
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_admin_actions_created ON admin_actions (created_at DESC);
 `);
 
 // ─── Migração de schema: users.osu_id ─────────────────────────────────────────
@@ -461,6 +526,110 @@ function setMeta(key, value) {
   `).run(key, value);
 }
 
+// ─── Vínculo de staff ─────────────────────────────────────────────────────────
+
+function setStaffLink(discordId, osuId, osuName, addedBy) {
+  db.prepare(`
+    INSERT INTO staff_links (discord_id, osu_id, osu_name, added_by, added_at)
+    VALUES (?, ?, ?, ?, ?)
+    ON CONFLICT(discord_id) DO UPDATE SET
+      osu_id = excluded.osu_id, osu_name = excluded.osu_name,
+      added_by = excluded.added_by, added_at = excluded.added_at
+  `).run(discordId, osuId, osuName ?? null, addedBy, Date.now());
+}
+
+function getStaffLink(discordId) {
+  return db.prepare('SELECT * FROM staff_links WHERE discord_id = ?').get(discordId) ?? null;
+}
+
+function removeStaffLink(discordId) {
+  return db.prepare('DELETE FROM staff_links WHERE discord_id = ?').run(discordId).changes > 0;
+}
+
+function listStaffLinks() {
+  return db.prepare('SELECT * FROM staff_links ORDER BY added_at ASC').all();
+}
+
+// ─── Nomeação de mapas ────────────────────────────────────────────────────────
+
+/** Registra (ou reafirma) a nomeação de um set por uma pessoa. */
+function addNomination(setId, targetStatus, discordId, osuId, osuName) {
+  db.prepare(`
+    INSERT INTO map_nominations (set_id, target_status, discord_id, osu_id, osu_name, created_at)
+    VALUES (?, ?, ?, ?, ?, ?)
+    ON CONFLICT(set_id, target_status, discord_id) DO UPDATE SET
+      osu_id = excluded.osu_id, osu_name = excluded.osu_name
+  `).run(setId, targetStatus, discordId, osuId, osuName ?? null, Date.now());
+}
+
+function removeNomination(setId, targetStatus, discordId) {
+  const res = db.prepare(`
+    DELETE FROM map_nominations WHERE set_id = ? AND target_status = ? AND discord_id = ?
+  `).run(setId, targetStatus, discordId);
+  return res.changes > 0;
+}
+
+function getNominations(setId, targetStatus) {
+  return db.prepare(`
+    SELECT discord_id, osu_id, osu_name, created_at
+    FROM map_nominations
+    WHERE set_id = ? AND target_status = ?
+    ORDER BY created_at ASC
+  `).all(setId, targetStatus);
+}
+
+/** Limpa a fila de um set — usado após aplicar, ou para descartar. */
+function clearNominations(setId, targetStatus) {
+  const res = db.prepare(`
+    DELETE FROM map_nominations WHERE set_id = ? AND target_status = ?
+  `).run(setId, targetStatus);
+  return res.changes;
+}
+
+/** Fila completa, agrupada por set + status alvo. */
+function listPendingNominations(limit = 25) {
+  return db.prepare(`
+    SELECT n.set_id, n.target_status, COUNT(*) AS votes, MAX(n.created_at) AS last_at,
+           m.artist, m.title, m.creator, m.diff_count
+    FROM map_nominations n
+    LEFT JOIN nomination_maps m ON m.set_id = n.set_id
+    GROUP BY n.set_id, n.target_status
+    ORDER BY last_at DESC
+    LIMIT ?
+  `).all(limit);
+}
+
+function cacheNominationMap(setId, { artist, title, creator, diffCount }) {
+  db.prepare(`
+    INSERT INTO nomination_maps (set_id, artist, title, creator, diff_count, cached_at)
+    VALUES (?, ?, ?, ?, ?, ?)
+    ON CONFLICT(set_id) DO UPDATE SET
+      artist = excluded.artist, title = excluded.title,
+      creator = excluded.creator, diff_count = excluded.diff_count,
+      cached_at = excluded.cached_at
+  `).run(setId, artist ?? null, title ?? null, creator ?? null, diffCount ?? null, Date.now());
+}
+
+// ─── Log de ações administrativas ─────────────────────────────────────────────
+
+function logAdminAction({ action, target, detail, actorDiscordId, actorOsuId, actorOsuName }) {
+  db.prepare(`
+    INSERT INTO admin_actions
+      (action, target, detail, actor_discord_id, actor_osu_id, actor_osu_name, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    action, String(target), detail ?? null,
+    actorDiscordId, actorOsuId, actorOsuName ?? null, Date.now(),
+  );
+}
+
+function listAdminActions(limit = 15) {
+  return db.prepare(`
+    SELECT action, target, detail, actor_osu_name, actor_discord_id, created_at
+    FROM admin_actions ORDER BY created_at DESC LIMIT ?
+  `).all(limit);
+}
+
 // ─── Encerramento ─────────────────────────────────────────────────────────────
 
 function close() {
@@ -480,5 +649,9 @@ module.exports = {
   getBeatmapMeta, setBeatmapMeta,
   getMapDifficulty, setMapDifficulty,
   getMeta, setMeta,
+  setStaffLink, getStaffLink, removeStaffLink, listStaffLinks,
+  addNomination, removeNomination, getNominations, clearNominations,
+  listPendingNominations, cacheNominationMap,
+  logAdminAction, listAdminActions,
   close,
 };
