@@ -101,7 +101,7 @@ function measureSpreadRatio(plays) {
 }
 
 /**
- * Simula quantas novas plays com valor ~`valuePerPlay` são necessárias para
+ * Simula quantas novas plays com valor ~`avgPP` são necessárias para
  * o PP ponderado total (mais o `bonus`) atingir `targetPP`.
  *
  * Cada play "nova" é inserida na lista (mantendo só o top 100, como o osu!
@@ -111,7 +111,7 @@ function measureSpreadRatio(plays) {
  *
  * O valor base de cada play sobe PROGRESSION_STEP pp em relação à anterior
  * (700, 701, 702...), simulando o jogador melhorando aos poucos. Sem isso a
- * média ficaria presa em `valuePerPlay` e o PP travaria num teto — metas
+ * média ficaria presa em `avgPP` e o PP travaria num teto — metas
  * acima dele seriam inalcançáveis por mais plays que se fizesse.
  *
  * Se `randomize` for true, cada play ainda varia aleatoriamente dentro de
@@ -119,7 +119,7 @@ function measureSpreadRatio(plays) {
  * progressão continua valendo e as plays saem em valores irregulares — com
  * uma amplitude proporcional ao nível das plays, não fixa em pp.
  */
-function simulatePlaysNeeded(currentPlays, bonus, targetPP, valuePerPlay, randomize, spreadRatio) {
+function simulatePlaysNeeded(currentPlays, bonus, targetPP, avgPP, randomize, spreadRatio) {
   let list = [...currentPlays].sort((a, b) => b.pp - a.pp).slice(0, 100);
   const generated = [];
   let count = 0;
@@ -129,7 +129,7 @@ function simulatePlaysNeeded(currentPlays, bonus, targetPP, valuePerPlay, random
       return { possible: false, count, generated, finalPP: calcWeightedPP(list) + bonus };
     }
 
-    let pp = valuePerPlay + count * PROGRESSION_STEP;
+    let pp = avgPP + count * PROGRESSION_STEP;
     if (randomize) {
       const offset = (Math.random() * 2 - 1) * pp * spreadRatio;
       pp = Math.max(1, pp + offset);
@@ -161,9 +161,9 @@ module.exports = {
     )
     .addNumberOption(opt =>
       opt
-        .setName('value_per_play')
-        .setDescription('If set, calculates how many plays of this pp value are needed instead')
-        .setDescriptionLocalizations({ 'pt-BR': 'Se definido, calcula quantas plays desse valor de pp são necessárias' })
+        .setName('avg_pp')
+        .setDescription('If set, answers how many plays averaging this much pp are needed instead')
+        .setDescriptionLocalizations({ 'pt-BR': 'Se definido, responde quantas plays com essa média de pp são necessárias' })
         .setRequired(false)
         .setMinValue(1)
         .setMaxValue(3000)
@@ -198,7 +198,7 @@ module.exports = {
   async execute(interaction) {
     const s             = t(interaction);
     const targetPP      = interaction.options.getNumber('target');
-    const valuePerPlay  = interaction.options.getNumber('value_per_play');
+    const avgPP  = interaction.options.getNumber('avg_pp');
     const randomize     = interaction.options.getBoolean('randomize') ?? false;
     const resolved      = resolvePlayer(interaction, 'player', 'server');
 
@@ -247,11 +247,11 @@ module.exports = {
       const targetWeighted  = targetPP - bonus;
 
       // Modo "quantas plays de X pp": em vez de achar uma única play que
-      // resolve tudo, simula quantas plays de ~valuePerPlay pp são
+      // resolve tudo, simula quantas plays de ~avgPP pp são
       // necessárias, uma a uma, respeitando a ponderação do top 100.
-      if (valuePerPlay != null) {
+      if (avgPP != null) {
         const spreadRatio = measureSpreadRatio(plays);
-        const result = simulatePlaysNeeded(plays, bonus, targetPP, valuePerPlay, randomize, spreadRatio);
+        const result = simulatePlaysNeeded(plays, bonus, targetPP, avgPP, randomize, spreadRatio);
 
         const embed = new EmbedBuilder()
           .setColor(result.possible ? 0x99ccff : 0xff9999)
@@ -266,11 +266,11 @@ module.exports = {
 
         // Valor base da última play — em ambos os modos a base sobe
         // PROGRESSION_STEP por play; o randomize só sacode em cima dela.
-        const lastBase = valuePerPlay + (result.count - 1) * PROGRESSION_STEP;
+        const lastBase = avgPP + (result.count - 1) * PROGRESSION_STEP;
 
         if (!result.possible) {
           embed.setDescription(
-            s.pp_howmany_impossible(user.username, valuePerPlay.toFixed(2), MAX_SIMULATED_PLAYS)
+            s.pp_howmany_impossible(user.username, avgPP.toFixed(2), MAX_SIMULATED_PLAYS)
           );
         } else if (randomize) {
           const min = Math.min(...result.generated);
@@ -278,7 +278,7 @@ module.exports = {
           embed.setDescription(
             s.pp_howmany_desc_randomized(
               user.username, targetLabel, result.count,
-              valuePerPlay.toFixed(2), lastBase.toFixed(2), PROGRESSION_STEP,
+              avgPP.toFixed(2), lastBase.toFixed(2), PROGRESSION_STEP,
               min.toFixed(2), max.toFixed(2), (spreadRatio * 100).toFixed(1)
             )
           );
@@ -286,7 +286,7 @@ module.exports = {
           embed.setDescription(
             s.pp_howmany_desc_progressive(
               user.username, targetLabel, result.count,
-              valuePerPlay.toFixed(2), lastBase.toFixed(2), PROGRESSION_STEP
+              avgPP.toFixed(2), lastBase.toFixed(2), PROGRESSION_STEP
             )
           );
         }

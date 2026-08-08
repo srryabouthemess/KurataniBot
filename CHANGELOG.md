@@ -6,7 +6,7 @@
 
 ## ✨ Novos recursos
 
-- **`/pp` ganhou o modo "quantas plays"** — `/pp target:<meta> value_per_play:<pp> [randomize]` responde quantas plays de um dado valor são necessárias para atingir a meta, simulando a inserção uma a uma no top 100 ponderado. [`commands/pp.js`](commands/pp.js)
+- **`/pp` ganhou o modo "quantas plays"** — `/pp target:<meta> avg_pp:<pp> [randomize]` responde quantas plays de um dado valor são necessárias para atingir a meta, simulando a inserção uma a uma no top 100 ponderado. [`commands/pp.js`](commands/pp.js)
   - O valor base de cada play sobe **+1pp** em relação à anterior (700, 701, 702...). Sem isso a média fica presa e o PP trava num teto: plays de 700pp fixos nunca passam de ~13.917pp, então metas acima disso eram inalcançáveis por mais plays que se fizesse.
   - `randomize` varia cada play por uma **fração** do valor dela, não por um número fixo de pp. Medindo as top plays reais de 21 jogadores do #1 ao #10.000, a dispersão relativa fica em ~5% independente do nível — ela escala proporcional ao valor da play, não exponencialmente com o skill. Um ±50 fixo seria 10% para quem joga 480pp e só 3,7% para o mrekk.
   - A amplitude é medida do **próprio perfil** via MAD/mediana (desvio absoluto mediano), não desvio padrão: uma única top play muito destacada do resto inflava a estimativa ao dobro do devido (10% contra ~5% de todo mundo). Limitada a 2,5%–10%, a faixa observada nos perfis reais.
