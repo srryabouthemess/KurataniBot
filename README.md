@@ -15,7 +15,7 @@ Funciona no **Bancho** (servidor oficial), no **Daycore** e no **Daycore RX**.
 | `/topplays` | Melhores plays, 5 por página |
 | `/compare` | Compara as estatísticas de dois jogadores |
 | `/whatif <pp>` | Quanto PP você ganharia com uma nova play de X pp |
-| `/pp <alvo>` | Quanto PP uma única play precisa valer para você chegar a um total |
+| `/pp <alvo>` | O que falta para chegar a um total de PP: numa play só, ou em quantas plays de X pp |
 | `/simulate <mapa>` | Quanto PP daria uma play específica num mapa (mods, 100s, misses, combo) |
 | `/link` | Vincula sua conta do osu! ao Discord |
 | `/language` | Muda o idioma — Português, English ou Русский |
@@ -160,38 +160,11 @@ Confira a versão com `node --version` — precisa ser **22.13 ou superior**.
 
 ## Administração do Daycore (opcional)
 
-Habilita `/nominate` e `/moderate`, que **mudam o Daycore de verdade** — rankeiam mapas e restringem contas. Esta seção só interessa a quem hospeda o bot junto de um servidor bancho.py-ex; para todo mundo mais, é só deixar as variáveis vazias e nada muda.
-
-**Sem configurar, os comandos falham fechado**: aparecem no Discord mas recusam qualquer ação. Não há estado "meio ligado".
-
-### Como funciona
-
-O bancho.py-ex expõe uma API v2 **somente leitura** — não existe rota HTTP para ações administrativas. O caminho de escrita dele é **Redis pub/sub**: no boot ele assina os canais `rank`, `restrict` e `unrestrict` e aplica o que for publicado (`app/api/start.py`). É o mesmo mecanismo que o admin panel do Shiina-Web usa, então o bot não precisa de nenhum código novo do lado do servidor.
-
-Duas consequências que valem entender:
-
-- **A permissão vem do Daycore, não do Discord.** O bot lê o `priv` da conta pela API v2 e exige os mesmos bits que os comandos in-game exigem: `NOMINATOR` para mexer em mapa, `ADMINISTRATOR` para restringir. Tirar o cargo de alguém no Daycore revoga o acesso pelo bot na hora.
-- **Publicar é fire-and-forget.** O bancho não responde a quem publicou. Por isso o bot relê o estado pela API depois de agir e diz na resposta se conseguiu confirmar; quando não confirma, ele avisa em vez de mentir que deu certo.
-
-### Quem é quem: `/staff`, não `/link`
-
-Para o bot saber que conta do Daycore corresponde a qual pessoa do Discord, existe um registro **separado** do `/link` comum:
-
-```
-/staff register member:@fulano player:<nick no Daycore>
-/staff list
-/staff remove member:@fulano
-```
-
-`/staff` exige **Administrador no Discord do Daycore** — o que é uma autoridade real, já que aquele servidor é controlado por quem manda no Daycore.
-
-O `/link` comum **não serve** aqui, e isso é deliberado: ele é auto-declarado (só confere que a conta existe, não que você é dono dela). Isso é inofensivo no propósito dele — os comandos de consulta só mostram dados públicos —, mas como base de permissão deixaria qualquer pessoa do servidor linkar o nick de um admin e herdar os poderes dele, inclusive assinando o log de auditoria do Daycore com o nome do admin real.
-
-O vínculo sozinho não concede nada: ele só diz *quem você é*. O que você *pode fazer* continua vindo do `priv`, conferido a cada comando.
+Habilita `/nominate`, `/moderate` e `/staff`, que **mudam o Daycore de verdade**. Só interessa a quem hospeda o bot junto de um servidor bancho.py-ex — com as variáveis vazias os comandos recusam qualquer ação e o resto do bot funciona normal.
 
 ### 1. Deixar o Redis alcançável
 
-No `docker-compose.yml` do [onl-docker](https://github.com/osu-NoLimits/onl-docker) o serviço `redis` não publica porta nenhuma — só é visível dentro da rede do compose. Rodando o bot no **host da mesma máquina**, adicione ao serviço `redis`:
+É por ele que as mudanças chegam no servidor. No `docker-compose.yml` do [onl-docker](https://github.com/osu-NoLimits/onl-docker) o `redis` não publica porta nenhuma, então adicione:
 
 ```yaml
   redis:
@@ -199,20 +172,14 @@ No `docker-compose.yml` do [onl-docker](https://github.com/osu-NoLimits/onl-dock
       - "127.0.0.1:6379:6379"
 ```
 
-Isso expõe o Redis apenas para o próprio host, não para a internet. O compose já usa esse mesmo padrão para o Prometheus do bancho. Depois, recrie o container:
+Isso o deixa visível só para o próprio host. Depois, `docker compose up -d redis`.
+
+> Faça isso apenas com o bot rodando na **mesma máquina**. Entre máquinas diferentes, use VPN ou túnel SSH: Redis aberto para a internet é controle administrativo do servidor para quem tiver a senha.
+
+### 2. Configurar o `.env`
 
 ```bash
-docker compose up -d redis
-```
-
-Se o bot rodar em **outra máquina**, não faça isso — use VPN ou túnel SSH entre as duas. Abrir o Redis para a internet dá controle administrativo do servidor a qualquer um que descubra a senha.
-
-### 2. Configurar o bot
-
-No `.env`:
-
-```bash
-DAYCORE_GUILD_ID=123456789012345678   # ID do Discord do Daycore
+DAYCORE_GUILD_ID=123456789012345678   # trava os comandos nesse Discord
 NOMINATION_THRESHOLD=2                # nomeações necessárias (padrão: 2)
 
 REDIS_HOST=127.0.0.1
@@ -221,37 +188,36 @@ REDIS_PASS=a_mesma_do_compose
 REDIS_DB=0
 ```
 
-`DAYCORE_GUILD_ID` tranca os comandos no servidor do Daycore: em qualquer outro Discord onde o bot esteja, eles são recusados.
+### 3. Registrar a staff
 
-### Fluxo de nomeação
-
-Espelha o osu! oficial — rankear precisa de consenso, desqualificar não:
+O que cada um pode fazer vem do cargo no **Daycore** (`NOMINATOR` para mapas, `ADMINISTRATOR` para contas) — tirar o cargo lá revoga o acesso na hora. O bot só precisa saber qual conta é de quem:
 
 ```
-/nominate add map:<id ou link>              → registra sua nomeação (1/2)
-/nominate add map:<id ou link>              → outro nominator (2/2) → aplica no Daycore
-/nominate queue                             → o que está esperando
-/nominate withdraw map:<id>                 → retira a sua
-/nominate disqualify map:<id> reason:<...>  → unrank imediato, sem precisar de votos
-/nominate force map:<id> status:<...>       → aplica ignorando a fila (Administrator)
+/staff register member:@fulano player:<nick no Daycore>
+/staff list
+/staff remove member:@fulano
 ```
 
-A fila, os votos e o histórico vivem no `bot.db` — o bancho.py-ex não tem conceito de "nomeação pendente", ele só sabe aplicar um status final. O Daycore só é tocado na decisão final.
+Exige Administrador no Discord do Daycore. O `/link` comum **não** serve aqui: ele é auto-declarado, então qualquer um poderia linkar o nick de um admin e herdar os poderes dele.
 
-Um mapa é sempre tratado como **set inteiro**: o canal `rank` age sobre uma dificuldade por mensagem, então o bot publica uma vez por diff e reporta quantas confirmaram.
-
-### Moderação
+### Comandos
 
 ```
-/moderate check player:<nome>                        → privilégios e status (não altera nada)
-/moderate restrict player:<nome> reason:<motivo>      → restringe (Administrator)
-/moderate unrestrict player:<nome> reason:<motivo>    → libera (Administrator)
-/moderate log                                         → ações recentes feitas pelo bot
+/nominate add map:<id ou link>        → nomeia; ao atingir o limiar, aplica no Daycore
+/nominate queue                       → o que está esperando
+/nominate withdraw map:<id>           → retira a sua
+/nominate disqualify map:<id>         → unrank imediato, sem precisar de votos
+/nominate force map:<id> status:<...> → ignora a fila (Administrator)
+
+/moderate check player:<nome>         → privilégios e status (não altera nada)
+/moderate restrict player:<nome> reason:<motivo>
+/moderate unrestrict player:<nome> reason:<motivo>
+/moderate log                         → ações recentes feitas pelo bot
 ```
 
-O motivo vai para o log de auditoria do próprio Daycore, junto do osu! ID de quem rodou o comando — o bancho registra a ação como sendo da pessoa, não do bot.
+A fila de nomeação vive no `bot.db` e o Daycore só é tocado na decisão final, sempre no set inteiro. O motivo da moderação vai para o log de auditoria do Daycore junto do osu! ID de quem rodou o comando.
 
-O nome do jogador é resolvido por busca **exata**: ou bate, ou o comando recusa. Um typo não acerta outra conta.
+Como o bot não recebe confirmação do servidor ao publicar, ele relê o estado depois e avisa quando não conseguiu confirmar — em vez de reportar sucesso no escuro.
 
 ---
 
