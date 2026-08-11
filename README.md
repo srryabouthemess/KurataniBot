@@ -42,10 +42,10 @@ Alguns detalhes úteis:
 Se o `COMMAND_PREFIX` estiver preenchido no `.env`, os mesmos comandos respondem escritos:
 
 ```
-k!rs pudim2                         → /rs player:pudim2
-k!rs pudim2 -daycore                → /rs player:pudim2 server:Daycore
+k!rs mrekk                          → /rs player:mrekk
+k!rs fulano -daycore                → /rs player:fulano server:Daycore
 k!score map:2298847 player:mrekk
-k!link set desgracadogames -daycore
+k!link set <seu nick lá> -daycore
 k!pp 10000 avg:700 -randomize
 ```
 
@@ -73,10 +73,10 @@ Vale também para **link colado na conversa**, não só embed do bot:
 ```
 Fulano:  https://osu.ppy.sh/beatmapsets/2291108#osu/5036232
 Você:    k!c -bancho        → seus scores nesse mapa
-Você:    k!c nunca -bancho  → os scores do "nunca" nesse mapa
+Você:    k!c WhiteCat -bancho  → os scores do WhiteCat nesse mapa
 ```
 
-No modo texto o `k!c` entende sozinho se o que você escreveu é mapa ou jogador: `k!c 2298847` é mapa, `k!c nunca` é jogador. (No slash a ordem é `map`, `player`, `server`.)
+No modo texto o `k!c` entende sozinho se o que você escreveu é mapa ou jogador: `k!c 2298847` é mapa, `k!c WhiteCat` é jogador. (No slash a ordem é `map`, `player`, `server`.)
 
 E se você **responder** a uma mensagem, o mapa dela tem prioridade sobre o resto do canal — dá para voltar numa play de meia hora atrás sem precisar recolar o link. Funciona respondendo tanto ao link cru quanto ao embed de uma play do próprio bot. (Só no modo texto: não dá para responder a uma mensagem com slash command.)
 
@@ -92,8 +92,8 @@ E se você **responder** a uma mensagem, o mapa dela tem prioridade sobre o rest
 Dá pra ter um nick diferente em cada servidor — útil se seu nome no Daycore não é o mesmo do Bancho:
 
 ```
-/link set desgracadogames          → vincula no Bancho
-/link set desgrasa server:Daycore  → vincula no Daycore
+/link set <seu nick no Bancho>            → vincula no Bancho
+/link set <seu nick no Daycore> -daycore  → vincula no Daycore
 ```
 
 Os dois convivem. Comandos sem a opção `server` usam o seu **servidor padrão**, que é o do último `/link set`.
@@ -125,7 +125,8 @@ Só a URL do site é obrigatória. As URLs de API seguem a convenção do
 [onl-docker](https://github.com/osu-NoLimits/onl-docker) (`api.<domínio>` e
 `a.<domínio>` para avatares) e podem ser sobrescritas com
 `SERVER_<CHAVE>_API` e `SERVER_<CHAVE>_AVATARS`. `SERVER_<CHAVE>_LABEL` muda o
-nome exibido, e `SERVER_<CHAVE>_KEY` guarda a api key quando o servidor exigir.
+nome exibido. Não há api key: nenhum dos endpoints que o bot usa pede
+autenticação.
 
 A chave vira o valor da opção `server` nos comandos (`daycore`, `daycore_rx`) e
 a flag do modo texto (`-daycore`, `-daycorerx`). Para adicionar outro, é só
