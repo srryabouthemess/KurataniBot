@@ -2,13 +2,13 @@
   "name": "kuratanibot",
   "version": "1.0.0",
   "description": "",
-  "main": "index.js",
+  "main": "src/index.js",
   "scripts": {
-    "start": "node index.js",
+    "start": "node src/index.js",
     "test": "node --test test/*.test.js",
     "lint": "eslint .",
     "smoke": "node test/smoke.js",
-    "deploy": "node deploy-commands.js"
+    "deploy": "node src/deploy-commands.js"
   },
   "keywords": [],
   "author": "",

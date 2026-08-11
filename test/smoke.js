@@ -6,8 +6,8 @@
  * regrediu. Rode com `npm run smoke` depois de mexer no osuClient ou no
  * registro de servidores.
  */
-const servers = require('../servers');
-const osu = require('../osuClient');
+const servers = require('../src/servers');
+const osu = require('../src/osuClient');
 
 // Um jogador conhecido por servidor; ajuste se algum sumir.
 const PLAYERS = { official: 'kuratani', default: 'pudim2' };

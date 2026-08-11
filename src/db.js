@@ -30,11 +30,14 @@ try {
 const fs   = require('fs');
 const path = require('path');
 const servers = require('./servers');
+const { ROOT, BOT_DB, CACHE_DB } = require('./paths');
 
-const DB_PATH       = path.join(__dirname, 'bot.db');
-const CACHE_PATH    = path.join(__dirname, 'cache.db');
-const OLD_LINKS_PATH = path.join(__dirname, 'links.json');
-const OLD_LANGS_PATH = path.join(__dirname, 'languages.json');
+// Os bancos ficam na raiz do projeto, não em src/: dado não acompanha
+// reorganização de pasta de código (ver paths.js).
+const DB_PATH        = BOT_DB;
+const CACHE_PATH     = CACHE_DB;
+const OLD_LINKS_PATH = path.join(ROOT, 'links.json');
+const OLD_LANGS_PATH = path.join(ROOT, 'languages.json');
 
 const db = new DatabaseSync(DB_PATH);
 

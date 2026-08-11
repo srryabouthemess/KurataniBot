@@ -8,7 +8,7 @@ const assert = require('node:assert');
 // de propósito.
 process.chdir(os.tmpdir());
 
-const SERVERS_PATH = require.resolve('../servers');
+const SERVERS_PATH = require.resolve('../src/servers');
 
 /** Recarrega o registro com um ambiente controlado. */
 function load(env) {
@@ -19,7 +19,7 @@ function load(env) {
   }
   Object.assign(process.env, env);
   delete require.cache[SERVERS_PATH];
-  return require('../servers');
+  return require('../src/servers');
 }
 
 test('configuração nova', async t => {

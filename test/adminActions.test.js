@@ -21,7 +21,7 @@ redis.createClient = () => ({
   async publish(channel, payload) { published.push([channel, JSON.parse(payload)]); },
 });
 
-const daycore = require('../daycoreAdmin');
+const daycore = require('../src/daycoreAdmin');
 
 const ACTOR = { osuId: 13, discordId: '100000000000000001', discordName: 'kuratani' };
 const lastPayload = () => published[published.length - 1][1];

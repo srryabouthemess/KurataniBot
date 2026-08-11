@@ -5,7 +5,7 @@ const path = require('path');
 const test = require('node:test');
 const assert = require('node:assert');
 
-const emojis = require('../emojis');
+const emojis = require('../src/emojis');
 
 // PNG de 1x1, o menor arquivo válido possível.
 const PNG = Buffer.from(
@@ -88,8 +88,8 @@ test('sync envia o que falta e reaproveita o resto', async t => {
 
 test('falha num emoji não impede os outros', async t => {
   // Cache novo: o de nomes vive pelo processo (um boot = um sync).
-  delete require.cache[require.resolve('../emojis')];
-  const fresh = require('../emojis');
+  delete require.cache[require.resolve('../src/emojis')];
+  const fresh = require('../src/emojis');
 
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'emoji2-'));
   fs.writeFileSync(path.join(dir, 'rank_ss.png'), PNG);

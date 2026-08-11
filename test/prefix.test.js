@@ -9,7 +9,7 @@ const assert = require('node:assert');
 const { MessageFlags } = require('discord.js');
 const { fakeMessage, firstReply, drain } = require('./helpers');
 
-const prefixCommands = require('../prefixCommands');
+const prefixCommands = require('../src/prefixCommands');
 
 const NAMES = [
   'recent', 'rs', 'score', 'c', 'simulate', 'pp',
@@ -19,7 +19,7 @@ const NAMES = [
 let captured = null;
 const commands = new Map();
 for (const name of NAMES) {
-  const real = require(`../commands/${name}`);
+  const real = require(`../src/commands/${name}`);
   commands.set(name, {
     data: real.data,
     prefix: real.prefix,

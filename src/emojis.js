@@ -23,7 +23,8 @@ const fs = require('fs');
 const path = require('path');
 const { logError } = require('./logger');
 
-const ASSETS_DIR = path.join(__dirname, 'assets', 'emojis');
+// Fora de src/: emoji é conteúdo, não fonte (ver paths.js).
+const ASSETS_DIR = path.join(require('./paths').ASSETS, 'emojis');
 
 // Limite do Discord por emoji.
 const MAX_BYTES = 256 * 1024;

@@ -8,7 +8,7 @@
 
 const path = require('path');
 
-const ROOT = path.join(__dirname, '..');
+const ROOT = path.join(__dirname, '..', 'src');
 
 /** Uma `Message` do Discord com o mínimo que o bot toca. */
 function fakeMessage(content, {

@@ -2,8 +2,10 @@
  * Nomeação: unicidade por conta de JOGO (não por conta do Discord) e a
  * migração que troca a chave da tabela antiga.
  *
- * Roda contra um bot.db descartável — o db.js abre o banco ao lado dele mesmo,
- * então copiamos o módulo para um diretório temporário.
+ * Roda contra um bot.db descartável: os módulos são copiados para um diretório
+ * temporário que **reproduz o layout do projeto** (`<temp>/src/db.js`), porque
+ * o caminho do banco é resolvido a partir de `src/` (ver src/paths.js). Copiar
+ * para uma pasta plana faria o teste escrever o banco um nível acima.
  */
 const fs = require('fs');
 const os = require('os');
@@ -12,14 +14,19 @@ const test = require('node:test');
 const assert = require('node:assert');
 const { DatabaseSync } = require('node:sqlite');
 
-const ROOT = path.join(__dirname, '..');
+const PROJECT = path.join(__dirname, '..');
+const SRC     = path.join(PROJECT, 'src');
 
 function workspace(t) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'kb-db-'));
-  for (const file of ['db.js', 'servers.js']) {
-    fs.copyFileSync(path.join(ROOT, file), path.join(dir, file));
+  const srcDir = path.join(dir, 'src');
+  fs.mkdirSync(srcDir);
+
+  for (const file of ['db.js', 'servers.js', 'paths.js']) {
+    fs.copyFileSync(path.join(SRC, file), path.join(srcDir, file));
   }
-  fs.symlinkSync(path.join(ROOT, 'node_modules'), path.join(dir, 'node_modules'), 'junction');
+  // Na raiz do temp: o require sobe de `src/` até achar.
+  fs.symlinkSync(path.join(PROJECT, 'node_modules'), path.join(dir, 'node_modules'), 'junction');
 
   const dbPath = path.join(dir, 'bot.db');
 
@@ -27,8 +34,8 @@ function workspace(t) {
   // ainda aberto trava o arquivo e o rmSync falha com EPERM.
   const opened = [];
   const load = () => {
-    delete require.cache[require.resolve(path.join(dir, 'db.js'))];
-    const db = require(path.join(dir, 'db.js'));
+    delete require.cache[require.resolve(path.join(srcDir, 'db.js'))];
+    const db = require(path.join(srcDir, 'db.js'));
     opened.push(db);
     return db;
   };

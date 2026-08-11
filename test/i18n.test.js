@@ -9,7 +9,7 @@ const test = require('node:test');
 const assert = require('node:assert');
 
 const LANGS = ['pt', 'en', 'ru'];
-const load = lang => require(`../i18n/${lang}`)({ ADMIN: 'Servidor' });
+const load = lang => require(`../src/i18n/${lang}`)({ ADMIN: 'Servidor' });
 
 test('todos os idiomas têm as mesmas chaves', () => {
   const [first, ...rest] = LANGS;

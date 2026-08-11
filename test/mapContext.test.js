@@ -2,7 +2,7 @@
 const test = require('node:test');
 const assert = require('node:assert');
 
-const mapContext = require('../mapContext');
+const mapContext = require('../src/mapContext');
 
 const BOT = { id: 'bot-1' };
 const message = (content, { embeds = [], author = { id: 'u1' }, channelId = 'c1', age = 0 } = {}) => ({
