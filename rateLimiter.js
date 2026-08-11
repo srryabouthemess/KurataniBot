@@ -59,12 +59,18 @@ class LeakyBucket {
 /**
  * Limites por recurso (requisições por segundo).
  *
- * osuMapFile é o mais restrito de propósito: são arquivos de ~50KB e a API
- * oficial é bem menos tolerante neles do que nos endpoints de metadados.
+ * `osuMapFile` continua sendo o mais apertado: são arquivos de ~50KB, e o
+ * endpoint de download é mais sensível que os de metadados. Mas o 2 original
+ * foi cautela sem medição, e ele estava no caminho crítico do que a pessoa
+ * sente: uma página de /topplays com 5 mapas inéditos gastava ~2,5s só na fila
+ * de download, antes de qualquer cálculo. A 4/s isso cai para ~1,2s, e ainda
+ * fica na metade do balde de metadados.
+ *
+ * Se algum dia aparecer 429 nos downloads, este é o primeiro número a baixar.
  */
 const BUCKETS = {
   osuApi:     8,  // GET/POST em osu.ppy.sh/api/v2
-  osuMapFile: 2,  // download de .osu em osu.ppy.sh/osu/{id}
+  osuMapFile: 4,  // download de .osu em osu.ppy.sh/osu/{id}
   osuOAuth:   1,  // /oauth/token
 };
 
