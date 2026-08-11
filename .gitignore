@@ -42,6 +42,13 @@ bot.db
 bot.db-journal
 bot.db-wal
 bot.db-shm
+
+# Cache de mapas (arquivo separado do bot.db justamente por ser descartável:
+# some sem prejuízo nenhum, o bot rebaixa o que precisar)
+cache.db
+cache.db-journal
+cache.db-wal
+cache.db-shm
 links.json
 links.json.migrated
 langs.json

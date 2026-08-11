@@ -2,6 +2,148 @@
 
 ---
 
+# Sessão de 2026-08-11
+
+## ⚡ Desempenho
+
+- **Índice na evicção do cache de mapas.** [`db.js`](db.js)
+  - A evicção roda a cada download novo e ordenava por "usado menos recentemente" sem índice — uma varredura da tabela inteira, que é onde os BLOBs moram. Medido com o cache cheio (1500 mapas, 87MB de banco): **41ms de event loop parado por mapa novo, contra 0,07ms com o índice**. Como só dispara depois que o cache enche, era um custo permanente e invisível.
+  - Medidos e descartados no caminho: o `COUNT(*)` que roda junto (0,04ms), a leitura síncrona de um blob de 60KB (0,05ms) e o pior caso do `/pp` (20ms, com 5000 plays simuladas; caso realista, 1ms). Nenhum justifica mudança.
+
+- **Prefetch da página seguinte na paginação.** [`pagination.js`](pagination.js)
+  - O gargalo de uma página nova não é CPU: é o balde de download de `.osu` (2/s, o mais apertado do rate limiter). Uma página de `/topplays` com 5 mapas inéditos passa ~2,5s só na fila. Agora, assim que uma página é exibida, os arquivos da próxima começam a ser baixados — sem `await`, então uma falha só faz o clique seguir o caminho normal.
+
+## 🧱 Organização
+
+- **Um adaptador por tipo de servidor.** [`osu/officialApi.js`](osu/officialApi.js), [`osu/banchoPyApi.js`](osu/banchoPyApi.js)
+  - Seis funções do `osuClient` decidiam por `if (servers.isOfficial(mode))`. Cada tipo novo de servidor obrigaria a editar todas — o oposto de aberto para extensão. Agora os dois adaptadores implementam o mesmo contrato (`fetchUser`, `bestScores`, `recentScores`, `beatmapScores`, `userUrl`, `mapUrl`) e a escolha acontece num lugar só, no `apiFor(mode)`, pelo `kind` que já vinha do registro.
+  - Tipo sem adaptador **falha alto** em vez de cair no oficial em silêncio e devolver o perfil errado.
+  - Os comandos também paravam para pensar em servidor: `isOfficial(mode) ? página : await enrichScores(página)` aparecia em três arquivos. O `enrichScores` do cliente passou a resolver isso sozinho (no oficial é um no-op), e os comandos só pedem.
+  - `osuClient.js`: 951 → **370 linhas**, agora só despacho e o que é comum aos dois (metadados de mapa, cache de usuário, links).
+
+- **`prefixCommands.js` dividido por responsabilidade.** [`prefix/`](prefix/)
+  - Eram 534 linhas fazendo cinco coisas: configuração, leitura da linha digitada, entendimento das opções, imitação da interação e despacho. Viraram `config`, `tokenize`, `spec`, `coerce`, `parseArgs` e `MessageCommand`, com o `prefixCommands.js` reduzido a 150 linhas de ponta (travas de acesso e despacho).
+  - O ganho prático: o parser virou lógica pura, testável sem nada do Discord por perto, e o `tokenize` não depende de mais nada.
+
+- **Cache de mapas saiu do `bot.db` para um `cache.db` anexado.** [`db.js`](db.js)
+  - Os dados que importam somam dezenas de KB; o cache de `.osu` chega a ~90MB. Junto num arquivo só, todo backup ou cópia carregava dezenas de MB de coisa regenerável, e não dava para apagar o cache sem arriscar o resto. Medido depois da migração: **bot.db de 444KB para 68KB**, com o cache nos seus 492KB à parte.
+  - `ATTACH` numa conexão só, em vez de uma segunda conexão: transação atravessa os dois arquivos, `close()` fecha tudo, e a separação aparece apenas no prefixo `cache.` das tabelas. A migração move as três tabelas e faz checkpoint + `VACUUM` — sem isso o arquivo continuaria do tamanho antigo, que era justamente o ponto.
+
+- **Paginação virou um módulo só.** [`pagination.js`](pagination.js)
+  - `/recent`, `/topplays` e `/score` tinham cada um a sua cópia dos botões, do cache de embed, do coletor, da checagem de dono e do encerramento — três lugares para corrigir cada defeito, e as cópias já tinham divergido em detalhes. Agora o comando só diz quantas páginas existem e como montar uma. Saldo: **106 linhas a menos** nos comandos, 91 num lugar só.
+
+- **`i18n.js` (626 linhas) virou um arquivo por idioma.** [`i18n/`](i18n/)
+  - Acrescentar uma chave exigia editar três blocos distantes no mesmo arquivo — o atrito de todas as sessões recentes. Cada idioma agora é um módulo que recebe o rótulo do servidor administrado e devolve as strings.
+  - Junto veio um teste de **paridade**: os três idiomas precisam ter as mesmas chaves, dos mesmos tipos, com a mesma aridade nas funções. O erro fácil (acrescentar chave só num idioma, e o bot responder `undefined` para quem usa os outros) passa a falhar no teste em vez de em produção.
+
+- **`osuClient.js` (951 linhas) deixou de ser o módulo-deus.** [`pp.js`](pp.js), [`mods.js`](mods.js), [`inflight.js`](inflight.js)
+  - Saíram o cálculo de PP com os dois motores e o download dos `.osu` que os alimenta (`pp.js`), a tradução entre bitmask/acrônimo/texto de mods (`mods.js`) e a deduplicação de requisições em voo (`inflight.js`). Restaram 735 linhas de cliente de API e normalização.
+  - A dependência é de mão única — o `osuClient` importa de `pp`, nunca o contrário — e ele **reexporta** o que saiu, então nenhum comando precisou mudar.
+
+- **ESLint, com regras só de erro.** [`eslint.config.mjs`](eslint.config.mjs)
+  - Nada de estilo: o `recommended` do próprio ESLint já é o recorte de "isso está errado" — variável não definida, variável não usada, código inalcançável. `npm run lint`.
+  - **Achou dois bugs de verdade na primeira execução**, ambos introduzidos na extração do `pp.js` e ambos invisíveis para o que existia antes: o `idSegment` (usado no download de `.osu`) e o par `_rosu`/`_rosuTried` (usado no cálculo por rosu-pp) tinham ficado no `osuClient`. `node --check` não pega, porque a sintaxe está correta; os 128 testes não pegaram, porque não tocam a rede; e o smoke passou porque o mapa estava em cache e o caminho do Relax vai por Python. O primeiro download de mapa novo teria estourado `idSegment is not defined` em produção.
+  - As duas peças foram para onde deviam: `urlSafe.js` (escapar segmento de URL, usado pelos dois módulos) e o estado do rosu-pp dentro do próprio `pp.js`. Junto saiu um `officialPost` morto desde que as estrelas passaram a ser calculadas localmente.
+  - Os dois pontos que usam caractere de controle em regex de propósito (higienizar motivo de moderação, e o teste disso) levaram `eslint-disable-next-line` com o motivo escrito.
+
+- **Testes viraram parte do projeto.** [`test/`](test/)
+  - `npm test` respondia `Error: no test specified` e tudo que existia vivia em pasta temporária. Agora são **128 casos** no runner nativo do Node (`node --test`, sem dependência nova), rodando em ~2s: registro de servidores, comandos por texto, contexto de mapa, emojis, assinatura administrativa, nomeação e migração de banco, limiar e paridade de i18n.
+  - O teste que depende de rede ficou fora do `npm test`, em `npm run smoke`: uma falha lá é o servidor fora do ar, não regressão de código. Também entraram `npm start` e `npm run deploy`.
+
+## 🔒 Segurança
+
+- **Os comandos por texto passaram a conferir `default_member_permissions`.** [`prefixCommands.js`](prefixCommands.js)
+  - O Discord aplica essa declaração **só no slash command**; no modo texto não existe nada equivalente. Até aqui a única barreira era a checagem dentro de cada `execute` — funcionava, mas por convenção: bastaria um comando futuro confiar só na declaração para nascer aberto a qualquer um. Agora o dispatcher lê o bitfield do próprio JSON do comando e exige do autor da mensagem, fechando a classe inteira em vez de comando por comando.
+  - `"0"` é tratado como **Administrator**, não como "todo mundo" — no Discord esse valor quer dizer "ninguém, exceto quem administra o servidor", e um `.has(0n)` responderia o contrário.
+  - Não substitui a checagem no comando: as regras por canal e por cargo que o dono do servidor configura em Integrações continuam invisíveis para o modo texto, e o `execute` segue com a palavra final. Está escrito no código.
+
+- **Credencial que nada usava saiu da configuração.** [`servers.js`](servers.js)
+  - `SERVER_<CHAVE>_KEY` (antes `PRIVATE_API_KEY`) era lida pelo registro e **nunca enviada a lugar nenhum** — nenhum dos endpoints que o bot usa pede autenticação, o que ficou confirmado no teste ao vivo contra os três servidores. Credencial parada não compra nada e ainda aparece em backup, captura de tela e `docker inspect`.
+
+- **`deploy-commands.js` parou de imprimir o erro cru.** Era o único ponto fora do `logger.js`, que existe justamente porque um erro de requisição carrega a configuração dela junto — incluindo o header `Authorization`.
+
+- **O limiar de nomeação passou a contar contas do JOGO, não contas do Discord.** [`db.js`](db.js)
+  - A PK de `map_nominations` era `(set_id, target_status, discord_id)`, então duas contas do Discord ligadas ao mesmo osu! id valiam duas nomeações: uma pessoa sozinha atingia um limiar de 2 e aplicava ranked/loved. A identidade que conta é a do jogo — é dela que o privilégio de nominator é lido, é ela que o limiar quer contar.
+  - A chave virou `(set_id, target_status, osu_id)`; o `discord_id` continua guardado, mas como registro de quem operou. Nomear de novo (inclusive de outra conta do Discord) atualiza a linha em vez de virar um segundo voto, e o `withdraw` passou a ser por conta de jogo — quem nomeou de um Discord consegue retirar de outro, porque é a mesma pessoa.
+  - Migração reconstrói a tabela (SQLite não altera PK) dentro de uma transação, mantendo em cada colisão a nomeação **mais antiga** — a que de fato aconteceu primeiro. A detecção é pelo próprio schema (`discord_id` ainda na PK?) em vez de flag no `meta`: fica idempotente por construção, sem depender de o registro da flag ter sobrevivido.
+
+- **Ações administrativas passaram a ir assinadas com o Discord de quem pediu.** [`daycoreAdmin.js`](daycoreAdmin.js)
+  - O `userId` publicado no Redis é a conta de **jogo** do staff — é ela que o bancho grava como autor. Mas quem apertou o botão foi uma conta do **Discord**, e o vínculo entre as duas vive só no `staff_links` do bot. Como o `/staff register` é auto-declarado do lado do jogo, quem tem Administrator no Discord pode apontar a própria conta para o nick de outro staff e agir com o privilégio dele: o log de auditoria do servidor culparia o dono da conta, e o único registro do Discord real (`admin_actions`) fica dentro do bot — ou seja, dentro do componente que teria sido comprometido.
+  - Agora todo `restrict`/`unrestrict` leva ` | via KurataniBot: @nome (discord_id)` no motivo, então o log do **servidor** guarda as duas pontas e a auditoria deixa de depender de o bot estar íntegro. A assinatura é feita no ponto de publicação, não no comando, para nascer em qualquer call site futuro.
+  - O motivo do usuário é higienizado antes: caractere de controle vira espaço (senão um `\n` desenha linha falsa no log) e o próprio marcador é neutralizado (senão o motivo forjaria uma segunda assinatura apontando para outra pessoa). Num motivo longo, quem é cortado é o texto — a assinatura nunca.
+  - **Não resolve a raiz**, e isso está escrito no [`commands/staff.js`](commands/staff.js): continua sendo possível agir em nome de outro, só deixa de ser possível sem rastro. A correção de verdade é provar posse da conta antes de vincular (código temporário no perfil do osu!, ou OAuth do servidor) — em aberto de propósito, para quando o fluxo administrativo for testado contra um bancho.py real.
+  - O canal `rank` não tem campo de motivo no payload que o bancho espera, então nomeação/desqualificação seguem sem assinatura desse lado — o rastro delas é o `admin_actions` local.
+
+## 🧹 Limpeza / estilo
+
+- **`pp_calc.py` não escreve mais arquivo temporário.** O `.osu` vai direto de stdin para a lib em memória (`Beatmap(bytes=...)`). Antes passava por um `NamedTemporaryFile(delete=False)`: quando o Node matava o processo pelo timeout de 12s, o `finally` que apagava não chegava a rodar e o arquivo ficava para trás. Conferido que o resultado não muda — mesmo `{ pp: 88.7373, stars: 4.5402, maxCombo: 313 }` do teste do README.
+- **O Redis é fechado no shutdown.** O `closeRedis()` existia e nunca era chamado.
+- **`uncaughtException` continua logando e seguindo**, agora com a troca escrita no código: o certo é sair com código 1 e deixar um supervisor subir de novo, mas sem supervisor configurado sair deixaria o bot fora do ar até alguém perceber. Trocar quando o deploy tiver systemd/pm2.
+
+## 🔧 Mudanças
+
+- **`NOMINATION_THRESHOLD` passou a valer 1 por padrão** — quem nomeia já aplica. [`commands/nominate.js`](commands/nominate.js)
+  - O 2 vinha do osu! oficial (dois BNs), mas lá ele resolve um problema que servidor pequeno não tem: com poucos nominators, exigir um segundo só trava mapa esperando alguém aparecer. Quem quiser o modelo do osu! sobe o número no `.env` — a fila, o `withdraw` e o `/nominate queue` continuam iguais para limiar maior que 1.
+  - Com limiar 1 o embed deixa de anunciar "limiar atingido": não houve espera, seria ruído.
+
+## ✨ Novos recursos
+
+- **Servidores viraram configuração, não código.** [`servers.js`](servers.js)
+  - O bot se dizia "Bancho e Daycore", mas o código sempre tratou o Daycore como "o servidor que não é o oficial": tudo decidia por `mode === 'official'` e a única coisa específica eram três URLs no topo do `osuClient`. Agora elas saem de um registro montado do `.env` — `SERVERS=daycore` + `SERVER_DAYCORE_URL`, com `_RELAX=true` criando a variante RX. Hospedar o bot para outro servidor bancho.py não exige tocar no projeto.
+  - Só a URL do site é obrigatória: as de API seguem a convenção do onl-docker (`api.<domínio>`, `a.<domínio>` para avatar), sobrescrevíveis uma a uma. O label padrão é a chave capitalizada.
+  - **`'private'`/`'private_rx'` deram lugar a `daycore`/`daycore_rx`** (a chave de cada servidor). As 8 cópias do `addChoices({name:'Bancho'...})` viraram `servers.choices()` — antes, adicionar um servidor pedia editar 8 arquivos e ainda assim o `osuClient` não saberia falar com ele.
+  - Migração no `bot.db` para as chaves novas, no mesmo estilo das anteriores: `preferred_server` e `user_links.namespace` passam a apontar para o primeiro servidor configurado. `PRIVATE_SERVER_URL`/`PRIVATE_API_KEY` da configuração antiga continuam valendo — viram um servidor com a chave tirada do domínio (`daycore.org` → `daycore`), com RX ligado.
+  - O `mapContext` reconhece link de **qualquer servidor configurado**, não mais só `daycore.org` cravado, e o domínio diz de qual servidor o mapa é. Cada servidor também ganhou seu próprio bucket no rate limiter: são hosts diferentes, e um lento não tem por que segurar a fila do outro.
+  - Os textos administrativos pararam de dizer "Daycore" na mão — o nome vem do registro (`ADMIN` no [`i18n.js`](i18n.js)), então quem hospeda para outro servidor lê o nome do seu. A estrutura dos comandos de staff continua igual: um servidor só, travado por `DAYCORE_GUILD_ID`.
+  - O `servers.js` chama `dotenv.config()` por conta própria. Sem isso, qualquer ponto de entrada que o carregasse antes do dotenv montaria um registro **vazio**, e todo servidor privado cairia calado no oficial — foi o que aconteceu no primeiro teste contra a API de verdade.
+
+## ⚠️ Limite conhecido
+
+- **"funciona com qualquer bancho.py" é meia verdade.** O rank global e as top plays vêm de `get_rank_cache` e `get_player_scores`, que são da **Shiina-Web** (o front-end), não do bancho.py. Um servidor com outro front responde o resto e falha nesses dois — perfil sai como *Unranked* e `/topplays` vazio. Por isso o registro separa `webApi` (front-end) de `banchoV1`/`banchoV2` (bancho.py-ex): o dia em que valer a pena, dá para prever fallback só nesses dois pontos.
+
+---
+
+# Sessão de 2026-08-10
+
+## ✨ Novos recursos
+
+- **Comandos por texto** — `k!rs mrekk` faz o mesmo que `/rs player:mrekk`. [`prefixCommands.js`](prefixCommands.js)
+  - Nenhum comando foi reescrito: um adaptador embrulha a `Message` com a superfície que eles já usam da interação (`options.getX`, `reply`, `deferReply`, `editReply`, `user`, `guildId`, `channelId`, `memberPermissions`) e o dispatcher chama o mesmo `execute`. Comando novo nasce funcionando nos dois modos.
+  - O parser das opções é **derivado do `data.toJSON()`** de cada comando — nomes, tipos, obrigatoriedade, choices, min/max, tamanho. Escrever isso à mão significaria que mudar uma opção no builder e esquecer do parser deixaria os dois modos discordando calados; e as validações que o Discord aplica ao slash command precisam valer no texto também, senão o prefixo vira o jeito de driblá-las. Pelo mesmo motivo o dispatcher repete a trava de contexto (comando de servidor recusa em DM) e passa pelo mesmo cooldown.
+  - Aceita opção posicional (`k!rs pudim2`), nomeada (`k!rs player:pudim2`), **flag** (`k!rs pudim2 -daycore`) e tudo misturado. O `:` só vira separador quando o que vem antes é mesmo uma opção do comando — senão um link (`https://osu.ppy.sh/...`) seria lido como opção `https`.
+  - A flag não nomeia a opção, e sim o valor: `-daycore` acha sozinho que quem tem essa escolha é o `server`, `-love` que é o `status` do `/nominate`, `-pt` que é o `lang` do `/language`. Funciona porque as listas fechadas do bot têm valores distintos entre si, e é o que dispensa repetir `server:` em todo comando. Booleana também entra (`-randomize`), e `-500` continua sendo um número negativo, não uma flag. Flag que não casa com nada responde com as aceitas naquele comando em vez de virar nome de jogador.
+  - Nick com espaço vai entre aspas (inclusive as `“ ”` que o teclado do celular troca sozinho).
+  - **Uma opção opcional pode recusar o token posicional** e deixar passar para a próxima. Vale para lista fechada (`server`, `status`, que só engolem o token se ele for mesmo uma das escolhas) e para o que o comando declarar em `prefix.guards` — hoje só o `map` do `/score`, que exige um ID ou link. Sem isso, `k!c nunca` respondia "não consegui identificar o mapa": no slash o `map` é a primeira opção, então o nome do jogador caía nele. Do mesmo jeito, `k!rs nome do cara` reclama das aspas em vez de dizer que "do" é um servidor inválido. Sendo obrigatória, a opção consome assim mesmo — aí o erro sobre o valor inválido é justamente o que a pessoa precisa ler.
+  - **Desligado por padrão.** Ler texto de mensagem exige o intent privilegiado MESSAGE CONTENT, e pedir um intent não habilitado no Developer Portal faz o `login()` ser recusado — o bot inteiro não subiria. Só liga com `COMMAND_PREFIX` no `.env`, e quando o login falha por isso a mensagem diz onde habilitar em vez de repetir o "Used disallowed intents" do gateway.
+  - Ephemeral não existe fora de interação: a flag é removida do payload (mandá-la numa mensagem comum é erro) e a resposta sai no canal. O ciclo `deferReply` → `editReply` vira "digitando..." → primeira resposta cria a mensagem → as seguintes editam ela, que é o que mantém a paginação por botões idêntica à do slash.
+
+- **`/score` — todos os scores de um jogador em um mapa**, com atalhos `/c` e `/choke`. [`commands/score.js`](commands/score.js)
+  - `/score map:<id ou link> [player] [server]` lista cada score do jogador naquele mapa (um por combinação de mods), do maior pp para o menor, 5 por página. Cada linha traz rank, mods, estrelas ajustadas pelos mods, pp, accuracy, combo, hits e quando foi.
+  - O **PP de FC** aparece ao lado do pp de todo score que foi choke — é o que dá nome ao atalho `/choke`. Mesmo cálculo do `/recent` e do `/topplays`.
+  - Funciona nos três servidores. No Bancho vem de `GET /beatmaps/{id}/scores/users/{user}/all`; no Daycore a busca da tabela de scores é pelo **hash** do mapa, não pelo id, então o id é convertido antes via `/v2/maps/{id}`. Scores com `status = 0` (quit) são descartados, porque o endpoint oficial só devolve play completa e os dois lados precisam mostrar a mesma coisa. [`osuClient.js`](osuClient.js)
+  - Quando a API não informa o pp — acontece com score de lazer, por exemplo — o valor é calculado localmente a partir dos hits reais, pelo mesmo caminho do `/simulate`, e sai marcado com `~` para não passar por número oficial do servidor.
+
+- **Contexto de mapa por canal.** [`mapContext.js`](mapContext.js)
+  - `/score` sem a opção `map` usa o último mapa exibido no canal. Assim, quando alguém posta uma play com `/rs`, qualquer pessoa responde só com `/score` para ver as próprias plays no mesmo mapa — que era o pedido original.
+  - Alimentado por `/recent`, `/topplays`, `/simulate` e pelo próprio `/score`. O registro fica fora do `buildEmbed` porque os embeds são memoizados: voltar para uma página já vista não passa por lá de novo, mas ainda precisa atualizar o contexto.
+  - O escopo é o **canal**, não quem rodou o comando — a graça é justamente reagir à play de outra pessoa. Fica em memória, com TTL de 6h e poda preguiçosa por teto de canais.
+  - **Link colado na conversa também conta**, não só embed do bot. Era o primeiro tropeço real do modo texto: alguém posta o link do mapa, manda `k!c` embaixo e ouve que não deu para identificar o mapa, sendo que ele estava logo ali. Só link de `osu.ppy.sh` e `daycore.org` — jogar o texto inteiro no `parseBeatmapId` acharia "mapa" em qualquer `algumsite.com/b/12` que passasse pelo chat.
+  - **Varredura do histórico quando a memória está vazia.** O contexto não sobrevive a restart, e o primeiro teste real caiu justo nisso: o link estava na tela, mas fora postado antes de o bot subir. Sem nada lembrado, o `recall` lê as últimas 50 mensagens do canal (uma chamada, só no miss, com o mesmo corte de 6h) e memoriza o que achou. Das mensagens do próprio bot só conta o embed — o texto de "não identifiquei o mapa" traz um link de **exemplo**, e o bot acharia o próprio exemplo como se fosse o mapa da conversa.
+  - **Responder a uma mensagem tem prioridade** sobre o último mapa do canal: quem responde está apontando para aquele mapa, e não para o que rolou no canal enquanto digitava. Vale tanto para o link cru quanto para o embed de uma play do bot. Existe só no modo texto — não dá para responder a uma mensagem com slash command —, então o `recall` pergunta por um método (`fetchRepliedMessage`) que só o adaptador de mensagem tem, em vez de fingir mais um campo de interação.
+
+- **Emojis de rank do próprio aplicativo.** [`emojis.js`](emojis.js)
+  - As grades (SS, S, A...) do `/recent`, `/topplays`, `/score` e `/profile` viram emoji quando existe a imagem em `assets/emojis`. Cada arquivo é enviado uma vez no boot e reaproveitado depois; nada é apagado do aplicativo, para um deploy de uma máquina com a pasta incompleta não derrubar o que a outra subiu.
+  - São **application emojis**, não de servidor. Emoji de servidor exigiria o bot estar no servidor dono dele e ter permissão de emoji externo no canal — quebrando justo onde mais importa (DM e servidor recém-adicionado). O do aplicativo funciona em toda guild e em DM, sem permissão nenhuma.
+  - A pasta é opcional: sem a imagem daquela grade, ela sai no texto de antes (`**A**`). Arquivo com nome fora da regra do Discord ou acima de 256KB é recusado com aviso no log, e falha no envio de um emoji não impede os outros nem o boot.
+
+- **`/score` no bucket `heavy` de cooldown**, com `c` e `choke` mapeados como aliases — sem isso um alias cairia no bucket `default` e driblaria o limite do comando original. [`cooldowns.js`](cooldowns.js)
+
+## 🧹 Limpeza / estilo
+
+- **A opção `avg_pp` do `/pp` virou `avg`.** No slash o nome é clicado, mas no modo texto ele é digitado na mão — e o underline é o caractere mais chato de alcançar no teclado do celular. [`commands/pp.js`](commands/pp.js)
+
+---
+
 # Sessão de 2026-08-08
 
 ## ✨ Novos recursos
