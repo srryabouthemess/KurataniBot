@@ -1,0 +1,11 @@
+# Fim de linha: LF no repositório, em qualquer sistema.
+#
+# Sem isto, a regra fica no `core.autocrlf` de cada máquina — configuração
+# invisível para quem clona. Como o bot é editado no Windows e roda numa VPS
+# Linux, bastava um arquivo editado dos dois lados para o diff mostrar o
+# arquivo inteiro alterado por causa de bytes invisíveis.
+* text=auto eol=lf
+
+# Binários nunca passam por conversão. A detecção automática já daria conta,
+# mas ser explícito descarta qualquer chance de um PNG ser tratado como texto.
+*.png binary
