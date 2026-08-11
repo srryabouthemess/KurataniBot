@@ -147,10 +147,19 @@ module.exports = {
       if (sub === 'restrict' && isRestricted)   return interaction.editReply(s.mod_already_restricted(target.name));
       if (sub === 'unrestrict' && !isRestricted) return interaction.editReply(s.mod_not_currently_restricted(target.name));
 
+      // Quem publica precisa das duas identidades: a conta de jogo (que vira o
+      // autor no log do servidor) e a do Discord (que vai assinada no motivo,
+      // para a auditoria não depender do vínculo guardado aqui dentro).
+      const actor = {
+        osuId:       staff.osuId,
+        discordId:   interaction.user.id,
+        discordName: interaction.user.username,
+      };
+
       if (sub === 'restrict') {
-        await daycore.restrictPlayer(target.id, staff.osuId, reason);
+        await daycore.restrictPlayer(target.id, actor, reason);
       } else {
-        await daycore.unrestrictPlayer(target.id, staff.osuId, reason);
+        await daycore.unrestrictPlayer(target.id, actor, reason);
       }
 
       const expectRestricted = sub === 'restrict';

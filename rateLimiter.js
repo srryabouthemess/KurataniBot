@@ -66,8 +66,12 @@ const BUCKETS = {
   osuApi:     8,  // GET/POST em osu.ppy.sh/api/v2
   osuMapFile: 2,  // download de .osu em osu.ppy.sh/osu/{id}
   osuOAuth:   1,  // /oauth/token
-  daycore:    5,  // API do Daycore (v1 e v2)
 };
+
+// Servidores privados usam `server:<chave>`, criado sob demanda: são hosts
+// diferentes, com limites independentes — um servidor lento não tem por que
+// segurar a fila do outro.
+const PER_SERVER = 5;
 
 const buckets = Object.fromEntries(
   Object.entries(BUCKETS).map(([name, perSecond]) => [name, new LeakyBucket(perSecond)])
@@ -75,11 +79,16 @@ const buckets = Object.fromEntries(
 
 /**
  * Espera até que seja permitido fazer uma requisição ao recurso indicado.
- * @param {keyof typeof BUCKETS} site
+ * @param {keyof typeof BUCKETS | `server:${string}`} site
  */
 function acquire(site) {
-  const bucket = buckets[site];
+  let bucket = buckets[site];
+
+  if (!bucket && String(site).startsWith('server:')) {
+    bucket = buckets[site] = new LeakyBucket(PER_SERVER);
+  }
   if (!bucket) throw new Error(`rateLimiter: bucket desconhecido "${site}"`);
+
   return bucket.acquire();
 }
 

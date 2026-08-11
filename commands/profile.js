@@ -1,6 +1,8 @@
 const { SlashCommandBuilder, EmbedBuilder, ApplicationIntegrationType, InteractionContextType, MessageFlags } = require('discord.js');
 const osu = require('../osuClient');
+const servers = require('../servers');
 const { resolvePlayer } = require('../userLink');
+const emojis = require('../emojis');
 const { t } = require('../i18n');
 const { logError } = require('../logger');
 
@@ -30,11 +32,7 @@ module.exports = {
         .setDescription('Which server to use? (default: your linked server)')
         .setDescriptionLocalizations({ 'pt-BR': 'Qual servidor usar? (padrão: o do seu link)' })
         .setRequired(false)
-        .addChoices(
-          { name: 'Bancho',     value: 'official'   },
-          { name: 'Daycore',    value: 'private'     },
-          { name: 'Daycore RX', value: 'private_rx'  }
-        )
+        .addChoices(...servers.choices())
     ),
 
   async execute(interaction) {
@@ -53,7 +51,7 @@ module.exports = {
 
       const stats     = user.statistics;
       const rawBest   = await osu.getBestScores(user.id, 1, mode);
-      const bestPlays = mode === 'official' ? rawBest : await osu.enrichScores(rawBest);
+      const bestPlays = await osu.enrichScores(rawBest, mode);
       const bestPlay  = bestPlays[0] || null;
 
       let topPlayString = s.profile_no_play;
@@ -63,7 +61,7 @@ module.exports = {
         topPlayString =
           `🏆 **[${mapName}](${mapUrl})**\n` +
           `> **PP:** ${bestPlay.pp.toFixed(2)}pp | **${s.profile_acc}:** ${(bestPlay.accuracy * 100).toFixed(2)}%\n` +
-          `> **Rank:** ${bestPlay.rank} | **${s.profile_max_combo}:** ${bestPlay.max_combo !== null ? bestPlay.max_combo + 'x' : '-'}`;
+          `> **Rank:** ${emojis.rankLabel(bestPlay.rank)} | **${s.profile_max_combo}:** ${bestPlay.max_combo !== null ? bestPlay.max_combo + 'x' : '-'}`;
       }
 
       const rankValue = user._private

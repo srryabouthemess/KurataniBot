@@ -1,0 +1,340 @@
+/**
+ * osu/banchoPyApi.js
+ * Adaptador para servidores bancho.py.
+ *
+ * Implementa o mesmo contrato do osu/officialApi.js — `fetchUser`,
+ * `bestScores`, `recentScores`, `beatmapScores`, `userUrl`, `mapUrl` — para o
+ * osuClient poder escolher um ou outro sem saber a diferença.
+ *
+ * ATENÇÃO: "bancho.py" aqui quer dizer a stack completa. O rank global e as top
+ * plays vêm de `get_rank_cache` e `get_player_scores`, que são da Shiina-Web (o
+ * front-end), não do bancho.py. Por isso `webApi` e `banchoV1/V2` são endereços
+ * separados no registro: um servidor com outro front responde o resto e falha
+ * nesses dois.
+ */
+
+const axios = require('axios');
+const servers = require('../servers');
+const rateLimiter = require('../rateLimiter');
+const { decodeMods } = require('../mods');
+const { idSegment } = require('../urlSafe');
+const { withRetry } = require('../retry');
+
+// O servidor padrão de quem consulta sem dizer qual. Hoje só os comandos
+// administrativos, que operam uma instância só.
+const PRIVATE_MODE = servers.resolveKey('private') ?? servers.defaultKey();
+
+// (Havia um officialPost aqui, do tempo em que as estrelas ajustadas vinham de
+// POST /beatmaps/{id}/attributes. Hoje esse cálculo é local, pelo rosu-pp, e
+// nenhuma chamada do bot escreve na API oficial.)
+
+/**
+ * GET na API do front-end (Shiina-Web) do servidor.
+ *
+ * É um serviço DIFERENTE do bancho.py, apesar de conviverem no mesmo domínio:
+ * `get_rank_cache` e `get_player_scores` existem aqui e não lá. Um servidor
+ * bancho.py com outro front-end responde o resto e falha nestes dois.
+ */
+async function webApiGet(mode, endpoint, params = {}) {
+  const server = servers.get(mode);
+  const res = await withRetry(async () => {
+    await rateLimiter.acquire(`server:${server.key}`);
+    return axios.get(`${server.webApi}/${endpoint}`, { params, timeout: 10000 });
+  });
+  return res.data;
+}
+
+/**
+ * GET na API v1 do bancho.py-ex.
+ *
+ * `validateStatus` aceita 404 e 422 como respostas normais em vez de erro:
+ * "jogador não existe" e "nome fora do formato aceito" são resultados
+ * legítimos de uma busca, não falhas de rede que valha a pena relançar.
+ */
+async function banchoV1Get(mode, endpoint, params = {}) {
+  const server = servers.get(mode);
+  const res = await withRetry(async () => {
+    await rateLimiter.acquire(`server:${server.key}`);
+    return axios.get(`${server.banchoV1}/${endpoint}`, {
+      params,
+      timeout: 10000,
+      validateStatus: (s) => (s >= 200 && s < 300) || s === 404 || s === 422,
+    });
+  });
+  return res.status === 200 ? res.data : null;
+}
+
+/** GET na API v2 do bancho.py-ex (somente leitura). */
+async function banchoV2Get(mode, path, params = {}) {
+  const server = servers.get(mode);
+  const res = await withRetry(async () => {
+    await rateLimiter.acquire(`server:${server.key}`);
+    return axios.get(`${server.banchoV2}${path}`, { params, timeout: 10000 });
+  });
+  return res.data;
+}
+
+// ─── Normalização: usuário ────────────────────────────────────────────────────
+function normalizeUserPrivate(playerData, statsData, mode, globalRank = null, countryRank = null) {
+  if (!playerData) return null;
+
+  return {
+    id: playerData.id,
+    username: playerData.name,
+    avatar_url: `${servers.get(mode).avatars}/${playerData.id}`,
+    country_code: (playerData.country || 'xx').toUpperCase(),
+    join_date: playerData.creation_time
+      ? new Date(playerData.creation_time * 1000).toISOString()
+      : null,
+    last_visit: playerData.latest_activity
+      ? new Date(playerData.latest_activity * 1000).toISOString()
+      : null,
+    is_online: false,
+    statistics: {
+      global_rank:   globalRank,
+      country_rank:  countryRank,
+      pp: parseFloat(statsData?.pp ?? 0),
+      hit_accuracy: parseFloat(statsData?.acc ?? statsData?.accuracy ?? 0),
+      level: { current: 1 },
+      maximum_combo: statsData?.max_combo ?? 0,
+      play_count: statsData?.plays ?? statsData?.play_count ?? 0,
+    },
+    _private: true,
+  };
+}
+
+// ─── Normalização: score ──────────────────────────────────────────────────────
+// A tradução entre bitmask, acrônimos e texto vive em mods.js.
+
+// Mescla dados da v1 (map info) com dados da v2 (score detalhado)
+function normalizeScorePrivate(v1, v2) {
+  if (!v1) return null;
+ 
+  const pp = parseFloat(v2?.pp ?? v1.pp ?? 0);
+  const acc = parseFloat(v2?.acc ?? v1.acc ?? 0) / 100;
+  const max_combo = v2?.max_combo ?? null;
+  const grade = v2?.grade ?? v1.grade ?? 'F';
+ 
+  const mods = v2
+    ? decodeMods(v2.mods ?? 0)
+    : (Array.isArray(v1.mods) ? v1.mods : decodeMods(v1.mods ?? 0));
+ 
+  const playTimeRaw = v2?.play_time ?? v1.play_time;
+  const playTime = playTimeRaw
+    ? new Date(String(playTimeRaw).includes('T')
+        ? playTimeRaw
+        : playTimeRaw.replace(' ', 'T') + 'Z')
+    : new Date();
+ 
+  const mapName = v1.map_name ?? '';
+  const diffMatch = mapName.match(/\[(.+?)\](?:\.osu)?$/);
+  const titleMatch = mapName.match(/^(.+?)\s*\(([^)]+)\)\s*\[/);
+  const version = diffMatch ? diffMatch[1] : '?';
+  const title = titleMatch ? titleMatch[1].trim() : mapName.replace(/\.osu$/, '');
+
+  // Hits: v2 tende a ter n300/n100/n50/nmiss, v1 pode ter count_300 etc.
+  const count300  = v2?.n300  ?? v1.count_300  ?? v1.n300  ?? null;
+  const count100  = v2?.n100  ?? v1.count_100  ?? v1.n100  ?? null;
+  const count50   = v2?.n50   ?? v1.count_50   ?? v1.n50   ?? null;
+  const countMiss = v2?.nmiss ?? v1.count_miss  ?? v1.nmiss ?? null;
+ 
+  return {
+    pp,
+    accuracy: acc,
+    rank: grade,
+    max_combo,
+    mods,
+    passed: grade !== 'F',
+    created_at: playTime.toISOString(),
+    mode: 'osu',
+    statistics: {
+      count_300:  count300,
+      count_100:  count100,
+      count_50:   count50,
+      count_miss: countMiss,
+    },
+    beatmap: {
+      id: v1.map_id ?? null,
+      version,
+      max_combo: null,
+      difficulty_rating: 0,
+    },
+    beatmapset: {
+      id: v1.map_set_id ?? null,
+      title,
+      artist: '',
+      covers: {
+        list: `https://assets.ppy.sh/beatmaps/${v1.map_set_id ?? ''}/covers/list.jpg`,
+      },
+    },
+  };
+}
+
+// ─── Busca ID do jogador pelo nome (via api v2) ──────────────────────────────
+async function resolvePlayerId(username, mode = PRIVATE_MODE) {
+  // Pode chegar como número (ID vindo do link salvo) ou string (nome digitado
+  // no comando). Normalizamos antes de qualquer operação de string — sem isso
+  // um ID numérico estourava em `username.trim()`.
+  const raw = String(username).trim();
+
+  // /^\d+$/ em vez de !isNaN(): isNaN('   ') é false (Number('   ') === 0),
+  // então uma string só de espaços virava silenciosamente o ID 0.
+  if (/^\d+$/.test(raw)) return Number(raw);
+
+  // Busca exata pelo nome. Usa a v1 do bancho porque o endpoint /players da
+  // v2 NÃO aceita filtro por nome — os parâmetros dele são priv, country,
+  // clan_id, clan_priv, preferred_mode, play_style e paginação. Passar `name`
+  // ali é silenciosamente ignorado pelo FastAPI: a chamada devolvia a primeira
+  // página de TODOS os jogadores, e o código caía no primeiro resultado
+  // (`?? results[0]`) quando não achava correspondência.
+  //
+  // Isso funcionava por acidente enquanto o servidor coubesse numa página de
+  // 50: qualquer nome inexistente resolvia para o primeiro usuário da tabela
+  // (o BanchoBot, id 1), e a partir de 51 contas qualquer jogador fora da
+  // primeira página resolveria para ele também — linkando ou consultando a
+  // conta errada sem nenhum aviso.
+  const res = await banchoV1Get(mode, 'get_player_info', { name: raw, scope: 'info' });
+  return res?.player?.info?.id ?? null;
+}
+
+// Busca detalhes completos de cada score via v2
+async function enrichScores(v1Scores, mode = PRIVATE_MODE) {
+  return Promise.all(
+    v1Scores.map(async (s) => {
+      try {
+        const res = await banchoV2Get(mode, `/scores/${idSegment(s.score_id)}`);
+        return normalizeScorePrivate(s, res?.data ?? null);
+      } catch {
+        return normalizeScorePrivate(s, null);
+      }
+    })
+  );
+}
+
+/**
+ * No bancho.py a busca é pelo HASH do mapa, não pelo id — a tabela de scores
+ * guarda `map_md5`. Por isso o id vira hash antes (via /maps/{id}).
+ */
+async function privateBeatmapScores(userId, beatmapId, mode) {
+  let map = null;
+  try {
+    map = await getServerMap(beatmapId, mode);
+  } catch (error) {
+    // 404 = mapa nunca foi submetido lá. Qualquer outra falha (rede, 5xx) sobe:
+    // devolver "sem scores" nesse caso esconderia o erro de quem chamou.
+    if (error?.response?.status !== 404) throw error;
+  }
+  if (!map?.md5) return [];
+
+  const res = await banchoV2Get(mode, '/scores', {
+    map_md5:   map.md5,
+    user_id:   userId,
+    mode:      servers.get(mode).gameMode,
+    page_size: 100,
+  });
+
+  const raw = Array.isArray(res?.data) ? res.data : [];
+
+  // status 0 é quit (o bancho.py guarda tentativa falha também). O endpoint
+  // oficial só devolve play completa, então filtramos para os dois servidores
+  // mostrarem a mesma coisa.
+  return raw
+    .filter(v2 => (v2.status ?? 0) > 0)
+    .map(v2 => normalizeScorePrivate(
+      { map_id: map.id, map_set_id: map.set_id, map_name: map.filename },
+      v2
+    ));
+}
+
+// ─── bancho.py: leitura para ações administrativas ────────────────────────────
+// A API v2 do bancho.py-ex é somente leitura, então ela serve para *consultar*
+// o estado (privilégios de quem mandou o comando, status atual de um mapa) —
+// as escritas vão por outro caminho, via Redis pub/sub (ver daycoreAdmin.js).
+
+/**
+ * Dados crus do jogador no servidor, incluindo o bitfield `priv` — é ele que
+ * diz se a pessoa é NOMINATOR/ADMINISTRATOR lá, e não no Discord.
+ */
+async function getServerPlayerRaw(playerId, mode = PRIVATE_MODE) {
+  const res = await banchoV2Get(mode, `/players/${idSegment(playerId)}`);
+  return res?.data ?? null;
+}
+
+/** Um beatmap (dificuldade única) pelo ID. */
+async function getServerMap(mapId, mode = PRIVATE_MODE) {
+  const res = await banchoV2Get(mode, `/maps/${idSegment(mapId)}`);
+  return res?.data ?? null;
+}
+
+/**
+ * Todas as dificuldades de um beatmapset.
+ * Necessário porque o canal `rank` do bancho age sobre UMA dificuldade por
+ * mensagem — para rankear o set inteiro é preciso publicar uma vez por diff.
+ */
+async function getServerMapsBySet(setId, mode = PRIVATE_MODE) {
+  const res = await banchoV2Get(mode, '/maps', { set_id: setId, page_size: 100 });
+  const data = res?.data;
+  return Array.isArray(data) ? data : [];
+}
+
+async function fetchUser(username, mode) {
+  const playerId = await resolvePlayerId(username, mode);
+  if (!playerId) return null;
+
+  const modeNum = servers.get(mode).gameMode;
+
+  const [playerRes, statsRes] = await Promise.all([
+    banchoV2Get(mode, `/players/${idSegment(playerId)}`),
+    banchoV2Get(mode, `/players/${idSegment(playerId)}/stats/${idSegment(modeNum)}`),
+  ]);
+
+  // O endpoint de stats não retorna rank — buscamos via leaderboard do
+  // front-end. Conta nova, sem cache ainda, ou front sem esse endpoint: o rank
+  // fica null e sai como "Unranked", em vez de derrubar a consulta inteira.
+  let globalRank = null;
+  try {
+    const rankRes = await webApiGet(mode, 'get_rank_cache', { id: playerId, mode: modeNum });
+    if (Array.isArray(rankRes) && rankRes.length > 0) {
+      globalRank = rankRes[rankRes.length - 1].rank ?? null;
+    }
+  } catch {
+    // segue sem rank
+  }
+
+  return normalizeUserPrivate(playerRes?.data ?? null, statsRes?.data ?? null, mode, globalRank);
+}
+
+async function bestScores(userId, limit, mode) {
+  const res = await webApiGet(mode, 'get_player_scores', {
+    id: userId, mode: servers.get(mode).gameMode, scope: 'best', limit,
+  });
+  // Cru de propósito: enriquecer as N buscadas de uma vez seria uma rajada de
+  // requisições. Quem chama enriquece só a página que vai exibir.
+  return res.scores ?? [];
+}
+
+async function recentScores(userId, limit, mode) {
+  const res = await webApiGet(mode, 'get_player_scores', {
+    id: userId, mode: servers.get(mode).gameMode, scope: 'recent', limit,
+  });
+  return res.scores ?? [];
+}
+
+const userUrl = (userId, mode) => `${servers.get(mode).webUrl}/u/${userId}`;
+const mapUrl  = (mapId, _setId, mode) => `${servers.get(mode).webUrl}/b/${mapId}`;
+
+module.exports = {
+  fetchUser,
+  bestScores,
+  recentScores,
+  beatmapScores: privateBeatmapScores,
+  userUrl,
+  mapUrl,
+
+  // Específicos deste tipo de servidor, usados pelos comandos administrativos.
+  enrichScores,
+  resolvePlayerId,
+  getServerPlayerRaw,
+  getServerMap,
+  getServerMapsBySet,
+};

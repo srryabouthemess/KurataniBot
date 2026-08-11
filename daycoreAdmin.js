@@ -164,24 +164,73 @@ async function rankBeatmap(beatmapId, status, frozen = true) {
   });
 }
 
+// ─── Assinatura do autor ──────────────────────────────────────────────────────
+/**
+ * O `userId` publicado é a conta de jogo do staff — é ela que o bancho grava
+ * como autor no log de auditoria dele. Só que quem apertou o botão foi uma
+ * conta do **Discord**, e o vínculo entre as duas vive só aqui dentro
+ * (`staff_links`, alimentada pelo /staff register).
+ *
+ * Isso deixava o log do servidor contar meia verdade: quem tem Administrator no
+ * Discord pode vincular a própria conta ao nick de outro staff e agir com o
+ * privilégio dele — e a auditoria do servidor culparia o dono da conta, sem
+ * nenhum rastro do Discord. O registro que aponta a conta real (`admin_actions`)
+ * fica dentro do próprio bot, ou seja, dentro do componente que teria sido
+ * comprometido.
+ *
+ * Anexar o Discord ao motivo faz o log do **servidor** guardar as duas pontas,
+ * então a auditoria deixa de depender de o bot estar íntegro.
+ *
+ * Não resolve a raiz: o /staff register continua sendo auto-declarado, e a
+ * correção de verdade é provar posse da conta (código temporário no perfil do
+ * osu!, ou OAuth do próprio servidor) — ainda por fazer.
+ */
+const SIGNATURE_MARK = 'via KurataniBot';
+
+// Teto do que vai publicado. O motivo do usuário é cortado se preciso; a
+// assinatura nunca — ela é a parte que a auditoria precisa.
+const PUBLISHED_REASON_MAX = 512;
+
+function signReason(reason, actor) {
+  const signature = ` | ${SIGNATURE_MARK}: @${actor.discordName ?? '?'} (${actor.discordId})`;
+
+  const text = String(reason ?? '')
+    // Quebra de linha e controle viram espaço: sem isso um motivo com \n
+    // desenha linhas falsas em quem lê o log depois. O linter reclama de
+    // caractere de controle em regex justamente porque costuma ser engano —
+    // aqui é o alvo.
+    // eslint-disable-next-line no-control-regex
+    .replace(/[\u0000-\u001F\u007F]+/g, ' ')
+    // E o próprio marcador é neutralizado, para o motivo não conseguir forjar
+    // uma segunda assinatura apontando para outra pessoa.
+    .split(SIGNATURE_MARK).join('via-bot');
+
+  const room = Math.max(0, PUBLISHED_REASON_MAX - signature.length);
+  const clipped = text.length > room ? `${text.slice(0, Math.max(0, room - 1))}…` : text;
+
+  return clipped + signature;
+}
+
 /**
  * `id` é o alvo e `userId` é quem está aplicando — o bancho registra o segundo
  * como `admin` no log de auditoria dele, então precisa ser o osu! ID real do
  * staff que rodou o comando no Discord, não o do bot.
+ *
+ * @param {{osuId: number, discordId: string, discordName?: string}} actor
  */
-async function restrictPlayer(targetOsuId, actorOsuId, reason) {
+async function restrictPlayer(targetOsuId, actor, reason) {
   await publish(CHANNELS.RESTRICT, {
     id:     Number(targetOsuId),
-    userId: Number(actorOsuId),
-    reason: String(reason),
+    userId: Number(actor.osuId),
+    reason: signReason(reason, actor),
   });
 }
 
-async function unrestrictPlayer(targetOsuId, actorOsuId, reason) {
+async function unrestrictPlayer(targetOsuId, actor, reason) {
   await publish(CHANNELS.UNRESTRICT, {
     id:     Number(targetOsuId),
-    userId: Number(actorOsuId),
-    reason: String(reason),
+    userId: Number(actor.osuId),
+    reason: signReason(reason, actor),
   });
 }
 
@@ -205,7 +254,7 @@ function privLabel(priv) {
  * @returns {Promise<{id: number, name: string, priv: number} | null>}
  */
 async function getPlayerPrivileges(osuId) {
-  const player = await osu.getDaycorePlayerRaw(osuId);
+  const player = await osu.getServerPlayerRaw(osuId);
   if (!player) return null;
   return { id: player.id, name: player.name, priv: Number(player.priv ?? 0) };
 }
@@ -231,7 +280,7 @@ async function verifyMapStatus(beatmapIds, expectedStatus, { attempts = 3, delay
     const still = [];
     for (const id of pending) {
       try {
-        const map = await osu.getDaycoreMap(id);
+        const map = await osu.getServerMap(id);
         if (map && Number(map.status) === Number(expectedStatus)) confirmed.push(id);
         else still.push(id);
       } catch {
@@ -249,7 +298,7 @@ async function verifyRestricted(osuId, expectRestricted, { attempts = 3, delayMs
   for (let i = 0; i < attempts; i++) {
     await sleep(delayMs);
     try {
-      const player = await osu.getDaycorePlayerRaw(osuId);
+      const player = await osu.getServerPlayerRaw(osuId);
       if (player) {
         const restricted = !hasPriv(player.priv, Privileges.UNRESTRICTED);
         if (restricted === expectRestricted) return true;

@@ -2,21 +2,18 @@ const { SlashCommandBuilder, EmbedBuilder, ApplicationIntegrationType, Interacti
 const { setLink, getLink, getAllLinks, removeLink, setPreferredServer, getPreferredServer, linkNamespace } = require('../db');
 const { t } = require('../i18n');
 const osu = require('../osuClient');
+const servers = require('../servers');
 const { logError } = require('../logger');
 
-const SERVER_CHOICES = [
-  { name: 'Bancho',     value: 'official'   },
-  { name: 'Daycore',    value: 'private'     },
-  { name: 'Daycore RX', value: 'private_rx'  },
-];
+const SERVER_CHOICES = servers.choices();
 
 /**
- * Rótulo a exibir para uma conta linkada. Daycore vanilla e RX compartilham o
- * mesmo cadastro, então o link é listado como "Daycore" — não faria sentido
- * mostrar duas linhas com o mesmo nick.
+ * Rótulo a exibir para uma conta linkada. Vanilla e RX do mesmo servidor
+ * compartilham o cadastro, então o link é listado com o nome do servidor —
+ * não faria sentido mostrar duas linhas com o mesmo nick.
  */
 function namespaceLabel(namespace) {
-  return namespace === 'official' ? 'Bancho' : 'Daycore';
+  return servers.label(servers.keyForNamespace(namespace));
 }
 
 module.exports = {

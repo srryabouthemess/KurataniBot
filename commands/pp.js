@@ -1,5 +1,6 @@
 const { SlashCommandBuilder, EmbedBuilder, ApplicationIntegrationType, InteractionContextType, MessageFlags } = require('discord.js');
 const osu = require('../osuClient');
+const servers = require('../servers');
 const { resolvePlayer } = require('../userLink');
 const { t } = require('../i18n');
 const { logError } = require('../logger');
@@ -177,7 +178,9 @@ module.exports = {
     )
     .addNumberOption(opt =>
       opt
-        .setName('avg_pp')
+        // `avg`, não `avg_pp`: no modo texto o nome é digitado na mão, e o
+        // underline é o caractere mais chato de alcançar no teclado do celular.
+        .setName('avg')
         .setDescription('If set, answers how many plays averaging this much pp are needed instead')
         .setDescriptionLocalizations({ 'pt-BR': 'Se definido, responde quantas plays com essa média de pp são necessárias' })
         .setRequired(false)
@@ -204,17 +207,13 @@ module.exports = {
         .setDescription('Which server to use? (default: your linked server)')
         .setDescriptionLocalizations({ 'pt-BR': 'Qual servidor usar? (padrão: o do seu link)' })
         .setRequired(false)
-        .addChoices(
-          { name: 'Bancho',     value: 'official'   },
-          { name: 'Daycore',    value: 'private'     },
-          { name: 'Daycore RX', value: 'private_rx'  }
-        )
+        .addChoices(...servers.choices())
     ),
 
   async execute(interaction) {
     const s             = t(interaction);
     const targetPP      = interaction.options.getNumber('target');
-    const avgPP  = interaction.options.getNumber('avg_pp');
+    const avgPP  = interaction.options.getNumber('avg');
     const randomize     = interaction.options.getBoolean('randomize') ?? false;
     const resolved      = resolvePlayer(interaction, 'player', 'server');
 

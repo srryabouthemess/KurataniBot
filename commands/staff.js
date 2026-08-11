@@ -23,6 +23,25 @@ const { logError } = require('../logger');
  * específico (DAYCORE_GUILD_ID), que é controlado por quem administra o
  * Daycore. Em qualquer outro servidor, onde "ser admin" não significa nada, o
  * comando é recusado antes de olhar permissão.
+ *
+ * ── O que este comando AINDA não garante ──────────────────────────────────────
+ * O vínculo é auto-declarado do lado do jogo: nada prova que a conta informada
+ * pertence ao membro sendo vinculado. Quem tem Administrator no Discord pode
+ * apontar a própria conta do Discord para o nick de outro staff e passar a agir
+ * com o privilégio dele. E "Administrator no Discord" não é o mesmo conjunto de
+ * pessoas que "staff do servidor de jogo" — um community manager entra num, não
+ * no outro.
+ *
+ * Mitigado, não resolvido: toda ação publicada leva o Discord de quem pediu
+ * assinado no motivo (ver `signReason` em daycoreAdmin.js), então o log do
+ * **servidor** registra as duas pontas e a auditoria não depende de o bot estar
+ * íntegro. Continua sendo possível agir em nome de outro; deixa de ser possível
+ * fazer isso sem rastro.
+ *
+ * A correção de raiz é provar posse da conta antes de vincular — código
+ * temporário que a pessoa cola no perfil do osu!, ou OAuth do próprio servidor.
+ * Está em aberto de propósito, para quando o fluxo administrativo for testado
+ * de verdade contra um bancho.py real.
  */
 module.exports = {
   data: new SlashCommandBuilder()

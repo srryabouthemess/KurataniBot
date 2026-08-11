@@ -4,6 +4,7 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 require('dotenv').config();
 const db = require('./db');
+const { logError } = require('./logger');
 
 const commands = [];
 // Ajuste 'commands' para o nome da sua pasta onde estão os arquivos .js dos comandos
@@ -47,6 +48,9 @@ const rest = new REST().setToken(process.env.DISCORD_TOKEN);
         console.log('ℹ️  O bot agora também registra sozinho no boot quando os comandos mudam;');
         console.log('   este script continua útil para forçar um registro manual.');
     } catch (error) {
-        console.error('❌ Erro ao registrar comandos:', error);
+        // Pelo logger, não pelo console: um erro de requisição carrega a
+        // configuração dela junto (incluindo o header Authorization), e
+        // imprimir o objeto cru põe o token do bot no log.
+        logError('deploy-commands', error);
     }
 })();

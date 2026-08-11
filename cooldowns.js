@@ -31,8 +31,10 @@ const BUCKETS = {
  * Resolver aqui evita que o próximo alias repita o problema.
  */
 const ALIASES = {
-  wi: 'whatif',
-  rs: 'recent',
+  wi:    'whatif',
+  rs:    'recent',
+  c:     'score',
+  choke: 'score',
 };
 
 /** Qual bucket cada comando usa. Ausente = 'default'. */
@@ -40,6 +42,8 @@ const COMMAND_BUCKET = {
   topplays: 'heavy',
   recent:   'heavy',
   compare:  'heavy',
+  // Uma página do /score enriquece o mapa e calcula PP de FC por score.
+  score:    'heavy',
   simulate: 'compute',
   whatif:   'compute',
   pp:       'compute',

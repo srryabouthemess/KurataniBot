@@ -3,7 +3,8 @@
 pp_calc.py - Calculador de PP (algoritmo Akatsuki/oppai-2019) para o KurataniBot
 Uso: python pp_calc.py <beatmap_id> <mods_bits> <n300> <n100> <n50> <nmiss> <combo>
 
-O conteúdo do arquivo .osu é lido da ENTRADA PADRÃO (stdin), não baixado aqui.
+O conteúdo do arquivo .osu é lido da ENTRADA PADRÃO (stdin), não baixado aqui,
+e vai direto para a lib em memória — sem passar por arquivo temporário.
 Antes este script fazia o próprio download, o que contornava o rate limiter e o
 cache de mapas do bot: cada cálculo de RX gerava uma requisição extra e não
 controlada a osu.ppy.sh, arriscando throttling/ban do IP. Agora o Node envia os
@@ -26,8 +27,6 @@ Requer: pip install akatsuki-pp-py (use Python <= 3.11, veja o README)
 
 import sys
 import json
-import tempfile
-import os
 
 def main():
     if len(sys.argv) != 8:
@@ -61,44 +60,38 @@ def main():
             print("null")
             return
 
-        # Salva em arquivo temporário — forma mais compatível com akatsuki-pp-py
-        tmp = tempfile.NamedTemporaryFile(suffix='.osu', delete=False)
-        tmp.write(osu_bytes)
-        tmp.close()
+        # Direto da memória. Antes isto passava por um NamedTemporaryFile com
+        # delete=False: quando o Node matava o processo pelo timeout, o `finally`
+        # que apagava não chegava a rodar e o arquivo ficava para trás.
+        beatmap = Beatmap(bytes=osu_bytes)
 
-        try:
-            beatmap = Beatmap(path=tmp.name)
+        calc_kwargs = {"mods": mods}
 
-            calc_kwargs = {"mods": mods}
+        if n300 >= 0 and n100 >= 0 and n50 >= 0:
+            # Modo FC: hits reais conhecidos, misses são mesclados ao n300
+            # para estimar o PP "se tivesse sido FC" (usado por getFCpp).
+            calc_kwargs["n300"]     = n300 + nmiss
+            calc_kwargs["n100"]     = n100
+            calc_kwargs["n50"]      = n50
+            calc_kwargs["n_misses"] = 0
+        else:
+            # Modo simulação: n300 desconhecido (a lib completa
+            # automaticamente com o restante dos objetos do mapa), misses
+            # contam como misses reais.
+            if n100 >= 0: calc_kwargs["n100"] = n100
+            if n50  >= 0: calc_kwargs["n50"]  = n50
+            calc_kwargs["n_misses"] = nmiss
 
-            if n300 >= 0 and n100 >= 0 and n50 >= 0:
-                # Modo FC: hits reais conhecidos, misses são mesclados ao n300
-                # para estimar o PP "se tivesse sido FC" (usado por getFCpp).
-                calc_kwargs["n300"]     = n300 + nmiss
-                calc_kwargs["n100"]     = n100
-                calc_kwargs["n50"]      = n50
-                calc_kwargs["n_misses"] = 0
-            else:
-                # Modo simulação: n300 desconhecido (a lib completa
-                # automaticamente com o restante dos objetos do mapa), misses
-                # contam como misses reais.
-                if n100 >= 0: calc_kwargs["n100"] = n100
-                if n50  >= 0: calc_kwargs["n50"]  = n50
-                calc_kwargs["n_misses"] = nmiss
+        if combo >= 0:
+            calc_kwargs["combo"] = combo
 
-            if combo >= 0:
-                calc_kwargs["combo"] = combo
-
-            calc   = Calculator(**calc_kwargs)
-            result = calc.performance(beatmap)
-            print(json.dumps({
-                "pp":        round(result.pp, 4),
-                "stars":     round(result.difficulty.stars, 4),
-                "max_combo": result.difficulty.max_combo,
-            }))
-
-        finally:
-            os.unlink(tmp.name)
+        calc   = Calculator(**calc_kwargs)
+        result = calc.performance(beatmap)
+        print(json.dumps({
+            "pp":        round(result.pp, 4),
+            "stars":     round(result.difficulty.stars, 4),
+            "max_combo": result.difficulty.max_combo,
+        }))
 
     except Exception as e:
         sys.stderr.write(f"Erro: {e}\n")

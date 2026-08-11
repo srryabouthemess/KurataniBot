@@ -1,5 +1,6 @@
 const { SlashCommandBuilder, EmbedBuilder, ApplicationIntegrationType, InteractionContextType, MessageFlags } = require('discord.js');
 const osu = require('../osuClient');
+const servers = require('../servers');
 const { getLink, getPreferredServer } = require('../db');
 const { t } = require('../i18n');
 const { logError } = require('../logger');
@@ -54,11 +55,7 @@ module.exports = {
         .setDescription('Which server to use? (default: your linked server)')
         .setDescriptionLocalizations({ 'pt-BR': 'Qual servidor usar? (padrão: o do seu link)' })
         .setRequired(false)
-        .addChoices(
-          { name: 'Bancho',     value: 'official'   },
-          { name: 'Daycore',    value: 'private'     },
-          { name: 'Daycore RX', value: 'private_rx'  }
-        )
+        .addChoices(...servers.choices())
     ),
 
   async execute(interaction) {

@@ -1,35 +1,21 @@
-const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ApplicationIntegrationType, InteractionContextType, MessageFlags } = require('discord.js');
+const { SlashCommandBuilder, EmbedBuilder, ApplicationIntegrationType, InteractionContextType, MessageFlags } = require('discord.js');
 const osu = require('../osuClient');
+const servers = require('../servers');
 const { resolvePlayer } = require('../userLink');
+const mapContext = require('../mapContext');
+const emojis = require('../emojis');
+const { paginate } = require('../pagination');
 const { t } = require('../i18n');
 const { logError } = require('../logger');
 
-const PAGE_SIZE     = 5;
-const FETCH_LIMIT    = 100;
-// Inatividade, não tempo absoluto: o contador reinicia a cada clique, então os
-// botões não morrem no meio de uma navegação ativa.
-const COLLECTOR_IDLE = 120_000;
+const PAGE_SIZE   = 5;
+const FETCH_LIMIT = 100;
 
 const truncateTitle = (title, maxLen = 22) =>
   title.length > maxLen ? `${title.slice(0, maxLen).trimEnd()}...` : title;
 
 const discordTimestamp = (dateString) =>
   `<t:${Math.floor(new Date(dateString).getTime() / 1000)}:R>`;
-
-function buildRow(page, totalPages) {
-  return new ActionRowBuilder().addComponents(
-    new ButtonBuilder()
-      .setCustomId('topplays_prev')
-      .setEmoji('◀️')
-      .setStyle(ButtonStyle.Secondary)
-      .setDisabled(page === 0),
-    new ButtonBuilder()
-      .setCustomId('topplays_next')
-      .setEmoji('▶️')
-      .setStyle(ButtonStyle.Secondary)
-      .setDisabled(page === totalPages - 1)
-  );
-}
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -51,11 +37,7 @@ module.exports = {
         .setDescription('Which server to use? (default: your linked server)')
         .setDescriptionLocalizations({ 'pt-BR': 'Qual servidor usar? (padrão: o do seu link)' })
         .setRequired(false)
-        .addChoices(
-          { name: 'Bancho',     value: 'official'   },
-          { name: 'Daycore',    value: 'private'     },
-          { name: 'Daycore RX', value: 'private_rx'  }
-        )
+        .addChoices(...servers.choices())
     ),
 
   async execute(interaction) {
@@ -77,6 +59,11 @@ module.exports = {
 
       const totalPages = Math.ceil(plays.length / PAGE_SIZE);
 
+      // Mapa do topo de cada página, para o /score sem argumento (mapContext).
+      // Fica fora do buildEmbed porque o embed é memoizado — voltar para uma
+      // página já vista não passa por lá de novo.
+      const pageMapId = new Map();
+
       const stats       = user.statistics;
       const rankDisplay = stats.global_rank ? `#${stats.global_rank.toLocaleString()}` : s.profile_unranked;
       const countryPart = (!user._private && stats.country_rank)
@@ -87,8 +74,10 @@ module.exports = {
         // Enriquece só os mapas da página atual (5), não os 100 buscados de
         // uma vez — evita rajada de requisições/rate limit na API do osu!
         const rawPage    = plays.slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE);
-        const scoredPage = mode === 'official' ? rawPage : await osu.enrichScores(rawPage);
+        const scoredPage = await osu.enrichScores(rawPage, mode);
         const pagePlays  = await osu.enrichBeatmapData(scoredPage);
+
+        pageMapId.set(page, pagePlays[0]?.beatmap?.id ?? null);
 
         const [adjustedStarsArray, fcPPArray] = await Promise.all([
           Promise.all(pagePlays.map(play => osu.getAdjustedStars(play.beatmap.id, play.mods, mode))),
@@ -132,7 +121,7 @@ module.exports = {
 
           const title = truncateTitle(play.beatmapset.title);
           description += `**#${globalIndex + 1} [${title} [${play.beatmap.version}]](${mapUrl}) [${stars}★]**\n`;
-          description += `**${play.rank}** ${ppText} (${acc}%) [${comboText}] **${mods}** ${discordTimestamp(play.created_at)}\n`;
+          description += `${emojis.rankLabel(play.rank)} ${ppText} (${acc}%) [${comboText}] **${mods}** ${discordTimestamp(play.created_at)}\n`;
           description += `${hitsLine}\n\n`;
         });
 
@@ -142,41 +131,21 @@ module.exports = {
         return embed;
       }
 
-      // Memoiza a página montada. Sem isso, voltar para uma página já vista
-      // refazia tudo do zero — enriquecimento dos scores, cálculo de estrelas
-      // e de PP de FC das mesmas 5 plays. Navegar 1→2→1 custava o triplo.
-      const embedCache = new Map();
-      async function getEmbed(page) {
-        if (!embedCache.has(page)) embedCache.set(page, await buildEmbed(page));
-        return embedCache.get(page);
-      }
-
-      let page = 0;
-      const embed = await getEmbed(page);
-      const message = await interaction.editReply({
-        embeds: [embed],
-        components: totalPages > 1 ? [buildRow(page, totalPages)] : [],
-      });
-
-      if (totalPages <= 1) return;
-
-      const collector = message.createMessageComponentCollector({ idle: COLLECTOR_IDLE });
-
-      collector.on('collect', async (i) => {
-        if (i.user.id !== interaction.user.id) {
-          return i.reply({ content: s.pagination_not_yours, flags: MessageFlags.Ephemeral }).catch(() => {});
-        }
-
-        if (i.customId === 'topplays_prev' && page > 0) page--;
-        if (i.customId === 'topplays_next' && page < totalPages - 1) page++;
-
-        await i.deferUpdate();
-        const newEmbed = await getEmbed(page);
-        await interaction.editReply({ embeds: [newEmbed], components: [buildRow(page, totalPages)] });
-      });
-
-      collector.on('end', () => {
-        interaction.editReply({ components: [] }).catch(() => {});
+      // O embed da página é memoizado pelo paginate(): sem isso, voltar para
+      // uma página já vista refazia tudo do zero — enriquecimento dos scores,
+      // estrelas e PP de FC das mesmas 5 plays. Navegar 1→2→1 custava o triplo.
+      await paginate(interaction, {
+        id: 'topplays',
+        totalPages,
+        buildEmbed,
+        strings: s,
+        onPage: page => mapContext.remember(interaction, pageMapId.get(page), mode),
+        // Baixa os .osu da próxima página enquanto a pessoa lê a atual: o
+        // gargalo de uma página nova é o limite de download, não o cálculo.
+        prefetch: page => Promise.all(
+          plays.slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE)
+            .map(play => osu.getBeatmapFile(play.beatmap?.id ?? play.beatmap_id))
+        ),
       });
     } catch (error) {
       logError('topplays', error);

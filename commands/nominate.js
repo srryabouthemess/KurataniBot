@@ -11,8 +11,17 @@ const { t } = require('../i18n');
 const { logError } = require('../logger');
 
 // Quantas nomeações distintas um set precisa antes de ser aplicado de fato.
-// O osu! oficial usa 2 (dois BNs); o Daycore pode querer outro número.
-const DEFAULT_THRESHOLD = 2;
+//
+// O padrão é 1: quem nomeia já aplica. O osu! oficial pede 2 (dois BNs), mas lá
+// isso resolve um problema que um servidor pequeno não tem — com poucos
+// nominators, exigir um segundo só trava mapa esperando alguém aparecer. Quem
+// quiser o modelo do osu! sobe o número no `.env`.
+//
+// ATENÇÃO ao subir para 2 ou mais: hoje a contagem é por conta do **Discord**
+// (a PK de map_nominations é discord_id), não por conta do jogo. Duas contas do
+// Discord ligadas ao mesmo osu! id valem como duas nomeações — então o limiar
+// só vale de verdade depois de trocar essa unicidade para osu_id.
+const DEFAULT_THRESHOLD = 1;
 
 // Tetos nas entradas de texto livre. Sem eles o Discord aceita até 6000
 // caracteres, que estouram o limite de 4096 do embed — o comando falharia ao
@@ -45,23 +54,23 @@ async function resolveSet(input) {
   // Link de beatmapset (sem #diff) → o ID já é o do set.
   const setLink = raw.match(/beatmapsets?\/(\d+)/) ?? raw.match(/\/s\/(\d+)/);
   if (setLink) {
-    const diffs = await osu.getDaycoreMapsBySet(Number(setLink[1]));
+    const diffs = await osu.getServerMapsBySet(Number(setLink[1]));
     return diffs.length > 0 ? { setId: Number(setLink[1]), diffs } : { error: 'not_found' };
   }
 
   // Link/ID de dificuldade → sobe para o set dela.
   const mapId = osu.parseBeatmapId(raw);
   if (mapId) {
-    const map = await osu.getDaycoreMap(mapId);
+    const map = await osu.getServerMap(mapId);
     if (map?.set_id) {
-      const diffs = await osu.getDaycoreMapsBySet(map.set_id);
+      const diffs = await osu.getServerMapsBySet(map.set_id);
       return { setId: map.set_id, diffs: diffs.length > 0 ? diffs : [map] };
     }
 
     // Número solto que não é dificuldade: tenta como ID de set antes de
     // desistir — quem copia da página do mapa costuma pegar o do set.
     if (/^\d+$/.test(raw)) {
-      const diffs = await osu.getDaycoreMapsBySet(Number(raw));
+      const diffs = await osu.getServerMapsBySet(Number(raw));
       if (diffs.length > 0) return { setId: Number(raw), diffs };
     }
     return { error: 'not_found' };
@@ -243,7 +252,9 @@ module.exports = {
 
       // ── withdraw ─────────────────────────────────────────────────────────
       if (sub === 'withdraw') {
-        const removed = db.removeNomination(setId, targetStatus, interaction.user.id);
+        // Por conta de jogo, como a nomeação: quem nomeou de um Discord
+        // consegue retirar de outro, porque é a mesma pessoa.
+        const removed = db.removeNomination(setId, targetStatus, staff.osuId);
         const left = db.getNominations(setId, targetStatus).length;
         return interaction.editReply(
           removed ? s.nom_withdrawn(label, left, threshold()) : s.nom_nothing_to_withdraw(label),
@@ -317,7 +328,9 @@ module.exports = {
         .setTitle(s.nom_applied_title(daycore.STATUS_LABELS[targetStatus]))
         .setDescription(
           `**${label}**\n${s.nom_set_line(setId, diffs.length)}\n\n` +
-          s.nom_threshold_reached(need) + '\n' +
+          // Com limiar 1 não houve espera nenhuma — anunciar "limiar atingido"
+          // seria ruído.
+          (need > 1 ? `${s.nom_threshold_reached(need)}\n` : '') +
           s.nom_by(nominations.map(n => n.osu_name ?? n.osu_id).join(', ')) + '\n\n' +
           resultLine(s, confirmed, pending),
         );
@@ -327,4 +340,8 @@ module.exports = {
       return interaction.editReply(s.admin_action_failed);
     }
   },
+
+  // Exportado para poder ser verificado direto: é a leitura de uma configuração
+  // que muda quanta gente precisa concordar antes de mexer no servidor.
+  threshold,
 };

@@ -7,15 +7,25 @@ const { logError } = require('./logger');
 const { t } = require('./i18n');
 const db = require('./db');
 const cooldowns = require('./cooldowns');
+const prefixCommands = require('./prefixCommands');
+const mapContext = require('./mapContext');
+const emojis = require('./emojis');
+const daycoreAdmin = require('./daycoreAdmin');
 
 const client = new Client({
-  intents: [GatewayIntentBits.Guilds],
+  // INTENTS vem vazio quando o modo texto (`k!comando`) está desligado: ler o
+  // conteúdo das mensagens é intent privilegiado, e pedir um intent não
+  // habilitado no Developer Portal derruba o login do bot inteiro.
+  intents: [GatewayIntentBits.Guilds, ...prefixCommands.INTENTS],
   // O bot nunca precisa mencionar ninguém: as respostas são embeds e texto.
   // Sem isso, qualquer texto de terceiro que o bot ecoe (nome de jogador,
   // metadados de mapa, motivo de moderação) poderia disparar @everyone se um
   // dia passasse por `content` em vez de embed. Barrar na origem é mais
   // seguro do que confiar que todo call site futuro use embed.
-  allowedMentions: { parse: [] },
+  //
+  // `repliedUser: false` porque o modo texto responde à mensagem de quem
+  // chamou: sem isso, cada comando vira uma notificação para a pessoa.
+  allowedMentions: { parse: [], repliedUser: false },
 });
 
 client.commands = new Collection();
@@ -27,6 +37,17 @@ for (const file of commandFiles) {
   const filePath = path.join(commandsPath, file);
   const command = require(filePath);
   client.commands.set(command.data.name, command);
+}
+
+// Mesmos comandos, também por texto (`k!rs mrekk`). Não faz nada sem
+// COMMAND_PREFIX no .env.
+prefixCommands.register(client);
+
+// Link de mapa colado na conversa também vira contexto do canal, para o
+// `/score` sem argumento achá-lo. Depende do mesmo intent privilegiado dos
+// comandos por texto, então só é ligado junto com eles.
+if (prefixCommands.ENABLED) {
+  client.on('messageCreate', message => mapContext.watch(message));
 }
 
 /**
@@ -74,6 +95,13 @@ client.once('clientReady', async () => {
     // continuam registrados no Discord e funcionando.
     logError('deploy', error);
   }
+
+  try {
+    await emojis.sync(client);
+  } catch (error) {
+    // Sem emoji o bot mostra a grade em texto, então não vale travar o boot.
+    logError('emojis', error);
+  }
 });
 
 client.on('interactionCreate', async interaction => {
@@ -119,6 +147,17 @@ process.on('unhandledRejection', (reason) => {
   logError('unhandledRejection', reason);
 });
 
+// ATENÇÃO à troca embutida aqui: depois de uma exceção não capturada o estado
+// do processo é indefinido (conexão meio-fechada, escrita pela metade), e
+// seguir rodando pode significar operar sobre estado inconsistente — inclusive
+// nos comandos que publicam no servidor de jogo. O correto é sair com código 1
+// e deixar um supervisor (systemd, pm2, Docker com restart) subir de novo.
+//
+// Continuamos logando e seguindo porque hoje não há supervisor configurado:
+// sair deixaria o bot fora do ar até alguém perceber, que é exatamente o que
+// este handler foi criado para evitar. Ao configurar o deploy, troque por
+// `process.exit(1)` — o `unhandledRejection` acima já cobre a maior parte dos
+// casos reais sem esse risco.
 process.on('uncaughtException', (error) => {
   logError('uncaughtException', error);
 });
@@ -139,6 +178,7 @@ async function shutdown(signal) {
     // Desconecta do gateway antes de fechar o banco, para não atender uma
     // interação com o db já fechado.
     await client.destroy();
+    await daycoreAdmin.closeRedis().catch(() => {});
     db.close();
     console.log('[shutdown] Concluído.');
   } catch (error) {
@@ -152,4 +192,18 @@ for (const signal of ['SIGINT', 'SIGTERM']) {
   process.on(signal, () => shutdown(signal));
 }
 
-client.login(process.env.DISCORD_TOKEN);
+client.login(process.env.DISCORD_TOKEN).catch(error => {
+  // O intent de conteúdo de mensagem é privilegiado: pedir sem habilitar no
+  // Developer Portal faz o gateway recusar a conexão inteira, e a mensagem
+  // padrão ("Used disallowed intents") não diz o que fazer.
+  if (prefixCommands.ENABLED && /disallowed intents/i.test(String(error?.message))) {
+    console.error(
+      '[login] O Discord recusou os intents. Como o COMMAND_PREFIX está definido,\n' +
+      '        o bot pede MESSAGE CONTENT INTENT — habilite em\n' +
+      '        Developer Portal > seu app > Bot > Privileged Gateway Intents,\n' +
+      '        ou apague o COMMAND_PREFIX do .env para voltar ao modo só slash.'
+    );
+  }
+  logError('login', error);
+  process.exit(1);
+});

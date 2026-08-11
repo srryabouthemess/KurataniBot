@@ -1,27 +1,14 @@
-const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ApplicationIntegrationType, InteractionContextType, MessageFlags } = require('discord.js');
+const { SlashCommandBuilder, EmbedBuilder, ApplicationIntegrationType, InteractionContextType, MessageFlags } = require('discord.js');
 const osu = require('../osuClient');
+const servers = require('../servers');
 const { resolvePlayer } = require('../userLink');
+const mapContext = require('../mapContext');
+const emojis = require('../emojis');
+const { paginate } = require('../pagination');
 const { t } = require('../i18n');
 const { logError } = require('../logger');
 
-const FETCH_LIMIT    = 50;
-// Inatividade, não tempo absoluto: reinicia a cada clique.
-const COLLECTOR_IDLE = 120_000;
-
-function buildRow(page, totalPages) {
-  return new ActionRowBuilder().addComponents(
-    new ButtonBuilder()
-      .setCustomId('recent_prev')
-      .setEmoji('◀️')
-      .setStyle(ButtonStyle.Secondary)
-      .setDisabled(page === 0),
-    new ButtonBuilder()
-      .setCustomId('recent_next')
-      .setEmoji('▶️')
-      .setStyle(ButtonStyle.Secondary)
-      .setDisabled(page === totalPages - 1)
-  );
-}
+const FETCH_LIMIT = 50;
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -43,11 +30,7 @@ module.exports = {
         .setDescription('Which server to use? (default: your linked server)')
         .setDescriptionLocalizations({ 'pt-BR': 'Qual servidor usar? (padrão: o do seu link)' })
         .setRequired(false)
-        .addChoices(
-          { name: 'Bancho',     value: 'official'   },
-          { name: 'Daycore',    value: 'private'     },
-          { name: 'Daycore RX', value: 'private_rx'  }
-        )
+        .addChoices(...servers.choices())
     ),
 
   async execute(interaction) {
@@ -69,12 +52,20 @@ module.exports = {
 
       const totalPages = recents.length;
 
+      // Mapa de cada página já montada, para o /score conseguir responder à
+      // play que está sendo exibida agora (ver mapContext.js). Fica fora do
+      // buildEmbed porque o embed é memoizado: voltar para uma página antiga
+      // não passa por lá de novo, mas ainda precisa atualizar o contexto.
+      const pageMapId = new Map();
+
       async function buildEmbed(page) {
         // Enriquece só a play exibida agora, não as 50 buscadas de uma vez —
         // evita rajada de requisições/rate limit na API do osu!
         const rawPlay      = recents[page];
-        const [scoredPlay] = mode === 'official' ? [rawPlay] : await osu.enrichScores([rawPlay]);
+        const [scoredPlay] = await osu.enrichScores([rawPlay], mode);
         const [recent]     = await osu.enrichBeatmapData([scoredPlay]);
+
+        pageMapId.set(page, recent.beatmap.id);
 
         const mapUrl = osu.getMapUrl(recent.beatmap.id, recent.beatmapset.id, mode);
         const mods   = recent.mods.length > 0 ? `+${recent.mods.join('')}` : 'No Mods';
@@ -109,7 +100,7 @@ module.exports = {
           .setThumbnail(recent.beatmapset.covers.list)
           .addFields(
             { name: s.recent_status, value: isPass ? s.recent_pass : s.recent_fail, inline: true },
-            { name: s.recent_rank,   value: `**${recent.rank}**`,                   inline: true },
+            { name: s.recent_rank,   value: emojis.rankLabel(recent.rank),         inline: true },
             { name: s.recent_mods,   value: mods,                                   inline: true },
             {
               name: s.recent_stats,
@@ -132,40 +123,14 @@ module.exports = {
           });
       }
 
-      // Memoiza a play já montada: voltar para uma anterior não deve refazer o
-      // enriquecimento nem o cálculo de PP de FC.
-      const embedCache = new Map();
-      async function getEmbed(page) {
-        if (!embedCache.has(page)) embedCache.set(page, await buildEmbed(page));
-        return embedCache.get(page);
-      }
-
-      let page = 0;
-      const embed = await getEmbed(page);
-      const message = await interaction.editReply({
-        embeds: [embed],
-        components: totalPages > 1 ? [buildRow(page, totalPages)] : [],
-      });
-
-      if (totalPages <= 1) return;
-
-      const collector = message.createMessageComponentCollector({ idle: COLLECTOR_IDLE });
-
-      collector.on('collect', async (i) => {
-        if (i.user.id !== interaction.user.id) {
-          return i.reply({ content: s.pagination_not_yours, flags: MessageFlags.Ephemeral }).catch(() => {});
-        }
-
-        if (i.customId === 'recent_prev' && page > 0) page--;
-        if (i.customId === 'recent_next' && page < totalPages - 1) page++;
-
-        await i.deferUpdate();
-        const newEmbed = await getEmbed(page);
-        await interaction.editReply({ embeds: [newEmbed], components: [buildRow(page, totalPages)] });
-      });
-
-      collector.on('end', () => {
-        interaction.editReply({ components: [] }).catch(() => {});
+      await paginate(interaction, {
+        id: 'recent',
+        totalPages,
+        buildEmbed,
+        strings: s,
+        // O contexto do canal acompanha a página em que os botões pararam.
+        onPage: page => mapContext.remember(interaction, pageMapId.get(page), mode),
+        prefetch: page => osu.getBeatmapFile(recents[page]?.beatmap_id ?? recents[page]?.beatmap?.id),
       });
     } catch (error) {
       logError('recent', error);

@@ -1,5 +1,7 @@
 const { SlashCommandBuilder, EmbedBuilder, ApplicationIntegrationType, InteractionContextType, MessageFlags } = require('discord.js');
 const osu = require('../osuClient');
+const servers = require('../servers');
+const mapContext = require('../mapContext');
 const { t } = require('../i18n');
 const { logError } = require('../logger');
 
@@ -68,11 +70,7 @@ module.exports = {
         .setDescription('Which server/algorithm to use? (default: official)')
         .setDescriptionLocalizations({ 'pt-BR': 'Qual servidor/algoritmo usar? (padrão: oficial)' })
         .setRequired(false)
-        .addChoices(
-          { name: 'Bancho',     value: 'official'   },
-          { name: 'Daycore',    value: 'private'     },
-          { name: 'Daycore RX', value: 'private_rx'  }
-        )
+        .addChoices(...servers.choices())
     ),
 
   async execute(interaction) {
@@ -149,6 +147,10 @@ module.exports = {
       if (cover) embed.setThumbnail(cover);
 
       await interaction.editReply({ embeds: [embed] });
+
+      // Deixa o mapa como contexto do canal: quem viu a simulação pode rodar
+      // /score direto para comparar com o que realmente já foi jogado.
+      mapContext.remember(interaction, beatmapId, mode);
     } catch (error) {
       logError('simulate', error);
       interaction.editReply(s.simulate_error);

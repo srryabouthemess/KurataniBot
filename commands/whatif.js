@@ -1,5 +1,6 @@
 const { SlashCommandBuilder, EmbedBuilder, ApplicationIntegrationType, InteractionContextType, MessageFlags } = require('discord.js');
 const osu = require('../osuClient');
+const servers = require('../servers');
 const { resolvePlayer } = require('../userLink');
 const { t } = require('../i18n');
 const { logError } = require('../logger');
@@ -70,11 +71,7 @@ module.exports = {
         .setDescription('Which server to use? (default: your linked server)')
         .setDescriptionLocalizations({ 'pt-BR': 'Qual servidor usar? (padrão: o do seu link)' })
         .setRequired(false)
-        .addChoices(
-          { name: 'Bancho',     value: 'official'   },
-          { name: 'Daycore',    value: 'private'     },
-          { name: 'Daycore RX', value: 'private_rx'  }
-        )
+        .addChoices(...servers.choices())
     ),
 
   async execute(interaction) {
@@ -99,7 +96,9 @@ module.exports = {
         return interaction.editReply(s.no_plays(user.username, osu.getModeLabel(mode)));
       }
 
-      const { currentPP, simulatedPP, gain, position, didEnter } = simulateWhatIf(plays, hypotheticalPP);
+      // O PP atual exibido vem de `stats.pp` (o oficial do servidor), não do
+      // `currentPP` calculado aqui — por isso ele não é desestruturado.
+      const { simulatedPP, gain, position, didEnter } = simulateWhatIf(plays, hypotheticalPP);
 
       const stats      = user.statistics;
       const rankDisplay = stats.global_rank ? `#${stats.global_rank.toLocaleString()}` : s.profile_unranked;
@@ -132,7 +131,7 @@ module.exports = {
         .sort((a, b) => b.pp - a.pp)
         .slice(0, 5);
 
-      if (mode !== 'official') {
+      if (!servers.isOfficial(mode)) {
         const realOnes    = previewList.filter(p => !p._hypothetical);
         const enrichedMap = new Map(
           (await osu.enrichScores(realOnes)).map((p, i) => [realOnes[i], p])
