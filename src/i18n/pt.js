@@ -99,6 +99,12 @@ module.exports = ({ ADMIN }) => ({
   recent_acc:              'Acc',
   recent_combo:            'Combo',
   recent_hits:             'Hits',
+  // Fica ao lado de um valor calculado aqui, não de um zero: o que precisa
+  // ficar claro é que ele não entra no perfil, não que ele não existe.
+  recent_pp_unranked:      'mapa não ranqueado, não conta para o perfil',
+  // Numa play interrompida o valor é o do TRECHO jogado, não o do mapa inteiro.
+  recent_pp_failed:        'play não terminada, valor só do trecho jogado',
+  recent_pp_failed_unranked: 'play não terminada em mapa não ranqueado, só do trecho jogado',
   recent_pass:             '✅ **Pass**',
   recent_fail:             '❌ **Quit**',
   recent_error:            'Erro ao buscar a play recente. Verifique se o jogador existe.',

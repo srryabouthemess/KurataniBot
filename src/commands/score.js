@@ -5,11 +5,12 @@ const { resolvePlayer } = require('../userLink');
 const mapContext = require('../mapContext');
 const emojis = require('../emojis');
 const { paginate } = require('../pagination');
+const { localScorePP } = require('../scorePP');
 const { t } = require('../i18n');
 const { logError } = require('../logger');
+const { safeEditReply } = require('../replies');
 
 const PAGE_SIZE = 5;
-const { safeEditReply } = require('../replies');
 
 // Título de embed estoura em 256 caracteres — e "artista - título [diff]" de
 // mapa de maratona chega perto. Cortar aqui evita que o comando falhe ao
@@ -137,7 +138,7 @@ module.exports = {
           // de exibir 0pp, calculamos o valor localmente a partir dos hits
           // reais — o mesmo caminho do /simulate.
           Promise.all(pageScores.map(sc =>
-            sc.pp != null ? null : calcScorePP(sc, beatmapId, mode)
+            sc.pp != null ? null : localScorePP(sc, mode)
           )),
         ]);
 
@@ -215,29 +216,7 @@ module.exports = {
   },
 };
 
-/**
- * PP do score calculado localmente, para quando o servidor não informa o valor.
- *
- * Passa os hits e o combo reais do score: o simulatePP deduz os 300s a partir
- * da contagem de objetos do mapa, o que só vale porque a play foi completada —
- * e os dois servidores só devolvem play completa neste comando.
- *
- * @returns {Promise<number|null>}
- */
-async function calcScorePP(score, beatmapId, mode) {
-  const hits = score.statistics ?? {};
-
-  const result = await osu.simulatePP(
-    beatmapId,
-    score.mods ?? [],
-    {
-      n100:   hits.count_100  ?? hits.ok   ?? 0,
-      n50:    hits.count_50   ?? hits.meh  ?? 0,
-      misses: hits.count_miss ?? hits.miss ?? 0,
-      combo:  score.max_combo ?? undefined,
-    },
-    mode
-  );
-
-  return result?.pp ?? null;
-}
+// O cálculo local saiu daqui para o scorePP.js: o /recent precisa do mesmo
+// número, e as duas cópias já tinham divergido — esta calculava, a de lá
+// imprimia zero. O pré-requisito de play completa vale igual, e neste comando
+// ele é dado: os dois servidores só devolvem play completa em scores de mapa.

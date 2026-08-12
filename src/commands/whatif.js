@@ -97,11 +97,25 @@ module.exports = {
         return interaction.editReply(s.no_plays(user.username, osu.getModeLabel(mode)));
       }
 
-      // O PP atual exibido vem de `stats.pp` (o oficial do servidor), não do
-      // `currentPP` calculado aqui — por isso ele não é desestruturado.
-      const { simulatedPP, gain, position, didEnter } = simulateWhatIf(plays, hypotheticalPP);
+      const { currentPP: currentWeighted, simulatedPP, gain, position, didEnter } =
+        simulateWhatIf(plays, hypotheticalPP);
 
       const stats      = user.statistics;
+
+      // O total precisa sair da MESMA base que o `stats.pp` do perfil, e o
+      // calcWeightedPP só soma as top 100 ponderadas: de fora ficam o bônus por
+      // playcount e a cauda das plays além da centésima, que juntos passam de
+      // 400pp numa conta ativa.
+      //
+      // Sem somar isso de volta, o "indo para" saía ABAIXO do pp atual — uma
+      // play boa parecia fazer o jogador PERDER pp, e o número discordava do
+      // /pp, que pede um valor menor para uma meta maior.
+      //
+      // O ganho nunca teve esse problema: é uma diferença, e o offset se
+      // cancela. É a mesma conta que o /pp já fazia do outro lado — lá o offset
+      // é subtraído do alvo antes da busca, aqui é somado ao resultado.
+      const offset   = stats.pp - currentWeighted;
+      const newTotal = simulatedPP + offset;
       const rankDisplay = stats.global_rank ? `#${stats.global_rank.toLocaleString()}` : s.profile_unranked;
       const countryPart = (!user._private && stats.country_rank)
         ? ` ${user.country_code}#${stats.country_rank.toLocaleString()}`
@@ -122,7 +136,7 @@ module.exports = {
       }
 
       // Linha de ganho de PP
-      const gainLine = s.whatif_gain(gain.toFixed(2), simulatedPP.toFixed(2));
+      const gainLine = s.whatif_gain(gain.toFixed(2), newTotal.toFixed(2));
 
       // Top 5 plays para contexto, destacando onde a hipotética entraria.
       // Os títulos só precisam ser buscados pras 5 que realmente vão aparecer

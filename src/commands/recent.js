@@ -5,11 +5,63 @@ const { resolvePlayer } = require('../userLink');
 const mapContext = require('../mapContext');
 const emojis = require('../emojis');
 const { paginate } = require('../pagination');
+const { localScorePP } = require('../scorePP');
 const { t } = require('../i18n');
 const { logError } = require('../logger');
+const { safeEditReply } = require('../replies');
 
 const FETCH_LIMIT = 50;
-const { safeEditReply } = require('../replies');
+
+/**
+ * Só `ranked` e `approved` pagam pp — graveyard, wip, pending, qualified e
+ * loved não. O campo só vem da API oficial; o adaptador bancho.py não devolve
+ * status nenhum, e aí `undefined` é tratado como "paga": afirmar "não
+ * ranqueado" sem saber seria pior do que não afirmar nada.
+ */
+const PAGA_PP = new Set(['ranked', 'approved']);
+const awardsPP = score => {
+  const status = score.beatmap?.status;
+  return status == null || PAGA_PP.has(status);
+};
+
+/**
+ * Como escrever o PP da play — o `pp` nulo tem três causas distintas, e todas
+ * viravam o mesmo "0pp", que mentia em duas delas.
+ *
+ *  - Mapa que não paga pp (graveyard, loved): zero é o valor certo, mas
+ *    sozinho parece nota da play. Pior ao lado do "(FC: ~634pp)", que sugere
+ *    que um FC pagaria isso — pagaria zero também.
+ *  - Play fracassada: também vale zero de verdade, e aqui NÃO dá para calcular
+ *    localmente. O simulatePP deduz os 300s pela contagem de objetos do mapa,
+ *    o que só vale para play completa; num quit no meio, o número sairia
+ *    inflado (é a ressalva que o /score já documenta).
+ *  - Mapa ranqueado, play completa, pp nulo: é a API não ter pontuado o score
+ *    (acontece com lazer + CL). Aí zero é simplesmente errado, e o valor dá
+ *    para calcular — com `~` na frente, para não passar por número oficial.
+ *
+ * @returns {Promise<{text: string, note: string|null}>} `note` é chave de i18n
+ */
+async function describePP(score, isPass, mode) {
+  if (score.pp != null) return { text: `${score.pp.toFixed(2)}pp`, note: null };
+
+  // O status do mapa só vem da API oficial, então a ressalva de "não ranqueado"
+  // é na prática do Bancho: no bancho.py o campo não existe e o `awardsPP`
+  // assume que paga.
+  const semRank = !awardsPP(score);
+
+  const note = !isPass
+    ? (semRank ? 'recent_pp_failed_unranked' : 'recent_pp_failed')
+    : (semRank ? 'recent_pp_unranked' : null);
+
+  // `partial` numa play interrompida: sem ele a conta assume o mapa inteiro,
+  // inventa um 300 por objeto não jogado e devolve quase o valor de um FC.
+  const local = await localScorePP(score, mode, { partial: !isPass });
+  if (local === null) return { text: '?pp', note };
+
+  // Valor calculado aqui, com `~`: é tão real quanto o de um mapa ranqueado —
+  // mesmo algoritmo, mesmo .osu — só não entra no perfil.
+  return { text: `~${local.toFixed(2)}pp`, note };
+}
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -79,14 +131,21 @@ module.exports = {
         const hMiss = hits.count_miss ?? hits.miss  ?? 0;
         const hitsLine = `{ ${h300} / ${h100} / ${h50} / ${hMiss} }`;
 
+        // Vale para mapa que não paga pp também: ali o valor da play já sai
+        // calculado localmente, então o do FC ao lado é a mesma natureza de
+        // número — os dois hipotéticos, os dois com `~`. Era contraditório
+        // enquanto a play aparecia como "0pp".
         const fcPP       = await osu.getFCpp(recent, mode);
         const misses     = typeof hMiss === 'number' ? hMiss : 0;
         const mapCombo   = recent.beatmap?.max_combo ?? null;
         const scoreCombo = recent.max_combo ?? 0;
         const isChoke    = misses > 0 || (mapCombo !== null && scoreCombo < mapCombo);
 
+        const { text: ppText, note: ppNote } = await describePP(recent, isPass, mode);
+
         const ppLine =
-          `**${s.recent_pp}:** ${recent.pp ? recent.pp.toFixed(2) : '0'}pp` +
+          `**${s.recent_pp}:** ${ppText}` +
+          (ppNote ? ` — ${s[ppNote]}` : '') +
           (fcPP !== null && isChoke ? ` *(FC: ~${fcPP.toFixed(2)}pp)*` : '');
 
         return new EmbedBuilder()

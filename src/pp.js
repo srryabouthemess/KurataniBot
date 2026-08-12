@@ -330,10 +330,21 @@ async function getFCpp(score, mode = DEFAULT_MODE) {
  * - servidor com RX  → akatsuki-pp-py via Python (oppai-2019, o mesmo do Daycore)
  *
  * @param {number} beatmapId
+ * @param {number} [hits.n300]   - omitido, a lib DEDUZ pela contagem de objetos
+ *   do mapa, assumindo que todos foram jogados. Serve para play completa e para
+ *   simulação hipotética; numa play interrompida no meio, a dedução inventa um
+ *   300 para cada objeto que a pessoa nunca chegou a ver. Informe o valor real
+ *   nesse caso.
  * @param {string[]} mods       - acrônimos de mods, ex: ['DT', 'HR']
  * @param {object} hits
  * @param {number} [hits.n100=0]
  * @param {number} [hits.n50=0]
+ * @param {number} [hits.passedObjects] - quantos objetos a pessoa chegou a
+ *   jogar. Para play interrompida é o que torna o número honesto: a dificuldade
+ *   passa a ser a do TRECHO jogado, e não a do mapa inteiro. Sem isto, uma
+ *   desistência aos 120 de 1833 objetos era avaliada contra o mapa completo e o
+ *   `combo` não fazia diferença nenhuma no resultado — medido: 332.6pp contra os
+ *   101.3pp corretos.
  * @param {number} [hits.misses=0]
  * @param {number} [hits.combo]  - se omitido, assume full combo
  * @param {string} mode
@@ -344,13 +355,20 @@ async function simulatePP(beatmapId, mods, hits, mode = DEFAULT_MODE) {
   const n100     = hits.n100   ?? 0;
   const n50      = hits.n50    ?? 0;
   const misses   = hits.misses ?? 0;
+  const n300     = hits.n300   ?? null;
   const combo    = hits.combo  ?? -1;
 
   try {
     if (servers.get(mode).relax) {
+  const passed   = hits.passedObjects ?? null;
       // stars/maxCombo vêm do próprio akatsuki-pp (já ajustados pelos mods),
       // então não precisamos consultar a API oficial aqui.
-      return await calcPPPython(beatmapId, modsBits, -1, n100, n50, misses, combo);
+      // O akatsuki-pp trabalha sempre com o mapa inteiro — não há como dizer
+      // "parei no objeto N". Devolver o valor do mapa completo para uma play
+      // interrompida seria inventar; melhor admitir que não sabe.
+      if (passed !== null) return null;
+      // -1 é o "não sei" que o pp_calc.py entende (ver src/pp_calc.py).
+      return await calcPPPython(beatmapId, modsBits, n300 ?? -1, n100, n50, misses, combo);
     }
 
     const rosu = loadRosu();
@@ -361,7 +379,11 @@ async function simulatePP(beatmapId, mods, hits, mode = DEFAULT_MODE) {
 
     const beatmap = new rosu.Beatmap(beatmapBytes);
     try {
-      const difficulty = new rosu.Difficulty({ mods: modsBits, lazer: useLazer });
+      const diffArgs = { mods: modsBits, lazer: useLazer };
+      // Play interrompida: a dificuldade é a do trecho jogado, não a do mapa.
+      if (passed !== null) diffArgs.passedObjects = passed;
+
+      const difficulty = new rosu.Difficulty(diffArgs);
       const diffAttrs  = difficulty.calculate(beatmap);
 
       const perfParams = { mods: modsBits, n100, n50, misses, lazer: useLazer };
@@ -369,6 +391,9 @@ async function simulatePP(beatmapId, mods, hits, mode = DEFAULT_MODE) {
 
       const perf     = new rosu.Performance(perfParams);
       const result   = perf.calculate(diffAttrs);
+      // Só quando quem chamou soube dizer: sem isto a lib deduz, e a dedução
+      // é justamente o que estraga o número de uma play interrompida.
+      if (n300 !== null) perfParams.n300 = n300;
       const stars    = diffAttrs.stars;
       const maxCombo = diffAttrs.maxCombo;
 
