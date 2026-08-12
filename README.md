@@ -24,7 +24,7 @@ Funciona no **Bancho** e em **servidores bancho.py**, quantos você configurar.
 | `/link` | Vincula sua conta do osu! ao Discord |
 | `/language` | Português, English ou Русский |
 
-- Atalhos: `/rs`, `/wi`, `/c` e `/choke`.
+- Atalhos: `/osu`, `/rs`, `/top`, `/wi`, `/c` e `/choke`.
 - Depois do `/link`, você não precisa digitar seu nome nos outros comandos.
 - `/help` também mostra os servidores configurados e as chaves que a opção `server` aceita.
 - Em `/topplays`, `/recent` e `/score` dá pra navegar com ◀️ ▶️ (só quem usou o comando; expiram após 2 min sem uso).
@@ -101,7 +101,7 @@ Confira com `node --version` — precisa ser 22.13 ou superior.
 ### Testes
 
 ```bash
-npm test     # 128 casos, poucos segundos, sem tocar rede nem o bot.db real
+npm test     # 167 casos, poucos segundos, sem tocar rede nem o bot.db real
 npm run lint
 npm run smoke  # confere contra as APIs de verdade
 ```
