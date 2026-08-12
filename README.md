@@ -41,6 +41,16 @@ Funciona no **Bancho** e em **servidores bancho.py**, quantos você configurar.
 
 Dá para ter um nick por servidor; os dois convivem.
 
+### `/language`
+
+| Subcomando | O que faz |
+|---|---|
+| `/language set <lang>` | Seu idioma pessoal |
+| `/language server [lang]` | Idioma padrão do servidor — só Administrador; sem `lang`, volta ao padrão |
+| `/language status` | Mostra seu idioma e o do servidor |
+
+A escolha pessoal ganha da do servidor, que por sua vez ganha do padrão (português).
+
 ---
 
 ## Instalação

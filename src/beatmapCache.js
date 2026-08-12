@@ -7,7 +7,7 @@
  * isso gera rajadas de requisições paralelas que estouram o rate limit da API
  * (resultando em max_combo faltando aleatoriamente em /topplays e /recent).
  *
- * O armazenamento vive em bot.db (tabela beatmap_meta). Antes era um
+ * O armazenamento vive em cache.db (tabela beatmap_meta). Antes era um
  * beatmap_cache.json reescrito por inteiro (JSON.stringify do objeto todo) a
  * cada mapa novo, sem limite de tamanho nem evicção — tudo bem com 15 mapas,
  * caro com alguns milhares. Este módulo continua existindo como fachada para
