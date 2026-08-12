@@ -2,6 +2,119 @@
 
 ---
 
+# Sessão de 2026-08-12
+
+## 🐛 Correções de bugs
+
+Os dois primeiros foram encontrados no uso, olhando a saída real dos comandos. O resto veio de uma revisão do projeto inteiro.
+
+- **O `/whatif` dizia que uma play boa faria você PERDER pp.** [`whatif.js`](src/commands/whatif.js)
+  - Com 5860.19pp, simular uma play de 500pp respondia "mudaria em **+227.65pp**, indo para **5651.20pp**" — um total 200pp **abaixo** do atual, e incoerente com o `/pp`, que pedia só 412pp para chegar a 6000.
+  - O ganho sempre esteve certo: é uma diferença, e o que faltava se cancela nela. O erro estava no total, que saía do `calcWeightedPP` — a soma das top 100 ponderadas, sem o bônus por playcount nem a cauda das plays além da centésima. Medido na conta que reportou: **436.64pp** ficavam de fora, quase exatamente a diferença observada.
+  - O `/pp` já resolvia isso do outro lado (`bonus = currentPP - currentWeighted`, subtraído do alvo antes da busca binária); o `/whatif` nunca somou de volta. Agora os dois concordam no número: uma play de 412.16pp responde **6000.00** nos dois.
+
+- **`/simulate` passou a assumir mecânica stable, e a opção `combo` voltou a funcionar.** [`simulate.js`](src/commands/simulate.js), [`pp.js`](src/pp.js)
+  - Uma play hipotética não tem mod CL para consultar, então o `shouldUseLazer` concluía "lazer" — e em modo lazer o rosu-pp não aplica penalidade por combo, porque lá a quebra vem dos slider ends registrados, não de estimativa. Resultado: a opção `combo` do comando não mudava o número.
+  - Agora o comando força stable, que é o que praticamente todo mundo joga (hoje quase todo score ranqueado chega da API marcado com CL). No bancho.py já era assim, então a mudança vale só para o Bancho.
+  - **Correção do que ficou registrado antes:** "o rosu-pp ignora o combo" só vale para o modo lazer. No stable ele é aplicado, mas **limitado por `n100 + n50 + misses`** — e isso é a fórmula do osu!, não defeito da lib: quebra de combo sem miss é sliderbreak, que o stable não registra, então a estimativa não pode passar do número de julgamentos que não foram 300. Com `miss:5` e nenhum 100, o teto iguala os misses e o combo realmente não muda nada; com 100s na conta, muda bastante — de 1227pp a combo cheio para 623pp a 50x.
+
+- **O bot pedia à API um formato de score que escondia o mod CL.** [`osu/officialApi.js`](src/osu/officialApi.js), [`mods.js`](src/mods.js)
+  - O `shouldUseLazer` já decidia a mecânica de cálculo pela presença do mod `CL` — e estava certo desde sempre. Só que **o formato antigo da API não manda o CL**, então a condição nunca era verdadeira: todo score do Bancho era calculado com mecânica de lazer, inclusive os de stable, que são quase todos.
+  - Pedindo `x-api-version: 20240529`, o CL chega. E aí a diferença aparece onde dói: o rosu-pp **ignora o combo do jogador em modo lazer**, então scores com combo quebrado saíam muito acima do real. Medido contra o pp oficial em 8 scores: **18,9% de erro médio, agora 7,0%**. O resíduo é o rosu estar dois reworks atrás, não isto.
+  - Vieram junto as estatísticas de lazer de verdade para quem joga no lazer (a acurácia do `/recent` do mrekk passou de 95,28% para os 95,46% corretos — o formato antigo converte para acurácia clássica) e o `legacy_score_id`, que diz score a score qual é qual.
+  - A tradução fica na borda, num `normalizeScore`, e não espalhada pelos comandos — mesmo desenho dos adaptadores de bancho.py. **Atenção ao formato novo: ele é esparso**, o que vale zero não vem, e um FC sem tratamento viraria `undefined` misses. **7 casos de teste** cobrem isso, o CL e o caminho de volta para o formato antigo.
+  - O CL não é exibido: não é escolha de ninguém, é marcador de "jogado no stable", e mostrar "+DTCL" em toda play seria ruído novo — o formato antigo nem mandava esse mod. Conferido que o header não muda nada nos endpoints de usuário e de beatmap.
+
+- **Play não terminada também mostra pp — e o `passedObjects` que faltava.** [`pp.js`](src/pp.js), [`scorePP.js`](src/scorePP.js), [`recent.js`](src/commands/recent.js)
+  - Faltava usar um parâmetro que a lib sempre teve. A doc do rosu-pp é literal: *"Amount of passed objects for partial plays, e.g. a fail"*. Sem ele, uma desistência era avaliada contra o mapa **inteiro**: a lib inventava um 300 para cada objeto que a pessoa nunca viu, e o `combo` deixava de fazer qualquer diferença.
+  - O quanto isso importava, medido numa desistência aos 120 de 1833 objetos: **332.6pp sem, 101.3pp com**. Com `passedObjects`, as estrelas caem de 7.08 para 5.44 e o combo máximo de 1833 para 184 — ou seja, a dificuldade passa a ser a do trecho jogado, e o combo do jogador finalmente é comparado com algo que faz sentido.
+  - Antes de achar isso, o `combo` passado ao `simulatePP` era **silenciosamente ignorado**: 27x e 1833x devolviam o mesmo pp. Não era bug de chamada — é o comportamento da lib quando ela acha que o mapa foi jogado inteiro.
+  - No Relax o cálculo parcial devolve `null` em vez de um número: o akatsuki-pp trabalha sempre com o mapa inteiro, e dar o valor cheio para uma play interrompida seria inventar.
+
+- **Play em mapa não ranqueado passou a mostrar o pp calculado.** [`recent.js`](src/commands/recent.js)
+  - A API do osu! não expõe pp hipotético — conferido: o `POST /beatmaps/{id}/attributes` devolve `star_rating` e os fatores de dificuldade, **nunca** performance. Para mapa fora de ranked/approved o `pp` do score vem `null` e ponto.
+  - Mas o `.osu` é público para qualquer mapa, e o motor de pp já roda aqui. Então o valor existe: `~473.38pp` na play que motivou isso, ao lado do `(FC: ~634.38pp)` que já aparecia. Sai com `~` na frente e a ressalva de que não conta para o perfil — o número é real, o que muda é onde ele entra.
+  - Vale só quando o bot **sabe** que o mapa não paga, e o status só vem da API oficial: na prática, Bancho. No bancho.py o campo não existe e o padrão continua sendo confiar no pp do servidor.
+  - Play fracassada segue em `0pp` sem cálculo, e a razão é técnica: o `simulatePP` deduz os 300s pela contagem de objetos do mapa, o que só vale para play completa — num quit no meio o número sairia inflado.
+
+- **`/recent` mostrava "0pp" para play em mapa que não paga pp.** [`recent.js`](src/commands/recent.js), [`scorePP.js`](src/scorePP.js)
+  - A API devolve `pp: null` em três situações diferentes e as três viravam `0`, o que mentia em duas delas. O caso que apareceu: play do mrekk num mapa **graveyard**, exibida como `0pp` com um `(FC: ~634.38pp)` ao lado — sugerindo que um FC pagaria 634pp, quando pagaria zero igual.
+  - Agora cada causa é dita: mapa sem pp sai `0pp — mapa não ranqueado, não dá pp` e **sem** a dica de FC (não há o que deixar na mesa); play fracassada sai `0pp` sem enfeite; e mapa ranqueado com pp nulo — o caso de lazer com CL — é calculado localmente e sai com `~` na frente, como o `/score` já fazia.
+  - A distinção entre os dois últimos importa: em play fracassada **não** dá para calcular, porque o `simulatePP` deduz os 300s pela contagem de objetos do mapa e num quit no meio o número sairia inflado. Está escrito no código.
+  - O cálculo local virou o `scorePP.js`, compartilhado: era a mesma conta em dois comandos, e as cópias tinham divergido no pior sentido — o `/score` calculava, o `/recent` imprimia zero.
+
+- **Os dois adaptadores discordavam sobre "jogador não existe".** [`osu/officialApi.js`](src/osu/officialApi.js)
+  - O contrato do `osuClient` promete `fetchUser → usuário ou null`, e era o que o adaptador bancho.py fazia (o `banchoV1Get` aceita 404 e 422 como respostas válidas). O oficial não tinha `validateStatus` e deixava o axios lançar — então o `if (!user)` dos comandos **nunca rodava no Bancho**: a exceção pulava direto para o `catch`.
+  - Na prática, quem errava o nick no `/link set` lia *"Ocorreu um erro ao verificar o jogador"* em vez de *"Jogador não encontrado. Verifique o nome e o servidor."*, e o `/score` respondia *"Erro ao buscar os scores desse mapa"*. O `/profile` escapava porque checava `status === 404` na mão — remendo local de um problema que era do adaptador.
+  - Confirmado antes e depois contra a API de verdade: `official -> LANCOU: 404` virou `official -> devolveu: null`, igual ao Daycore.
+
+- **`play_time` numérico derrubava a página inteira do `/topplays` e do `/recent`.** [`osu/banchoPyApi.js`](src/osu/banchoPyApi.js)
+  - A expressão testava o valor convertido (`String(raw).includes('T')`) e convertia o valor cru (`raw.replace(...)`): um epoch numérico estourava com *"replace is not a function"*. O `String()` só no teste era o sinal de que o tipo já era incerto ali.
+  - O estrago passava do score: o `catch` do `enrichScores` chama a mesma normalização de novo, batia na mesma linha, e a **segunda** exceção escapava do try — o `Promise.all` rejeitava e a página inteira falhava, não só a play problemática.
+  - Virou um `parsePlayTime` que cobre os três formatos que a API usa conforme o endpoint (ISO, datetime do SQL, epoch em segundos) e devolve "agora" no que não der para ler — antes um formato desconhecido virava `Invalid Date` e só estourava adiante, no `toISOString()`, longe da causa. **8 casos novos de teste.**
+
+- **Nove `editReply` soltos em bloco `catch`.** [`replies.js`](src/replies.js)
+  - `interaction.editReply(s.erro);` sem `await` nem `.catch()` em nove comandos. Quando a interação já tinha expirado — e por causa da mesma lentidão que causou o erro, já que o token vale 15 min e o retry come tempo — a promise rejeitava solta: o processo não caía (o `index.js` tem handler global), mas o log enchia e **a pessoa não recebia aviso nenhum**.
+  - Um `safeEditReply` num módulo próprio, em vez de nove `.catch(() => {})` copiados. Não conseguir entregar o aviso é o fim da linha, não um segundo evento a registrar — mesma escolha que o `pagination.js` e o adaptador do prefixo já faziam.
+
+- **Falha ao montar uma página deixava a paginação travada e dessincronizada.** [`pagination.js`](src/pagination.js)
+  - O handler do coletor não tinha `try/catch`. Montar a página seguinte faz rede e cálculo de PP; se falhasse, a rejeição vinha **depois** do `deferUpdate`, então o Discord já considerava o clique respondido: a mensagem ficava parada, sem aviso, e o erro só aparecia no `unhandledRejection` global.
+  - Pior que o susto: o `page` já tinha sido incrementado. O cursor ficava numa página que nunca chegou à tela, e o clique seguinte partia do lugar errado — pulando uma página a cada falha. Agora o cursor volta para o que está na tela e os botões são restaurados.
+
+- **Os dois caches em memória não tinham teto de verdade.** [`osuClient.js`](src/osuClient.js), [`mapContext.js`](src/mapContext.js)
+  - Ao passar do limite, os dois podavam só o que tinha **expirado**. Com tráfego suficiente para encher a tabela dentro da janela do TTL (60s no cache de usuário, 6h no contexto de mapa), tudo está fresco, nada é descartado e o Map cresce sem limite — a condição volta a ser verdadeira na inserção seguinte, e assim por diante. Invisível num bot pequeno, vazamento num bot grande, que é o caso de quem hospeda isto para muita gente.
+  - A evicção por excesso usa a ordem de inserção do Map como recência, então as escritas passaram a fazer `delete` antes do `set`: reatribuir uma chave existente **não** muda a posição dela, e sem isso um canal (ou jogador) consultado o tempo todo ficaria parado na posição da primeira vez e seria descartado como se estivesse frio.
+  - Junto saiu uma escrita que nunca servia para nada: o cache de usuário indexava `mode:#id` mas **lia** só por texto, então a entrada por ID jamais era encontrada — o dobro de memória sem um acerto sequer. Agora a chave é a mesma nas duas pontas, e uma consulta pelo nome aquece a de quem vier pelo link (o `userLink` manda o `osu_id` quando tem).
+  - **3 casos de teste**, conferidos nos dois sentidos: falham no código antigo, passam no novo.
+
+- **`EXIT_ON_UNCAUGHT`: a escolha em falha grave passou a ser de quem hospeda.** [`index.js`](src/index.js)
+  - O handler de `uncaughtException` logava e seguia rodando, com um comentário admitindo que o certo seria `process.exit(1)` e que só não era por não haver supervisor configurado. Os dois lados têm razão, e qual vale depende de algo que o código não sabe: se existe alguém para reiniciar.
+  - O padrão não mudou — seguir rodando continua certo para quem roda na própria máquina. Com systemd/pm2/Docker configurado, `EXIT_ON_UNCAUGHT=true` faz o processo sair para voltar limpo, em vez de operar sobre estado indefinido. Importa mais aqui do que na média dos bots: este publica ações administrativas num servidor de jogo.
+
+- **A falha do PP do Relax era invisível.** [`pp.js`](src/pp.js)
+  - O `stderr` do processo Python nunca era consumido. O `pp_calc.py` faz a parte dele muito bem — escreve a causa exata (`akatsuki-pp-py nao instalado. Execute: pip install akatsuki-pp-py`, `stdin vazio para o mapa X`, `Erro: ...`) — e o Node jogava tudo fora. Quem via "PP do Relax indisponível" não tinha **nenhum** caminho para descobrir o porquê sem rodar o script na mão.
+  - A primeira tentativa de correção relatava só quando o `JSON.parse` estourava, e não funcionou: o script trata os próprios erros, então ele escreve no stderr **e** imprime `null` no stdout — o parse tem sucesso e o caminho de erro nunca era alcançado. O relato passou para "não veio número", que é onde a informação de fato está. Achado rodando o `npm run smoke`, não lendo.
+  - **Uma vez por processo**, no mesmo espírito do `_rosuTried`: isto é chamado uma vez por play, então um `/topplays` de RX viraria cinco tracebacks idênticos por página. Verificado com 5 cálculos seguidos — uma linha só.
+  - Consumir o stderr também fecha um travamento: o pipe tem buffer, e um filho que escreva mais do que cabe nele fica bloqueado até o timeout de 12s matar o processo.
+
+- **Corpo de resposta ia inteiro para o log.** [`logger.js`](src/logger.js)
+  - Dois casos reais: um 502 de proxy devolve página HTML completa, e o download de `.osu` usa `responseType: 'arraybuffer'` — um Buffer no `JSON.stringify` vira `{"type":"Buffer","data":[...]}`, **um número por byte**. Multiplicado pelas 4 tentativas do retry, uma queda da API escrevia megabytes por comando. Agora corta em 500 caracteres e corpo binário sai como `<50000 bytes>`.
+  - O `JSON.stringify` também ganhou `try/catch`: um corpo circular estourava dentro do tratamento de outro erro, que é o pior lugar possível para uma segunda exceção.
+  - **6 casos de teste**, incluindo o que já era a razão de o módulo existir: a credencial do `.config` do AxiosError não pode aparecer no log.
+
+- **Caminho de instalação com apóstrofo impedia o bot de subir.** [`db.js`](src/db.js)
+  - O `ATTACH DATABASE` montava o caminho por interpolação de string. Não é injeção (vem do `__dirname`), mas `C:\Users\O'Brien\KurataniBot` quebrava o SQL — e num bot que as pessoas auto-hospedam isso não é hipótese remota. Reproduzido numa pasta com apóstrofo: `FALHOU: near "Brien": syntax error`, um erro que não menciona o caminho em lugar nenhum. Com as aspas dobradas, `OK`.
+
+- **Três comentários que descreviam um código que não existe mais.** [`nominate.js`](src/commands/nominate.js), [`pp.js`](src/pp.js), [`daycoreAdmin.js`](src/daycoreAdmin.js)
+  - O `NOMINATION_THRESHOLD` vinha com um aviso para **não confiar nele**: dizia que a contagem era por conta do Discord e que o limiar "só vale de verdade depois de trocar essa unicidade para osu_id". Essa troca já tinha sido feita — a migração no `db.js` reconstruiu a tabela com `PRIMARY KEY (set_id, target_status, osu_id)`. O comentário desaconselhava um recurso que funciona.
+  - O caminho do Relax no `getFCpp` afirmava que "o script Python baixa o .osu internamente, então não precisamos fazer o download aqui" — exatamente o oposto do que passou a valer quando os bytes foram para o stdin, justamente para o download parar de escapar do cache e do rate limiter. E o docblock logo acima citava `akatsuki-pp-js ... via Neon/Rust`, um pacote que **não é dependência do projeto**: o motor do RX é o `akatsuki-pp-py`, por subprocesso.
+  - O `hasPriv` ganhou o comentário que faltava, depois de conferir o upstream: o teste de bits é o mesmo que o bancho.py faz ao despachar um comando (`player.priv & cmd.priv == cmd.priv`, em `app/commands.py`), e **não** é hierarquia. Os docstrings do upstream dizem "manage users (level 1/2)", o que lê como escada e convida a "corrigir" isto — mas quem tem DEVELOPER sem o bit de ADMINISTRATOR também é recusado pelo `!restrict` in-game, e transformar em hierarquia daria pelo Discord um acesso que o servidor nega. As constantes espelhadas conferem uma a uma com o upstream e com o fork.
+
+- **A falha de comando no slash saía em português para todo mundo.** [`index.js`](src/index.js)
+  - Quando um comando estourava no meio da execução, o handler respondia `'Erro ao executar o comando.'` — string crua, fora do i18n. Quem tinha `/language en` ou `ru` recebia português. O caminho do prefixo já respondia a essa mesma falha pelo `error_generic`, traduzido; agora os dois dizem a mesma coisa, no idioma de quem chamou.
+  - Resolver o idioma lê o banco, e o banco pode ser exatamente o que quebrou (ou já ter sido fechado por um shutdown em curso). Como este é o último `catch` antes do usuário, uma segunda exceção aqui significaria **não responder nada** — então a leitura do i18n tem fallback para a string fixa.
+
+## ✨ Novos recursos
+
+- **`/help`, o índice que faltava.** [`commands/help.js`](src/commands/help.js)
+  - Até aqui a única forma de descobrir o bot era o menu do Discord (que lista os 17 comandos achatados, aliases junto dos originais) ou o README. O `/help` agrupa em **Perfil e plays**, **PP e simulações** e **Configuração**, com os atalhos ao lado do comando que eles chamam — `/recent` (`/rs`) — em vez de ocupando linha própria.
+  - A lista é **curada, não derivada** do `client.commands`: derivar traria os quatro aliases e os três administrativos, dobrando o tamanho da resposta sem ajudar quem chegou agora. Mas os nomes são conferidos contra o registro antes de virar linha, então um comando removido some do help em vez de virar uma linha morta.
+  - Mostra também **os servidores configurados com as chaves que a opção `server` aceita** (`Bancho` `official`, `Daycore` `daycore`...) — que é justamente a parte que muda de instalação para instalação e não cabe no README de ninguém. Vem de `servers.choices()`, a mesma lista que os comandos oferecem, então não tem como divergir do que é aceito de verdade.
+  - Os administrativos (`/nominate`, `/moderate`, `/staff`) só aparecem dentro do Discord do `DAYCORE_GUILD_ID`, onde de fato funcionam. Fora dele o `staffGuard` recusaria tudo, e listá-los seria oferecer o que não dá para usar.
+  - Resposta **pública, não ephemeral**: help é o tipo de coisa que se manda no canal para outra pessoa ler. Também mantém os dois modos iguais, já que o adaptador do prefixo descarta a flag de ephemeral. Sem opções, o `k!help` sai de graça pelo `buildSpec`.
+
+- **O prefixo sozinho deixou de ser um beco sem saída.** [`prefixCommands.js`](src/prefixCommands.js)
+  - Quem descobria o bot e mandava `k!` para ver o que acontecia recebia silêncio — o `resolveCommand` devolvia `null` e o dispatcher desistia. Agora responde com por onde começar (`/link set`, os três comandos mais usados) e aponta o `/help`.
+  - **A exceção é o prefixo exato, não tudo que começa com ele.** `k!qualquercoisa` segue calado, e por um motivo que não mudou: ali o texto pode ser qualquer frase que por acaso comece com o prefixo, e responder a cada uma viraria ruído no canal. O teste guarda os dois lados.
+  - Divide o balde de cooldown com o `/help`, e **em cooldown fica em silêncio** em vez de responder "espere Xs" — ninguém pediu para executar nada, e trocar o convite por um erro seria pior do que não responder.
+
+- **Teste que impede o help de mentir.** [`test/help.test.js`](test/help.test.js)
+  - Três formas de o catálogo se descolar da realidade, nenhuma visível rodando o bot: citar comando que não existe mais (a linha some calada, porque o `execute` filtra pelo registro), faltar a descrição de um comando (vira `— undefined` para quem usa aquele idioma) e um comando novo nascer fora do catálogo.
+  - A terceira é o motivo de a conferência ser **nos dois sentidos**: todo comando registrado precisa estar no help ou na lista de exceções (os aliases e o próprio `/help`). Comando novo agora obriga quem o acrescenta a decidir em que grupo ele entra.
+  - O teste de paridade do i18n não cobria o segundo caso: ele compara os idiomas **entre si**, e uma chave pode faltar nos três de uma vez. Com os casos do prefixo sozinho, a suíte foi de 128 para **138 casos**.
+
+---
+
 # Sessão de 2026-08-11
 
 ## ⚡ Desempenho
