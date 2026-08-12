@@ -81,7 +81,21 @@ function stripClassic(mods) {
   return (mods ?? []).filter(mod => mod !== 'CL');
 }
 
+/**
+ * Como os mods vão para a tela: `['DT','CL']` → `+DTCL`, lista vazia → `+NM`.
+ *
+ * `+NM` (NoMod) é como a comunidade escreve, e vale nos três idiomas — por isso
+ * saiu do i18n. Antes cada comando montava esse texto por conta própria e os
+ * quatro discordavam no caso vazio: o /recent dizia "No Mods", o /score também
+ * (mas por uma chave de i18n), o /simulate dizia "Nenhum" e o /topplays não
+ * mostrava nada.
+ */
+function formatMods(mods) {
+  const list = mods ?? [];
+  return list.length > 0 ? `+${list.join('')}` : '+NM';
+}
+
 module.exports = {
   MOD_BITS, KNOWN_MOD_TOKENS,
-  decodeMods, parseModsString, modsToBits, stripClassic,
+  decodeMods, parseModsString, modsToBits, stripClassic, formatMods,
 };

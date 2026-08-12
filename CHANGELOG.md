@@ -30,6 +30,10 @@ Estes sete vieram de uma segunda revisão, feita sobre o código que a própria 
 - **O `x-api-version` ia em toda requisição.** [`osu/officialApi.js`](src/osu/officialApi.js)
   - Conferido que hoje não muda nada nos endpoints de usuário e de beatmap, mas fixar versão de formato é um contrato: quanto menos endpoints presos a ela, menos coisa quebra na próxima. Agora só as três chamadas de score usam o `scoreGet`.
 
+- **Sem mods virou `+NM`, e a formatação saiu de quatro cópias.** [`mods.js`](src/mods.js)
+  - O caso vazio estava escrito quatro vezes, e os quatro discordavam: o `/recent` dizia `No Mods` (texto cravado), o `/score` também mas por chave de i18n, o `/simulate` dizia `Nenhum` e o `/topplays` não mostrava **nada**. Agora todos passam por um `formatMods`, e o vazio é `+NM` — como a comunidade escreve.
+  - `+NM` vale nos três idiomas, então as chaves `score_no_mods` e `simulate_mods_none` ficaram sem uso e saíram.
+
 - **O mod CL voltou a aparecer nos scores.** [`mods.js`](src/mods.js), [`commands/`](src/commands/)
   - Eu o tinha escondido por achar que era ruído técnico. É o contrário: o CL é **o** sinal de como a play foi jogada — presente quer dizer mecânica clássica (stable, ou lazer com o mod Classic), ausente quer dizer lazer de verdade. É a mesma distinção que o bot usa para escolher o algoritmo de PP, e não havia nenhum outro indício disso no embed.
   - Continua fora de dois lugares, e por motivo diferente do original: ele não é mod de **dificuldade**. No `getAdjustedStars`, contá-lo fazia um score sem mod nenhum deixar de ser "sem mods" e o bot calcular estrelas localmente em vez de usar o valor da API. E no `/simulate` a simulação já é sempre stable, então digitar CL não muda nada e ecoá-lo enganaria.

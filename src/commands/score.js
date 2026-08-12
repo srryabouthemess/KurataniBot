@@ -6,6 +6,7 @@ const mapContext = require('../mapContext');
 const emojis = require('../emojis');
 const { paginate } = require('../pagination');
 const { localScorePP } = require('../scorePP');
+const { formatMods } = require('../mods');
 const { t } = require('../i18n');
 const { logError } = require('../logger');
 const { safeEditReply } = require('../replies');
@@ -159,7 +160,7 @@ module.exports = {
 
           const starsRaw = starsArray[index] ?? sc.beatmap?.difficulty_rating;
           const stars    = starsRaw ? ` [${parseFloat(starsRaw).toFixed(2)}★]` : '';
-          const mods     = sc.mods?.length > 0 ? `+${sc.mods.join('')}` : s.score_no_mods;
+          const mods     = formatMods(sc.mods);
 
           // pp calculado por nós vai com ~ na frente, para não passar por
           // número oficial do servidor.

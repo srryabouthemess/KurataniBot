@@ -103,7 +103,6 @@ module.exports = ({ ADMIN }) => ({
 
   score_no_map:            '❌ Укажите карту (ID или ссылку) — недавних карт в этом канале не нашлось.',
   score_none:              (name, map, label) => `У **${name}** нет скоров на **${map}** в ${label}.`,
-  score_no_mods:           'No Mods',
   score_footer:            (page, total, count, label, status) =>
     `Страница ${page}/${total} • скоров: ${count}${status ? ` • ${status}` : ''} • ${label}`,
   score_error:             'Ошибка при получении скоров на этой карте.',
@@ -149,7 +148,6 @@ module.exports = ({ ADMIN }) => ({
   simulate_map_not_found:  '❌ Карта не найдена.',
   simulate_calc_error:     '❌ Не удалось рассчитать PP для этой симуляции. Проверьте, подходят ли значения для карты.',
   simulate_error:          '❌ Произошла ошибка при симуляции плея.',
-  simulate_mods_none:      'Нет',
   simulate_title:          'Симуляция PP',
   simulate_combo_fc:       'Full Combo',
   simulate_combo_assumed:  'предполагается макс. комбо',

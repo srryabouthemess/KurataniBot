@@ -2,7 +2,7 @@ const { SlashCommandBuilder, EmbedBuilder, ApplicationIntegrationType, Interacti
 const osu = require('../osuClient');
 const servers = require('../servers');
 const mapContext = require('../mapContext');
-const { stripClassic } = require('../mods');
+const { stripClassic, formatMods } = require('../mods');
 const { t } = require('../i18n');
 const { logError } = require('../logger');
 const { safeEditReply } = require('../replies');
@@ -140,8 +140,7 @@ module.exports = {
       // O CL sai daqui, e só daqui: nos scores ele é exibido (é o que separa
       // play clássica de play de lazer). Numa simulação não — ela já é sempre
       // stable, então digitar CL não muda nada e ecoá-lo enganaria.
-      const shownMods = stripClassic(mods);
-      const modsText = shownMods.length > 0 ? `+${shownMods.join('')}` : s.simulate_mods_none;
+      const modsText = formatMods(stripClassic(mods));
       const stars = result.stars != null ? parseFloat(result.stars).toFixed(2) : '?';
 
       const title = beatmap.beatmapset?.title ?? '???';

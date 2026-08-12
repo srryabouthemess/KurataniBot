@@ -103,7 +103,6 @@ module.exports = ({ ADMIN }) => ({
 
   score_no_map:            '❌ Provide a map (ID or link) — I found no recent map in this channel.',
   score_none:              (name, map, label) => `**${name}** has no scores on **${map}** in ${label}.`,
-  score_no_mods:           'No Mods',
   score_footer:            (page, total, count, label, status) =>
     `Page ${page}/${total} • ${count} score(s)${status ? ` • ${status}` : ''} • ${label}`,
   score_error:             'Error fetching the scores for this map.',
@@ -149,7 +148,6 @@ module.exports = ({ ADMIN }) => ({
   simulate_map_not_found:  '❌ Map not found.',
   simulate_calc_error:     "❌ Couldn't calculate pp for this simulation. Check if the values make sense for the map.",
   simulate_error:          '❌ An error occurred while simulating the play.',
-  simulate_mods_none:      'None',
   simulate_title:          'PP Simulation',
   simulate_combo_fc:       'Full Combo',
   simulate_combo_assumed:  'max combo assumed',
