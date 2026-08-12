@@ -12,6 +12,7 @@ Funciona no **Bancho** e em **servidores bancho.py**, quantos você configurar.
 
 | Comando | O que faz |
 |---|---|
+| `/help` | Lista os comandos, agrupados |
 | `/profile` | Perfil do jogador |
 | `/recent` | Últimas plays, incluindo as que falharam |
 | `/topplays` | Melhores plays, 5 por página |
@@ -25,6 +26,7 @@ Funciona no **Bancho** e em **servidores bancho.py**, quantos você configurar.
 
 - Atalhos: `/rs`, `/wi`, `/c` e `/choke`.
 - Depois do `/link`, você não precisa digitar seu nome nos outros comandos.
+- `/help` também mostra os servidores configurados e as chaves que a opção `server` aceita.
 - Em `/topplays`, `/recent` e `/score` dá pra navegar com ◀️ ▶️ (só quem usou o comando; expiram após 2 min sem uso).
 - `/score` sem `map` usa o último mapa que apareceu no canal.
 

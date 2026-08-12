@@ -35,6 +35,34 @@ module.exports = ({ ADMIN }) => ({
   prefix_guild_only:       '❌ Esse comando só funciona dentro de um servidor.',
   prefix_no_permission:    '❌ Você não tem permissão para usar esse comando.',
 
+  // ── /help ─────────────────────────────────────────────────────────────────
+  // A ordem e o agrupamento dos comandos ficam no próprio commands/help.js;
+  // aqui é só o texto de cada um.
+  help_title:              'Comandos do KurataniBot',
+  help_intro:              'Estatísticas de osu! no Discord.\n' +
+                           'Use `/link set` uma vez e os outros comandos já sabem quem você é.',
+  help_group_stats:        '📊 Perfil e plays',
+  help_group_pp:           '💭 PP e simulações',
+  help_group_config:       '⚙️ Configuração',
+  help_group_admin:        `🛡️ Administração do ${ADMIN}`,
+  help_cmd_profile:        'Perfil do jogador: ranks, acc e a melhor play.',
+  help_cmd_recent:         'Últimas plays, incluindo as que falharam.',
+  help_cmd_topplays:       'Melhores plays, 5 por página.',
+  help_cmd_score:          'Scores num mapa, com o PP que cada um valeria com FC.',
+  help_cmd_compare:        'Compara dois jogadores lado a lado.',
+  help_cmd_whatif:         'Quanto PP você ganharia com uma play nova.',
+  help_cmd_pp:             'O que falta para chegar a um total de PP.',
+  help_cmd_simulate:       'Quanto PP daria uma play específica num mapa.',
+  help_cmd_link:           'Vincula sua conta do osu! ao Discord.',
+  help_cmd_language:       'Muda o idioma: Português, English ou Русский.',
+  help_cmd_nominate:       'Nomeia mapas para mudar de status.',
+  help_cmd_moderate:       'Consulta e restringe contas.',
+  help_cmd_staff:          'Gerencia os vínculos de staff.',
+  help_servers:            '🌐 Servidores disponíveis',
+  help_prefix:             '⌨️ Comandos por texto',
+  help_prefix_body:        (prefix) => `Os mesmos comandos funcionam escritos: \`${prefix}rs mrekk\`.`,
+  help_footer:             'Nos comandos com páginas, use ◀️ ▶️ para navegar.',
+
   profile_title:           (name) => `Perfil de ${name}`,
   profile_ranks:           '🌐 Ranks',
   profile_global:          'Global',

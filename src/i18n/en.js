@@ -32,6 +32,33 @@ module.exports = ({ ADMIN }) => ({
   prefix_guild_only:       '❌ This command only works inside a server.',
   prefix_no_permission:    '❌ You do not have permission to use this command.',
 
+  // ── /help ─────────────────────────────────────────────────────────────────
+  // Order and grouping live in commands/help.js; this is only the wording.
+  help_title:              'KurataniBot commands',
+  help_intro:              'osu! stats on Discord.\n' +
+                           'Run `/link set` once and the other commands already know who you are.',
+  help_group_stats:        '📊 Profile and plays',
+  help_group_pp:           '💭 PP and simulations',
+  help_group_config:       '⚙️ Settings',
+  help_group_admin:        `🛡️ ${ADMIN} administration`,
+  help_cmd_profile:        "Player profile: ranks, accuracy and their top play.",
+  help_cmd_recent:         'Latest plays, failed ones included.',
+  help_cmd_topplays:       'Best plays, 5 per page.',
+  help_cmd_score:          'Scores on a map, with the PP each would be worth on FC.',
+  help_cmd_compare:        'Compare two players side by side.',
+  help_cmd_whatif:         'How much PP a new play would earn you.',
+  help_cmd_pp:             'What you still need to reach a PP total.',
+  help_cmd_simulate:       'How much PP a specific play on a map would be worth.',
+  help_cmd_link:           'Link your osu! account to Discord.',
+  help_cmd_language:       'Change the language: Português, English or Русский.',
+  help_cmd_nominate:       'Nominate maps to change their status.',
+  help_cmd_moderate:       'Inspect and restrict accounts.',
+  help_cmd_staff:          'Manage staff links.',
+  help_servers:            '🌐 Available servers',
+  help_prefix:             '⌨️ Text commands',
+  help_prefix_body:        (prefix) => `The same commands work written out: \`${prefix}rs mrekk\`.`,
+  help_footer:             'On paged commands, use ◀️ ▶️ to browse.',
+
   profile_title:           (name) => `${name}'s Profile`,
   profile_ranks:           '🌐 Ranks',
   profile_global:          'Global',

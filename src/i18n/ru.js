@@ -32,6 +32,33 @@ module.exports = ({ ADMIN }) => ({
   prefix_guild_only:       '❌ Эта команда работает только на сервере.',
   prefix_no_permission:    '❌ У вас нет прав на использование этой команды.',
 
+  // ── /help ─────────────────────────────────────────────────────────────────
+  // Порядок и группировка команд — в commands/help.js; здесь только тексты.
+  help_title:              'Команды KurataniBot',
+  help_intro:              'Статистика osu! в Discord.\n' +
+                           'Выполните `/link set` один раз — и остальные команды уже знают, кто вы.',
+  help_group_stats:        '📊 Профиль и плеи',
+  help_group_pp:           '💭 PP и симуляции',
+  help_group_config:       '⚙️ Настройки',
+  help_group_admin:        `🛡️ Администрирование ${ADMIN}`,
+  help_cmd_profile:        'Профиль игрока: ранки, точность и лучший плей.',
+  help_cmd_recent:         'Последние плеи, включая проваленные.',
+  help_cmd_topplays:       'Лучшие плеи, по 5 на странице.',
+  help_cmd_score:          'Скоры на карте и сколько PP дал бы каждый при FC.',
+  help_cmd_compare:        'Сравнение двух игроков.',
+  help_cmd_whatif:         'Сколько PP принесёт новый плей.',
+  help_cmd_pp:             'Чего не хватает до нужного количества PP.',
+  help_cmd_simulate:       'Сколько PP дал бы конкретный плей на карте.',
+  help_cmd_link:           'Привязка аккаунта osu! к Discord.',
+  help_cmd_language:       'Смена языка: Português, English или Русский.',
+  help_cmd_nominate:       'Номинация карт для смены статуса.',
+  help_cmd_moderate:       'Просмотр и ограничение аккаунтов.',
+  help_cmd_staff:          'Управление привязками стаффа.',
+  help_servers:            '🌐 Доступные серверы',
+  help_prefix:             '⌨️ Текстовые команды',
+  help_prefix_body:        (prefix) => `Те же команды работают текстом: \`${prefix}rs mrekk\`.`,
+  help_footer:             'В командах со страницами листайте кнопками ◀️ ▶️.',
+
   profile_title:           (name) => `Профиль ${name}`,
   profile_ranks:           '🌐 Ранки',
   profile_global:          'Глобальный',
