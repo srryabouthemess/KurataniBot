@@ -3,7 +3,7 @@
  * O índice do bot: o que dá para fazer e por onde começar.
  *
  * A lista é curada, não derivada de `client.commands`. A coleção traz também os
- * aliases (`/osu`, `/rs`, `/wi`, `/c`, `/choke`) e os administrativos: listados um por
+ * aliases (`/osu`, `/rs`, `/top`, `/wi`, `/c`, `/choke`) e os administrativos: listados um por
  * linha, dobrariam o tamanho da resposta sem ajudar quem chegou agora. Aqui os
  * aliases aparecem ao lado do comando que eles chamam, e os administrativos só
  * no Discord onde de fato funcionam.
@@ -34,10 +34,11 @@ const ADMIN_GROUP = { key: 'admin', commands: ['nominate', 'moderate', 'staff'] 
 
 /** Atalhos, mostrados junto do comando de origem em vez de em linha própria. */
 const ALIASES = {
-  profile: ['osu'],
-  recent:  ['rs'],
-  score:   ['c', 'choke'],
-  whatif:  ['wi'],
+  profile:  ['osu'],
+  recent:   ['rs'],
+  topplays: ['top'],
+  score:    ['c', 'choke'],
+  whatif:   ['wi'],
 };
 
 /** Uma linha do help: nome em negrito, atalhos entre parênteses, descrição. */
