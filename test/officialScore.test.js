@@ -1,0 +1,93 @@
+/**
+ * Normalização do formato novo de score da API oficial.
+ *
+ * O bot passou a pedir `x-api-version` porque o formato antigo OMITE o mod CL —
+ * o único sinal de que a play foi jogada no stable. Sem ele o cálculo de PP
+ * escolhia mecânica de lazer para score que não é de lazer, e o rosu-pp então
+ * ignora o combo: 18,9% de erro médio contra o pp oficial, contra 7,3% com o CL.
+ *
+ * O que precisa continuar valendo depois da troca:
+ *  - o CL chega, porque é dele que depende a escolha da mecânica;
+ *  - o `statistics` novo é ESPARSO (zero não vem), e um FC não pode virar
+ *    `undefined` misses;
+ *  - os campos que mudaram de nome continuam legíveis pelos nomes antigos, que
+ *    é o que o resto do bot usa.
+ */
+const test = require('node:test');
+const assert = require('node:assert');
+
+const { normalizeScore } = require('../src/osu/officialApi');
+const { displayMods, modsToBits } = require('../src/mods');
+
+/** Score como a API responde com x-api-version: um FC de stable, com CL. */
+const FC_STABLE = {
+  mods: [{ acronym: 'DT' }, { acronym: 'CL' }],
+  statistics: { great: 268, ok: 5 },     // sem `meh`, sem `miss`: são zero
+  ended_at: '2026-02-23T20:16:07Z',
+  legacy_score_id: 4988081501,
+  is_perfect_combo: true,
+  legacy_total_score: 12345678,
+  max_combo: 402,
+  pp: 340.728,
+};
+
+test('o mod CL chega — é dele que depende a mecânica do cálculo', () => {
+  const s = normalizeScore(FC_STABLE);
+  assert.deepEqual(s.mods, ['DT', 'CL']);
+});
+
+test('CL não entra no bitmask nem na exibição', () => {
+  const s = normalizeScore(FC_STABLE);
+  // Não tem bit legado: só DT (64) deve sobrar.
+  assert.equal(modsToBits(s.mods), 64);
+  // E "+DTCL" seria ruído novo na tela — o formato antigo nem mandava o CL.
+  assert.deepEqual(displayMods(s.mods), ['DT']);
+});
+
+test('statistics esparso vira contagem completa', () => {
+  const s = normalizeScore(FC_STABLE);
+  assert.equal(s.statistics.count_300, 268);
+  assert.equal(s.statistics.count_100, 5);
+  // Os que não vieram são ZERO, não undefined — um `undefined` aqui vazaria
+  // para o cálculo de PP e para a linha de hits do embed.
+  assert.equal(s.statistics.count_50, 0);
+  assert.equal(s.statistics.count_miss, 0);
+});
+
+test('campos renomeados continuam legíveis pelos nomes antigos', () => {
+  const s = normalizeScore(FC_STABLE);
+  assert.equal(s.created_at, '2026-02-23T20:16:07Z');  // era ended_at
+  assert.equal(s.perfect, true);                        // era is_perfect_combo
+  assert.equal(s.score, 12345678);                      // era legacy_total_score
+  assert.equal(s.mode, 'osu');                          // era ruleset_id
+});
+
+test('legacy_score_id nulo identifica score de lazer', () => {
+  assert.equal(normalizeScore(FC_STABLE).set_on_lazer, false);
+
+  const lazer = { ...FC_STABLE, legacy_score_id: null, mods: [{ acronym: 'DT' }] };
+  const s = normalizeScore(lazer);
+  assert.equal(s.set_on_lazer, true);
+  // Sem CL: o cálculo deve usar a mecânica de lazer, que é o certo aqui.
+  assert.ok(!s.mods.includes('CL'));
+});
+
+test('formato antigo continua atravessando sem estrago', () => {
+  // Defensivo: se a API voltar a responder no formato velho, nada quebra.
+  const antigo = {
+    mods: ['HD', 'DT'],
+    statistics: { count_300: 100, count_100: 2, count_50: 0, count_miss: 1 },
+    created_at: '2026-01-01T00:00:00Z',
+    perfect: false,
+  };
+  const s = normalizeScore(antigo);
+  assert.deepEqual(s.mods, ['HD', 'DT']);
+  assert.equal(s.statistics.count_300, 100);
+  assert.equal(s.statistics.count_miss, 1);
+  assert.equal(s.created_at, '2026-01-01T00:00:00Z');
+});
+
+test('entrada inútil não estoura', () => {
+  assert.equal(normalizeScore(null), null);
+  assert.equal(normalizeScore(undefined), undefined);
+});

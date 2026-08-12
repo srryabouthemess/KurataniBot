@@ -49,18 +49,81 @@ async function getOfficialToken() {
 // Todos passam pelo rate limiter (rateLimiter.js) antes de sair e têm retry
 // com backoff (retry.js). O token é obtido dentro do withRetry para que uma
 // tentativa após um 401 pegue um token renovado.
+/**
+ * Versão do formato de score que pedimos à API.
+ *
+ * Sem este header, a resposta vem no formato antigo — e ele **omite o mod CL**,
+ * que é o único sinal de que o score foi jogado no stable. Sem esse sinal o
+ * `shouldUseLazer` (pp.js) escolhia mecânica de lazer para score que não é de
+ * lazer, e o rosu-pp então ignora o combo do jogador. Medido contra o pp oficial
+ * em scores com combo quebrado: **18,9% de erro médio, que cai para 7,3%** só
+ * com o CL chegando aqui.
+ *
+ * De quebra vêm as estatísticas de lazer (slider ends) para os scores que são de
+ * lazer de verdade, e o `legacy_score_id`, que diz qual é qual.
+ *
+ * Conferido que o header NÃO muda nada nos endpoints de usuário e de beatmap —
+ * por isso pode ficar no cliente inteiro em vez de só nas chamadas de score.
+ */
+const SCORE_FORMAT_VERSION = '20240529';
+
 async function officialGet(path, params = {}) {
   const res = await withRetry(async () => {
     const token = await getOfficialToken();
     await rateLimiter.acquire('osuApi');
     return axios.get(`https://osu.ppy.sh/api/v2${path}`, {
-      headers: { Authorization: `Bearer ${token}` },
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'x-api-version': SCORE_FORMAT_VERSION,
+      },
       params,
       timeout: 10000,
     });
   });
   return res.data;
 }
+
+/**
+ * Score do formato novo → a forma que o resto do bot já lê.
+ *
+ * Adaptar na borda, e não espalhar `?? great` por comando: é o mesmo desenho dos
+ * adaptadores de bancho.py (ver normalizeScorePrivate). Quem consome continua
+ * vendo `count_300`, `created_at` e `mods` como lista de acrônimos.
+ *
+ * ATENÇÃO ao `statistics` do formato novo: ele é **esparso** — o que vale zero
+ * simplesmente não vem. Um FC não traz `miss`, e ler direto daria `undefined`.
+ */
+function normalizeScore(raw) {
+  if (!raw || typeof raw !== 'object') return raw;
+
+  const stats = raw.statistics ?? {};
+
+  return {
+    ...raw,
+    // O CL vem aqui e é o que decide a mecânica lá no cálculo de PP. Ele não
+    // tem bit legado, então o modsToBits o ignora sozinho (ver mods.js).
+    mods: (raw.mods ?? []).map(m => (typeof m === 'string' ? m : m.acronym)),
+
+    statistics: {
+      ...stats,
+      count_300:  stats.great ?? stats.count_300  ?? 0,
+      count_100:  stats.ok    ?? stats.count_100  ?? 0,
+      count_50:   stats.meh   ?? stats.count_50   ?? 0,
+      count_miss: stats.miss  ?? stats.count_miss ?? 0,
+    },
+
+    // Campos que mudaram de nome; os antigos seguem valendo para quem lê.
+    created_at: raw.ended_at ?? raw.created_at ?? null,
+    perfect:    raw.is_perfect_combo ?? raw.legacy_perfect ?? raw.perfect ?? false,
+    score:      raw.legacy_total_score || raw.total_score || raw.score || 0,
+    mode:       raw.mode ?? 'osu',
+
+    // `legacy_score_id` nulo quer dizer que o score nasceu no lazer.
+    set_on_lazer: raw.legacy_score_id == null,
+  };
+}
+
+const normalizeScores = list => (Array.isArray(list) ? list.map(normalizeScore) : []);
 
 /**
  * `/scores/users/{user}/all` devolve todos os scores do jogador no mapa, não
@@ -71,7 +134,7 @@ async function officialBeatmapScores(userId, beatmapId) {
   const res = await officialGet(
     `/beatmaps/${idSegment(beatmapId)}/scores/users/${idSegment(userId)}/all`
   );
-  return res?.scores ?? [];
+  return normalizeScores(res?.scores);
 }
 
 /**
@@ -113,4 +176,8 @@ module.exports = {
   // O download de .osu e a busca de metadados usam a API oficial mesmo quando
   // o score veio de outro servidor: o arquivo é público lá para todo mapa.
   officialGet,
+
+  // Exportado para o teste: é a tradução entre dois formatos de score, e o
+  // formato novo é esparso de um jeito que engana fácil.
+  normalizeScore,
 };

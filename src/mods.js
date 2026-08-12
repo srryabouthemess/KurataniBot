@@ -59,4 +59,22 @@ function modsToBits(mods) {
   return (mods ?? []).reduce((acc, mod) => acc | (MOD_BITS[mod] ?? 0), 0);
 }
 
-module.exports = { MOD_BITS, KNOWN_MOD_TOKENS, decodeMods, parseModsString, modsToBits };
+/**
+ * Mods como o jogador os reconhece — o CL fica de fora.
+ *
+ * Ele não é escolha de ninguém: a API marca com CL todo score jogado no stable,
+ * e é justamente por isso que o pedimos (é o que faz o cálculo de PP usar a
+ * mecânica certa, ver osu/officialApi.js). Mas exibir "+CL" em toda play de
+ * stable seria ruído — e ruído novo, porque o formato antigo simplesmente não
+ * mandava esse mod.
+ *
+ * @returns {string[]} pode ser vazio, e aí quem chama decide o texto de "sem mods"
+ */
+function displayMods(mods) {
+  return (mods ?? []).filter(mod => mod !== 'CL');
+}
+
+module.exports = {
+  MOD_BITS, KNOWN_MOD_TOKENS,
+  decodeMods, parseModsString, modsToBits, displayMods,
+};

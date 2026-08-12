@@ -209,10 +209,10 @@ async function calcPPPython(beatmapId, modsBits, n300, n100, n50, nmiss, combo =
     proc.on('close', () => {
       let data = null;
       try {
-        const data = JSON.parse(output.trim());
-        // O script imprime `null` quando não consegue calcular
-        if (!data || typeof data.pp !== 'number') return resolve(null);
-        resolve({ pp: data.pp, stars: data.stars, maxCombo: data.max_combo });
+        data = JSON.parse(output.trim());
+      } catch {
+        // Saída ilegível: o motivo, se houver, está no stderr.
+      }
 
       if (data && typeof data.pp === 'number') {
         return resolve({ pp: data.pp, stars: data.stars, maxCombo: data.max_combo });
@@ -227,10 +227,8 @@ async function calcPPPython(beatmapId, modsBits, n300, n100, n50, nmiss, combo =
       // catch do parse.
       reportPythonFailure('calcPPPython', stderr.trim());
       resolve(null);
-      } catch {
-        // Saída ilegível: o motivo, se houver, está no stderr.
-      }
     });
+
     proc.on('error', (err) => {
       reportPythonFailure('calcPPPython:spawn', `falha ao iniciar "${pythonBin}": ${err.message}`);
       resolve(null);
@@ -330,37 +328,42 @@ async function getFCpp(score, mode = DEFAULT_MODE) {
  * - servidor com RX  → akatsuki-pp-py via Python (oppai-2019, o mesmo do Daycore)
  *
  * @param {number} beatmapId
+ * @param {string[]} mods       - acrônimos de mods, ex: ['DT', 'HR']
+ * @param {object} hits
  * @param {number} [hits.n300]   - omitido, a lib DEDUZ pela contagem de objetos
  *   do mapa, assumindo que todos foram jogados. Serve para play completa e para
  *   simulação hipotética; numa play interrompida no meio, a dedução inventa um
  *   300 para cada objeto que a pessoa nunca chegou a ver. Informe o valor real
  *   nesse caso.
- * @param {string[]} mods       - acrônimos de mods, ex: ['DT', 'HR']
- * @param {object} hits
  * @param {number} [hits.n100=0]
  * @param {number} [hits.n50=0]
+ * @param {number} [hits.misses=0]
+ * @param {number} [hits.combo]  - se omitido, assume full combo
  * @param {number} [hits.passedObjects] - quantos objetos a pessoa chegou a
  *   jogar. Para play interrompida é o que torna o número honesto: a dificuldade
  *   passa a ser a do TRECHO jogado, e não a do mapa inteiro. Sem isto, uma
  *   desistência aos 120 de 1833 objetos era avaliada contra o mapa completo e o
  *   `combo` não fazia diferença nenhuma no resultado — medido: 332.6pp contra os
  *   101.3pp corretos.
- * @param {number} [hits.misses=0]
- * @param {number} [hits.combo]  - se omitido, assume full combo
  * @param {string} mode
+ * @param {object} [opts]
+ * @param {boolean} [opts.lazer] força a mecânica em vez de deduzi-la dos mods.
+ *   Existe para o /simulate: uma play hipotética não tem mod CL para consultar,
+ *   e sem CL o `shouldUseLazer` conclui "lazer" — modo em que o rosu-pp ignora
+ *   o combo, deixando a opção `combo` do comando sem efeito nenhum.
  * @returns {Promise<{pp: number, stars: number, maxCombo: number}|null>}
  */
-async function simulatePP(beatmapId, mods, hits, mode = DEFAULT_MODE) {
+async function simulatePP(beatmapId, mods, hits, mode = DEFAULT_MODE, { lazer } = {}) {
   const modsBits = modsToBits(mods);
+  const n300     = hits.n300   ?? null;
   const n100     = hits.n100   ?? 0;
   const n50      = hits.n50    ?? 0;
   const misses   = hits.misses ?? 0;
-  const n300     = hits.n300   ?? null;
   const combo    = hits.combo  ?? -1;
+  const passed   = hits.passedObjects ?? null;
 
   try {
     if (servers.get(mode).relax) {
-  const passed   = hits.passedObjects ?? null;
       // stars/maxCombo vêm do próprio akatsuki-pp (já ajustados pelos mods),
       // então não precisamos consultar a API oficial aqui.
       // O akatsuki-pp trabalha sempre com o mapa inteiro — não há como dizer
@@ -375,7 +378,7 @@ async function simulatePP(beatmapId, mods, hits, mode = DEFAULT_MODE) {
     if (!rosu) return null;
 
     const beatmapBytes = await getBeatmapFile(beatmapId);
-    const useLazer     = shouldUseLazer(mode, mods);
+    const useLazer     = lazer ?? shouldUseLazer(mode, mods);
 
     const beatmap = new rosu.Beatmap(beatmapBytes);
     try {
@@ -388,12 +391,12 @@ async function simulatePP(beatmapId, mods, hits, mode = DEFAULT_MODE) {
 
       const perfParams = { mods: modsBits, n100, n50, misses, lazer: useLazer };
       if (combo >= 0) perfParams.combo = combo;
-
-      const perf     = new rosu.Performance(perfParams);
-      const result   = perf.calculate(diffAttrs);
       // Só quando quem chamou soube dizer: sem isto a lib deduz, e a dedução
       // é justamente o que estraga o número de uma play interrompida.
       if (n300 !== null) perfParams.n300 = n300;
+
+      const perf     = new rosu.Performance(perfParams);
+      const result   = perf.calculate(diffAttrs);
       const stars    = diffAttrs.stars;
       const maxCombo = diffAttrs.maxCombo;
 

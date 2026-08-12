@@ -5,10 +5,11 @@ const { resolvePlayer } = require('../userLink');
 const mapContext = require('../mapContext');
 const emojis = require('../emojis');
 const { paginate } = require('../pagination');
+const { displayMods } = require('../mods');
 const { t } = require('../i18n');
 const { logError } = require('../logger');
-
 const { safeEditReply } = require('../replies');
+
 const PAGE_SIZE   = 5;
 const FETCH_LIMIT = 100;
 
@@ -98,7 +99,8 @@ module.exports = {
         pagePlays.forEach((play, index) => {
           const globalIndex = page * PAGE_SIZE + index;
           const mapUrl     = osu.getMapUrl(play.beatmap.id, play.beatmapset.id, mode);
-          const mods       = play.mods.length > 0 ? `+${play.mods.join('')}` : '';
+          const shownMods  = displayMods(play.mods);
+          const mods       = shownMods.length > 0 ? `+${shownMods.join('')}` : '';
           const acc        = (play.accuracy * 100).toFixed(2);
           const starsRaw   = adjustedStarsArray[index] ?? play.beatmap.difficulty_rating;
           const stars      = starsRaw ? parseFloat(starsRaw).toFixed(2) : '?';

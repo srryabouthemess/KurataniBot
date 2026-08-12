@@ -98,11 +98,23 @@ module.exports = {
       const beatmap = await osu.getBeatmap(beatmapId);
       if (!beatmap) return interaction.editReply(s.simulate_map_not_found);
 
+      // Mecânica stable, sempre — inclusive no Bancho, onde o padrão seria
+      // lazer. São duas razões, e a segunda é a que decide:
+      //
+      //  1. É o que praticamente todo mundo joga. Um score de stable chega da
+      //     API marcado com CL, e hoje quase todo score ranqueado é assim.
+      //  2. Em modo lazer o rosu-pp IGNORA o combo, e este comando oferece uma
+      //     opção `combo`. Assumir lazer aqui seria manter na tela um campo que
+      //     não muda o resultado — medido: 1407.59pp para qualquer valor.
+      //
+      // No bancho.py isto já era o comportamento (ver shouldUseLazer), então a
+      // mudança vale só para o Bancho.
       const result = await osu.simulatePP(
         beatmapId,
         mods,
         { n100, n50, misses: miss, combo: comboOpt ?? undefined },
-        mode
+        mode,
+        { lazer: false },
       );
 
       if (!result || result.pp == null) {
