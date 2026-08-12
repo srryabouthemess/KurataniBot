@@ -6,9 +6,13 @@
 
 ## ✨ Novos recursos
 
+- **`/osu`, atalho para o `/profile`.** [`commands/osu.js`](src/commands/osu.js)
+  - Mesmo desenho dos outros quatro atalhos: o arquivo reaproveita o `toJSON()` do original em vez de redeclarar as opções, então mudar a descrição do `server` no `/profile` continua chegando aqui sozinho. Vale para o modo texto também (`k!osu`), que sai de graça pelo dispatcher.
+  - Cooldown é por nome digitado, então `/profile` e `/osu` têm baldes separados — como já acontece com `/rs`, `/c`, `/choke` e `/wi`.
+
 - **`/help`, o índice que faltava.** [`commands/help.js`](src/commands/help.js)
   - Até aqui a única forma de descobrir o bot era o menu do Discord, que lista os comandos achatados e com os atalhos ao lado dos originais. O `/help` agrupa em **Perfil e plays**, **PP e simulações** e **Configuração**, com os atalhos ao lado do comando que eles chamam — `/recent` (`/rs`) — em vez de ocupando linha própria.
-  - A lista é **curada, não derivada** do `client.commands`: derivar traria os quatro aliases e os três administrativos, dobrando o tamanho da resposta sem ajudar quem chegou agora. Mas os nomes são conferidos contra o registro antes de virar linha, então um comando removido some do help em vez de virar uma linha morta.
+  - A lista é **curada, não derivada** do `client.commands`: derivar traria os cinco aliases e os três administrativos, dobrando o tamanho da resposta sem ajudar quem chegou agora. Mas os nomes são conferidos contra o registro antes de virar linha, então um comando removido some do help em vez de virar uma linha morta.
   - Mostra também **os servidores configurados com as chaves que a opção `server` aceita** (`Bancho` `official`, `Daycore` `daycore`...) — justamente a parte que muda de instalação para instalação e não cabe no README de ninguém. Vem de `servers.choices()`, a mesma lista que os comandos oferecem, então não tem como divergir do que é aceito de verdade.
   - Os administrativos (`/nominate`, `/moderate`, `/staff`) só aparecem dentro do Discord do `DAYCORE_GUILD_ID`, onde de fato funcionam. Fora dele o `staffGuard` recusaria tudo, e listá-los seria oferecer o que não dá para usar.
   - Resposta **pública, não ephemeral**: help é o tipo de coisa que se manda no canal para outra pessoa ler. Também mantém os dois modos iguais, já que o adaptador do prefixo descarta a flag de ephemeral. Sem opções, o `k!help` sai de graça pelo `buildSpec`.
