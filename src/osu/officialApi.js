@@ -60,21 +60,26 @@ async function getOfficialToken() {
  * com o CL chegando aqui.
  *
  * De quebra vêm as estatísticas de lazer (slider ends) para os scores que são de
- * lazer de verdade, e o `legacy_score_id`, que diz qual é qual.
+ * lazer de verdade. O `legacy_score_id` também chega e diz score a score qual é
+ * qual, mas o bot não o consome: o CL já responde a mesma pergunta onde ela é
+ * feita, e um score de lazer COM o mod CL usa mecânica clássica de qualquer
+ * forma — o mod é o sinal certo, o id seria redundante.
  *
- * Conferido que o header NÃO muda nada nos endpoints de usuário e de beatmap —
- * por isso pode ficar no cliente inteiro em vez de só nas chamadas de score.
+ * Conferido que hoje o header não muda nada nos endpoints de usuário e de
+ * beatmap — mas ele vai só nas chamadas de SCORE mesmo assim. Fixar uma versão
+ * de formato é um contrato: quanto menos endpoints estiverem presos a ela,
+ * menos coisa quebra quando o osu-web publicar a próxima.
  */
 const SCORE_FORMAT_VERSION = '20240529';
 
-async function officialGet(path, params = {}) {
+async function officialGet(path, { params = {}, scoreFormat = false } = {}) {
   const res = await withRetry(async () => {
     const token = await getOfficialToken();
     await rateLimiter.acquire('osuApi');
     return axios.get(`https://osu.ppy.sh/api/v2${path}`, {
       headers: {
         Authorization: `Bearer ${token}`,
-        'x-api-version': SCORE_FORMAT_VERSION,
+        ...(scoreFormat ? { 'x-api-version': SCORE_FORMAT_VERSION } : {}),
       },
       params,
       timeout: 10000,
@@ -82,6 +87,9 @@ async function officialGet(path, params = {}) {
   });
   return res.data;
 }
+
+/** GET num endpoint de score, no formato novo (ver SCORE_FORMAT_VERSION). */
+const scoreGet = (path, params = {}) => officialGet(path, { params, scoreFormat: true });
 
 /**
  * Score do formato novo → a forma que o resto do bot já lê.
@@ -118,8 +126,6 @@ function normalizeScore(raw) {
     score:      raw.legacy_total_score || raw.total_score || raw.score || 0,
     mode:       raw.mode ?? 'osu',
 
-    // `legacy_score_id` nulo quer dizer que o score nasceu no lazer.
-    set_on_lazer: raw.legacy_score_id == null,
   };
 }
 
@@ -128,13 +134,32 @@ const normalizeScores = list => (Array.isArray(list) ? list.map(normalizeScore) 
 /**
  * `/scores/users/{user}/all` devolve todos os scores do jogador no mapa, não
  * só o melhor — que é justamente a diferença para o endpoint sem o `/all`.
- * Mapa inexistente responde 404; jogador sem score responde `{scores: []}`.
+ *
+ * Jogador sem score responde `{scores: []}`. O 404 é ambíguo e foi medido:
+ *
+ *   ranked/loved  → 200, lista (vazia quando não há score)
+ *   graveyard     → 404 "Specified beatmap difficulty couldn't be found"
+ *   inexistente   → 404, a mesma mensagem
+ *
+ * Ou seja, 404 quer dizer "esse mapa não tem placar" tanto para mapa que não
+ * existe quanto para mapa que existe mas nunca foi ranqueado. Deixar a exceção
+ * subir fazia o /score responder "erro ao buscar os scores" para qualquer mapa
+ * graveyard — enquanto o /recent exibia a play daquele mesmo mapa numa boa.
+ *
+ * Devolver lista vazia é o certo: quem chama já conferiu que o beatmap existe
+ * (o /score busca os metadados antes), então aqui o 404 só pode ser "sem
+ * placar", e a resposta vira "fulano não tem score neste mapa".
  */
 async function officialBeatmapScores(userId, beatmapId) {
-  const res = await officialGet(
-    `/beatmaps/${idSegment(beatmapId)}/scores/users/${idSegment(userId)}/all`
-  );
-  return normalizeScores(res?.scores);
+  try {
+    const res = await scoreGet(
+      `/beatmaps/${idSegment(beatmapId)}/scores/users/${idSegment(userId)}/all`
+    );
+    return normalizeScores(res?.scores);
+  } catch (error) {
+    if (error?.response?.status === 404) return [];
+    throw error;
+  }
 }
 
 /**
@@ -157,10 +182,10 @@ async function fetchUser(username) {
 }
 
 const bestScores = async (userId, limit) =>
-  normalizeScores(await officialGet(`/users/${idSegment(userId)}/scores/best`, { limit }));
+  normalizeScores(await scoreGet(`/users/${idSegment(userId)}/scores/best`, { limit }));
 
 const recentScores = async (userId, limit) =>
-  normalizeScores(await officialGet(`/users/${idSegment(userId)}/scores/recent`, { limit, include_fails: 1 }));
+  normalizeScores(await scoreGet(`/users/${idSegment(userId)}/scores/recent`, { limit, include_fails: 1 }));
 
 const userUrl = (userId, mode) => `${servers.get(mode).webUrl}/users/${userId}`;
 const mapUrl  = (mapId, setId, mode) => `${servers.get(mode).webUrl}/beatmapsets/${setId}#osu/${mapId}`;

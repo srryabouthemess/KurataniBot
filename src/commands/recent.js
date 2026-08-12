@@ -5,7 +5,7 @@ const { resolvePlayer } = require('../userLink');
 const mapContext = require('../mapContext');
 const emojis = require('../emojis');
 const { paginate } = require('../pagination');
-const { localScorePP } = require('../scorePP');
+const { localScorePP, mapAwardsPP } = require('../scorePP');
 const { displayMods } = require('../mods');
 const { t } = require('../i18n');
 const { logError } = require('../logger');
@@ -13,29 +13,19 @@ const { safeEditReply } = require('../replies');
 
 const FETCH_LIMIT = 50;
 
-/**
- * Só `ranked` e `approved` pagam pp — graveyard, wip, pending, qualified e
- * loved não. O campo só vem da API oficial; o adaptador bancho.py não devolve
- * status nenhum, e aí `undefined` é tratado como "paga": afirmar "não
- * ranqueado" sem saber seria pior do que não afirmar nada.
- */
-const PAGA_PP = new Set(['ranked', 'approved']);
-const awardsPP = score => {
-  const status = score.beatmap?.status;
-  return status == null || PAGA_PP.has(status);
-};
+const awardsPP = score => mapAwardsPP(score.beatmap?.status);
 
 /**
  * Como escrever o PP da play — o `pp` nulo tem três causas distintas, e todas
  * viravam o mesmo "0pp", que mentia em duas delas.
  *
- *  - Mapa que não paga pp (graveyard, loved): zero é o valor certo, mas
- *    sozinho parece nota da play. Pior ao lado do "(FC: ~634pp)", que sugere
- *    que um FC pagaria isso — pagaria zero também.
- *  - Play fracassada: também vale zero de verdade, e aqui NÃO dá para calcular
- *    localmente. O simulatePP deduz os 300s pela contagem de objetos do mapa,
- *    o que só vale para play completa; num quit no meio, o número sairia
- *    inflado (é a ressalva que o /score já documenta).
+ *  - Mapa que não paga pp (graveyard, loved): o servidor de fato não paga, mas
+ *    "0pp" sozinho parece nota da play. Pior ao lado do "(FC: ~634pp)", que
+ *    sugere que um FC pagaria isso — pagaria zero também. Mostramos o valor
+ *    calculado com a ressalva de que ele não entra no perfil.
+ *  - Play não terminada: também não paga, e o valor precisa do `passedObjects`
+ *    para valer alguma coisa — sem ele a conta assume o mapa inteiro, inventa
+ *    um 300 por objeto não jogado e devolve quase o valor de um FC.
  *  - Mapa ranqueado, play completa, pp nulo: é a API não ter pontuado o score
  *    (acontece com lazer + CL). Aí zero é simplesmente errado, e o valor dá
  *    para calcular — com `~` na frente, para não passar por número oficial.
@@ -52,7 +42,7 @@ async function describePP(score, isPass, mode) {
 
   const note = !isPass
     ? (semRank ? 'recent_pp_failed_unranked' : 'recent_pp_failed')
-    : (semRank ? 'recent_pp_unranked' : null);
+    : (semRank ? 'pp_unranked_map' : null);
 
   // `partial` numa play interrompida: sem ele a conta assume o mapa inteiro,
   // inventa um 300 por objeto não jogado e devolve quase o valor de um FC.

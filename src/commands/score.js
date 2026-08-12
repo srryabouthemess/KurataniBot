@@ -5,7 +5,7 @@ const { resolvePlayer } = require('../userLink');
 const mapContext = require('../mapContext');
 const emojis = require('../emojis');
 const { paginate } = require('../pagination');
-const { localScorePP } = require('../scorePP');
+const { localScorePP, mapAwardsPP } = require('../scorePP');
 const { displayMods } = require('../mods');
 const { t } = require('../i18n');
 const { logError } = require('../logger');
@@ -180,6 +180,12 @@ module.exports = {
                          `[${comboText}] • ${discordTimestamp(sc.created_at)}\n`;
           description += `{ ${h300} / ${h100} / ${h50} / ${hMiss} }\n\n`;
         });
+
+        // Uma vez no fim, não por linha: o mapa é o mesmo para os 5 scores da
+        // página. Sem isso o comando mostrava `~Xpp` pelado num mapa loved,
+        // enquanto o /recent dizia que aquele valor não conta — dois comandos
+        // exibindo a mesma coisa e discordando.
+        if (!mapAwardsPP(beatmap?.status)) description += `-# ${s.pp_unranked_map}`;
 
         const embed = new EmbedBuilder()
           .setColor(0xff66aa)

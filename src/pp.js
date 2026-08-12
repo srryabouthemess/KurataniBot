@@ -15,7 +15,7 @@ const db = require('./db');
 const servers = require('./servers');
 const rateLimiter = require('./rateLimiter');
 const { dedupe } = require('./inflight');
-const { modsToBits } = require('./mods');
+const { modsToBits, displayMods } = require('./mods');
 const { idSegment } = require('./urlSafe');
 const { withRetry } = require('./retry');
 const { logError } = require('./logger');
@@ -129,17 +129,19 @@ async function getDifficultyAttrs(mapId, modsBits, lazer) {
  * viraria cinco tracebacks idênticos por página — logar a cada chamada punia
  * justamente quem escolheu não instalar.
  *
- * Uma vez por processo é o que faltava para diagnosticar, sem virar ruído.
- * Mesma ideia do `_rosuTried` acima.
+ * Uma vez por MENSAGEM, não uma vez por processo: um booleano só deixaria
+ * passar a primeira causa e calaria todas as seguintes para sempre. Se a
+ * primeira falha for passageira ("stdin vazio para o mapa X") e o problema real
+ * aparecer depois, ninguém ficaria sabendo até reiniciar o bot.
  */
 const STDERR_MAX = 2000;
-let _pythonFailureLogged = false;
+const _falhasPythonVistas = new Set();
 
 function reportPythonFailure(context, detail) {
-  if (!detail || _pythonFailureLogged) return;
-  _pythonFailureLogged = true;
+  if (!detail || _falhasPythonVistas.has(detail)) return;
+  _falhasPythonVistas.add(detail);
   logError(context, new Error(detail));
-  console.error('[calcPPPython] PP do Relax indisponível; o erro acima é logado uma vez só.');
+  console.error('[calcPPPython] PP do Relax indisponível; esta causa é logada uma vez só.');
 }
 
 /**
@@ -411,15 +413,21 @@ async function simulatePP(beatmapId, mods, hits, mode = DEFAULT_MODE, { lazer } 
 }
 
 async function getAdjustedStars(beatmapId, mods, mode = DEFAULT_MODE) {
-  // Sem mods: o enrichBeatmapData já trouxe o difficulty_rating base, não precisa recalcular
-  if (!mods || mods.length === 0) return null;
-
-  // Com mods: calculado localmente pelo rosu-pp a partir do .osu em cache, em
-  // vez de um POST em /beatmaps/{id}/attributes por play a cada exibição.
+  // Sem mod de dificuldade, quem manda é a API: o `difficulty_rating` que o
+  // enrichBeatmapData já trouxe é o mesmo número que o site mostra, e é mais
+  // exato que o nosso — o rosu-pp está dois reworks atrás do osu! (medido: 6%
+  // de diferença no DT, 0,7% sem mods).
   //
-  // Também corrige uma inconsistência: as estrelas vinham sempre da API
-  // oficial (lazer), enquanto o PP de FC exibido ao lado é calculado com a
-  // mecânica do servidor (shouldUseLazer). Agora os dois usam a mesma base.
+  // O `displayMods` aqui não é cosmético. Todo score de stable chega com o mod
+  // CL desde que passamos a pedir o formato novo à API, e um `mods.length === 0`
+  // deixou de ser verdade para score sem mods nenhum — de um dia para o outro o
+  // bot passou a calcular localmente o que antes vinha pronto, e a estrela
+  // exibida deixou de bater com o site (7.08★ contra 7.13★).
+  if (displayMods(mods).length === 0) return null;
+
+  // Com mods a API não ajuda: ela só publica o valor sem mods. Aí é cálculo
+  // local, na mesma mecânica que o PP exibido ao lado usa (shouldUseLazer),
+  // para os dois números não saírem de bases diferentes.
   const attrs = await getDifficultyAttrs(
     beatmapId,
     modsToBits(mods),

@@ -16,8 +16,10 @@
 const test = require('node:test');
 const assert = require('node:assert');
 
-const { normalizeScore } = require('../src/osu/officialApi');
+const officialApi = require('../src/osu/officialApi');
+const { normalizeScore } = officialApi;
 const { displayMods, modsToBits } = require('../src/mods');
+const { shouldUseLazer } = require('../src/pp');
 
 /** Score como a API responde com x-api-version: um FC de stable, com CL. */
 const FC_STABLE = {
@@ -62,14 +64,18 @@ test('campos renomeados continuam legíveis pelos nomes antigos', () => {
   assert.equal(s.mode, 'osu');                          // era ruleset_id
 });
 
-test('legacy_score_id nulo identifica score de lazer', () => {
-  assert.equal(normalizeScore(FC_STABLE).set_on_lazer, false);
+test('a presença do CL é o que separa stable de lazer', () => {
+  // O `legacy_score_id` também diria isso, mas o bot não o consome: o mod é o
+  // sinal onde a pergunta é feita (shouldUseLazer), e um score de lazer COM o
+  // CL usa mecânica clássica de qualquer forma — o id seria redundante e
+  // discordaria justamente nesse caso.
+  const stable = normalizeScore(FC_STABLE);
+  assert.ok(stable.mods.includes('CL'), 'score de stable precisa trazer o CL');
+  assert.equal(shouldUseLazer('official', stable.mods), false);
 
-  const lazer = { ...FC_STABLE, legacy_score_id: null, mods: [{ acronym: 'DT' }] };
-  const s = normalizeScore(lazer);
-  assert.equal(s.set_on_lazer, true);
-  // Sem CL: o cálculo deve usar a mecânica de lazer, que é o certo aqui.
-  assert.ok(!s.mods.includes('CL'));
+  const lazer = normalizeScore({ ...FC_STABLE, legacy_score_id: null, mods: [{ acronym: 'DT' }] });
+  assert.ok(!lazer.mods.includes('CL'));
+  assert.equal(shouldUseLazer('official', lazer.mods), true);
 });
 
 test('formato antigo continua atravessando sem estrago', () => {
@@ -90,4 +96,47 @@ test('formato antigo continua atravessando sem estrago', () => {
 test('entrada inútil não estoura', () => {
   assert.equal(normalizeScore(null), null);
   assert.equal(normalizeScore(undefined), undefined);
+});
+
+/**
+ * Stub no axios (o mesmo objeto de módulo que o officialApi carregou), para o
+ * caminho testado ser o de verdade: rate limiter, retry e tratamento de erro.
+ */
+function comAxiosFalhando(status, corpo) {
+  const axios = require('axios');
+  const getOriginal = axios.get;
+  const postOriginal = axios.post;
+
+  axios.post = async () => ({ data: { access_token: 'x', expires_in: 86400 } });
+  axios.get = async () => {
+    throw Object.assign(new Error(`Request failed with status code ${status}`), {
+      response: { status, data: corpo },
+    });
+  };
+
+  return () => { axios.get = getOriginal; axios.post = postOriginal; };
+}
+
+test('mapa sem placar devolve lista vazia, não erro', async () => {
+  // Medido na API: o endpoint de scores responde 404 tanto para mapa
+  // inexistente quanto para mapa graveyard. Deixar a exceção subir fazia o
+  // /score dizer "erro ao buscar os scores" para QUALQUER mapa não ranqueado —
+  // enquanto o /recent exibia a play daquele mesmo mapa numa boa.
+  const restaurar = comAxiosFalhando(404, { error: "Specified beatmap difficulty couldn't be found." });
+  try {
+    assert.deepEqual(await officialApi.beatmapScores(7562902, 5391035), []);
+  } finally {
+    restaurar();
+  }
+});
+
+test('erro que NÃO é 404 continua subindo', async () => {
+  // Um 500 é falha de verdade: engolir viraria "sem score" e esconderia a
+  // indisponibilidade da API atrás de uma resposta que parece normal.
+  const restaurar = comAxiosFalhando(500, {});
+  try {
+    await assert.rejects(() => officialApi.beatmapScores(7562902, 2298847));
+  } finally {
+    restaurar();
+  }
 });

@@ -6,6 +6,33 @@
 
 ## 🐛 Correções de bugs
 
+Estes sete vieram de uma segunda revisão, feita sobre o código que a própria sessão escreveu.
+
+- **`/score` respondia erro genérico em qualquer mapa graveyard.** [`osu/officialApi.js`](src/osu/officialApi.js)
+  - O endpoint de scores responde **404 tanto para mapa inexistente quanto para mapa sem placar**, e o bot tratava os dois como falha. Medido: `ranked/loved` → 200 com lista; `graveyard` → 404; `inexistente` → 404, mesma mensagem.
+  - Resultado: `/score` num mapa graveyard dizia *"Erro ao buscar os scores desse mapa"* — enquanto o `/recent` exibia a play daquele mesmo mapa numa boa. É **o mesmo padrão do bug do `fetchUser`** corrigido acima: 404 que significa "não tem nada aqui" tratado como falha de rede.
+  - Agora devolve lista vazia, e a resposta vira *"mrekk não tem nenhum score em Exorcista no Bancho"*. O 500 continua subindo — engolir esconderia indisponibilidade da API atrás de uma resposta que parece normal. **2 casos de teste**, com stub no axios para exercitar o caminho real.
+
+- **`/score` e `/recent` discordavam sobre mapa que não paga pp.** [`scorePP.js`](src/scorePP.js), [`commands/score.js`](src/commands/score.js)
+  - Corrigi a apresentação só de um lado na primeira passada: o `/recent` avisava que o valor não conta para o perfil, o `/score` mostrava `~78.60pp` pelado. Alcançável hoje — mapa **loved** tem placar e não paga pp.
+  - O `awardsPP` saiu do `recent.js` para o `scorePP.js`, e a chave de i18n virou `pp_unranked_map` (era `recent_pp_*`, nome que já não dizia a verdade). No `/score` a ressalva aparece uma vez no fim, não por linha: o mapa é o mesmo para os cinco scores da página.
+
+- **A estrela de score sem mods deixou de bater com o site.** [`pp.js`](src/pp.js)
+  - Efeito colateral não previsto da chegada do CL: todo score de stable passou a ter `mods: ['CL']`, então `mods.length === 0` deixou de ser verdade para score sem mod nenhum. O `getAdjustedStars` parou de devolver `null`, e o bot passou a calcular localmente o que antes vinha pronto da API — **7.08★ no lugar de 7.13★**.
+  - A decisão é preferir a API quando não há mod de dificuldade: é o mesmo número que o site mostra e é mais exato, já que o rosu-pp está dois reworks atrás. Com mods não há escolha — a API só publica o valor sem mods. O teste é `displayMods(mods).length === 0`, não `mods.length`.
+
+- **Só a primeira falha do Python era logada, para sempre.** [`pp.js`](src/pp.js)
+  - O guard era um booleano por processo. Se a primeira causa fosse passageira (`stdin vazio para o mapa X`), o problema real que aparecesse depois **nunca** seria mostrado — o bot ficava mudo até reiniciar. Virou um `Set` de mensagens: uma vez por causa, não uma vez por processo.
+
+- **`set_on_lazer` era calculado e nunca lido.** [`osu/officialApi.js`](src/osu/officialApi.js)
+  - Mesma classe da chave `#id` do cache achada na revisão anterior: escrita sem leitor. É redundante com o mod CL, que é o sinal usado onde a pergunta é feita — e num score de lazer COM CL os dois discordariam, com o CL certo. Removido, com o porquê registrado.
+
+- **O `x-api-version` ia em toda requisição.** [`osu/officialApi.js`](src/osu/officialApi.js)
+  - Conferido que hoje não muda nada nos endpoints de usuário e de beatmap, mas fixar versão de formato é um contrato: quanto menos endpoints presos a ela, menos coisa quebra na próxima. Agora só as três chamadas de score usam o `scoreGet`.
+
+- **Dois comentários que já mentiam.** [`commands/recent.js`](src/commands/recent.js), [`commands/simulate.js`](src/commands/simulate.js)
+  - O docblock do `describePP` ainda dizia que em play fracassada "NÃO dá para calcular localmente" — o código calcula desde que o `passedObjects` entrou, na mesma sessão. E o `/simulate` era o único ponto de exibição sem `displayMods`: aceitava `CL` como token e ecoava `+DTCL`, dando a entender que o mod mudava alguma coisa quando a simulação já é sempre stable.
+
 Os dois primeiros foram encontrados no uso, olhando a saída real dos comandos. O resto veio de uma revisão do projeto inteiro.
 
 - **O `/whatif` dizia que uma play boa faria você PERDER pp.** [`whatif.js`](src/commands/whatif.js)

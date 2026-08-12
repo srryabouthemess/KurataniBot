@@ -95,7 +95,7 @@ module.exports = ({ ADMIN }) => ({
   recent_acc:              'Acc',
   recent_combo:            'Combo',
   recent_hits:             'Hits',
-  recent_pp_unranked:      "unranked map, doesn't count toward the profile",
+  pp_unranked_map:              "unranked map, doesn't count toward the profile",
   recent_pp_failed:        'unfinished play, value for the part played only',
   recent_pp_failed_unranked: 'unfinished play on an unranked map, part played only',
   recent_pass:             '✅ **Pass**',

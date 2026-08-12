@@ -24,6 +24,21 @@
 const osu = require('./osuClient');
 
 /**
+ * O mapa paga pp? Só `ranked` e `approved` pagam — graveyard, wip, pending,
+ * qualified e loved não.
+ *
+ * Mora aqui, e não dentro de um comando, porque o /recent e o /score exibem a
+ * mesma informação e já tinham divergido uma vez: o /recent avisava que o valor
+ * não conta para o perfil, o /score mostrava o número pelado.
+ *
+ * O status só vem da API oficial. No bancho.py o campo não existe, e aí
+ * `undefined` é tratado como "paga": afirmar "não ranqueado" sem saber seria
+ * pior do que não afirmar nada.
+ */
+const PAGA_PP = new Set(['ranked', 'approved']);
+const mapAwardsPP = status => status == null || PAGA_PP.has(status);
+
+/**
  * @param {object} score   score normalizado, com `beatmap.id` preenchido
  * @param {string} mode    chave do servidor (ver servers.js)
  * @param {object} [opts]
@@ -58,4 +73,4 @@ async function localScorePP(score, mode, { partial = false } = {}) {
   return result?.pp ?? null;
 }
 
-module.exports = { localScorePP };
+module.exports = { localScorePP, mapAwardsPP };
