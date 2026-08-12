@@ -30,6 +30,9 @@ Estes sete vieram de uma segunda revisão, feita sobre o código que a própria 
 - **O `x-api-version` ia em toda requisição.** [`osu/officialApi.js`](src/osu/officialApi.js)
   - Conferido que hoje não muda nada nos endpoints de usuário e de beatmap, mas fixar versão de formato é um contrato: quanto menos endpoints presos a ela, menos coisa quebra na próxima. Agora só as três chamadas de score usam o `scoreGet`.
 
+- **A data foi para o fim do rodapé do `/recent`.** [`i18n/`](src/i18n/)
+  - Estava espremida no meio, separada por um `|` que destoava dos `•` do resto: `Play 1/50 • Modo: osu | 12/08/2026 • graveyard • Bancho`. Agora fecha a linha, e o separador é o mesmo do começo ao fim: `Play 1/50 • Modo: osu • graveyard • Bancho • 12/08/2026, 15:59:20`.
+
 - **O status do mapa virou informação do rodapé.** [`commands/recent.js`](src/commands/recent.js), [`commands/score.js`](src/commands/score.js)
   - As ressalvas escritas na linha de PP saíram — tanto o *"play não terminada"* quanto o *"mapa não ranqueado, não conta para o perfil"*. Em vez de explicar em texto o que aquele número é, o rodapé passou a dizer **o que o mapa é**: `Play 1/50 • Modo: osu | 12/08/2026 • graveyard • Bancho`.
   - Fica melhor por três motivos: a linha de PP já carrega valor, acurácia e o FC, e mais uma frase ali era ruído; o status vale para os cinco scores de uma página do `/score`, então repetir por linha era errado; e a informação passa a aparecer **sempre**, não só quando o mapa não paga — quem olha sabe se é ranked, loved ou graveyard sem ter que deduzir pela ausência de aviso.

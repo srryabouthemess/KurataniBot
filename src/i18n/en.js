@@ -99,7 +99,7 @@ module.exports = ({ ADMIN }) => ({
   recent_fail:             '❌ **Quit**',
   recent_error:            'Error fetching recent play. Check if the player exists.',
   recent_footer:           (mode, date, label, page, total, status) =>
-    `Play ${page}/${total} • Mode: ${mode} | ${date}${status ? ` • ${status}` : ''} • ${label}`,
+    `Play ${page}/${total} • Mode: ${mode}${status ? ` • ${status}` : ''} • ${label} • ${date}`,
 
   score_no_map:            '❌ Provide a map (ID or link) — I found no recent map in this channel.',
   score_none:              (name, map, label) => `**${name}** has no scores on **${map}** in ${label}.`,

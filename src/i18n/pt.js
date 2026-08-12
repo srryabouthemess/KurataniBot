@@ -105,7 +105,7 @@ module.exports = ({ ADMIN }) => ({
   // `status` é o do MAPA (ranked, loved, graveyard...) e pode faltar: só a
   // API oficial manda esse campo, o bancho.py não.
   recent_footer:           (mode, date, label, page, total, status) =>
-    `Play ${page}/${total} • Modo: ${mode} | ${date}${status ? ` • ${status}` : ''} • ${label}`,
+    `Play ${page}/${total} • Modo: ${mode}${status ? ` • ${status}` : ''} • ${label} • ${date}`,
 
   // O /score reaproveita simulate_invalid_map e simulate_map_not_found: a
   // orientação sobre ID/link do mapa é a mesma dos dois comandos.
