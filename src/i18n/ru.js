@@ -95,16 +95,17 @@ module.exports = ({ ADMIN }) => ({
   recent_acc:              'Acc',
   recent_combo:            'Комбо',
   recent_hits:             'Хиты',
-  pp_unranked_map:              'карта не ранкед, в профиль не идёт',
   recent_pass:             '✅ **Pass**',
   recent_fail:             '❌ **Quit**',
   recent_error:            'Ошибка при получении последнего плея. Проверьте, существует ли игрок.',
-  recent_footer:           (mode, date, label, page, total) => `Плей ${page}/${total} • Режим: ${mode} | ${date} • ${label}`,
+  recent_footer:           (mode, date, label, page, total, status) =>
+    `Плей ${page}/${total} • Режим: ${mode} | ${date}${status ? ` • ${status}` : ''} • ${label}`,
 
   score_no_map:            '❌ Укажите карту (ID или ссылку) — недавних карт в этом канале не нашлось.',
   score_none:              (name, map, label) => `У **${name}** нет скоров на **${map}** в ${label}.`,
   score_no_mods:           'No Mods',
-  score_footer:            (page, total, count, label) => `Страница ${page}/${total} • скоров: ${count} • ${label}`,
+  score_footer:            (page, total, count, label, status) =>
+    `Страница ${page}/${total} • скоров: ${count}${status ? ` • ${status}` : ''} • ${label}`,
   score_error:             'Ошибка при получении скоров на этой карте.',
 
   compare_title:           'Сравнение osu!',

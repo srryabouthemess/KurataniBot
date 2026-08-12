@@ -99,22 +99,21 @@ module.exports = ({ ADMIN }) => ({
   recent_acc:              'Acc',
   recent_combo:            'Combo',
   recent_hits:             'Hits',
-  // Compartilhada entre /recent e /score: os dois exibem pp de mapa que não
-  // paga, e já divergiram uma vez — um avisava, o outro mostrava o número
-  // pelado. Fica ao lado de um valor calculado aqui, não de um zero: o que
-  // precisa ficar claro é que ele não entra no perfil, não que não existe.
-  pp_unranked_map:              'mapa não ranqueado, não conta para o perfil',
   recent_pass:             '✅ **Pass**',
   recent_fail:             '❌ **Quit**',
   recent_error:            'Erro ao buscar a play recente. Verifique se o jogador existe.',
-  recent_footer:           (mode, date, label, page, total) => `Play ${page}/${total} • Modo: ${mode} | ${date} • ${label}`,
+  // `status` é o do MAPA (ranked, loved, graveyard...) e pode faltar: só a
+  // API oficial manda esse campo, o bancho.py não.
+  recent_footer:           (mode, date, label, page, total, status) =>
+    `Play ${page}/${total} • Modo: ${mode} | ${date}${status ? ` • ${status}` : ''} • ${label}`,
 
   // O /score reaproveita simulate_invalid_map e simulate_map_not_found: a
   // orientação sobre ID/link do mapa é a mesma dos dois comandos.
   score_no_map:            '❌ Informe um mapa (ID ou link) — não achei nenhum mapa recente neste canal.',
   score_none:              (name, map, label) => `**${name}** não tem nenhum score em **${map}** no ${label}.`,
   score_no_mods:           'No Mods',
-  score_footer:            (page, total, count, label) => `Página ${page}/${total} • ${count} score(s) • ${label}`,
+  score_footer:            (page, total, count, label, status) =>
+    `Página ${page}/${total} • ${count} score(s)${status ? ` • ${status}` : ''} • ${label}`,
   score_error:             'Erro ao buscar os scores desse mapa.',
 
   compare_title:           'Comparação osu!',

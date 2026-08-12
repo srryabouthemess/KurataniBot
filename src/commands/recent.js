@@ -5,7 +5,7 @@ const { resolvePlayer } = require('../userLink');
 const mapContext = require('../mapContext');
 const emojis = require('../emojis');
 const { paginate } = require('../pagination');
-const { localScorePP, mapAwardsPP } = require('../scorePP');
+const { localScorePP } = require('../scorePP');
 const { displayMods } = require('../mods');
 const { t } = require('../i18n');
 const { logError } = require('../logger');
@@ -13,41 +13,28 @@ const { safeEditReply } = require('../replies');
 
 const FETCH_LIMIT = 50;
 
-const awardsPP = score => mapAwardsPP(score.beatmap?.status);
-
 /**
- * Como escrever o PP da play — o `pp` nulo tem três causas distintas, e todas
- * viravam o mesmo "0pp", que mentia em duas delas.
+ * O PP da play. O `pp` nulo tem três causas, e todas viravam o mesmo "0pp".
  *
- *  - Mapa que não paga pp (graveyard, loved): o servidor de fato não paga, mas
- *    "0pp" sozinho parece nota da play. Pior ao lado do "(FC: ~634pp)", que
- *    sugere que um FC pagaria isso — pagaria zero também. Daí a ressalva.
- *  - Play não terminada: o valor sai do trecho jogado, via `passedObjects` (sem
+ *  - Mapa que não paga pp (graveyard, loved): o servidor não paga mesmo, mas
+ *    "0pp" sozinho parece nota da play — e ao lado do "(FC: ~634pp)" sugeria
+ *    que um FC pagaria isso, quando pagaria zero também.
+ *  - Play não terminada: o valor sai do trecho jogado, via `passedObjects`. Sem
  *    ele a conta assume o mapa inteiro, inventa um 300 por objeto não jogado e
- *    devolve quase o valor de um FC). Aqui NÃO vai ressalva: o campo Status do
- *    embed já mostra "❌ Quit" bem na frente, e repetir em texto era ruído.
+ *    devolve quase o valor de um FC.
  *  - Mapa ranqueado, play completa, pp nulo: é a API não ter pontuado o score
- *    (acontece com lazer + CL). Aí zero é simplesmente errado, e o valor dá
- *    para calcular.
+ *    (acontece com lazer + CL). Aí zero é simplesmente errado.
  *
- * O `~` na frente é o que marca "calculado aqui, não é número oficial" — vale
- * para os três casos, e é o que sobra de aviso quando a play não terminou.
- *
- * @returns {Promise<{text: string, note: string|null}>} `note` é chave de i18n
+ * Nenhum dos três leva ressalva escrita na linha. O que a play foi já está no
+ * campo **Status** ("❌ Quit"), o que o MAPA é está no rodapé, e o `~` na frente
+ * marca "calculado aqui, não é número oficial". Explicar de novo em texto só
+ * engordava uma linha que já carrega pp, acurácia e o valor de FC.
  */
 async function describePP(score, isPass, mode) {
-  if (score.pp != null) return { text: `${score.pp.toFixed(2)}pp`, note: null };
-
-  // Só a ressalva do mapa sobrevive, e ela independe de a play ter terminado:
-  // é informação que o embed não carrega em nenhum outro lugar. O status só vem
-  // da API oficial — no bancho.py o campo não existe e o `awardsPP` assume que
-  // paga, porque afirmar "não ranqueado" sem saber seria pior.
-  const note = awardsPP(score) ? null : 'pp_unranked_map';
+  if (score.pp != null) return `${score.pp.toFixed(2)}pp`;
 
   const local = await localScorePP(score, mode, { partial: !isPass });
-  if (local === null) return { text: '?pp', note };
-
-  return { text: `~${local.toFixed(2)}pp`, note };
+  return local === null ? '?pp' : `~${local.toFixed(2)}pp`;
 }
 
 module.exports = {
@@ -129,11 +116,10 @@ module.exports = {
         const scoreCombo = recent.max_combo ?? 0;
         const isChoke    = misses > 0 || (mapCombo !== null && scoreCombo < mapCombo);
 
-        const { text: ppText, note: ppNote } = await describePP(recent, isPass, mode);
+        const ppText = await describePP(recent, isPass, mode);
 
         const ppLine =
           `**${s.recent_pp}:** ${ppText}` +
-          (ppNote ? ` — ${s[ppNote]}` : '') +
           (fcPP !== null && isChoke ? ` *(FC: ~${fcPP.toFixed(2)}pp)*` : '');
 
         return new EmbedBuilder()
@@ -166,7 +152,11 @@ module.exports = {
               new Date(recent.created_at).toLocaleString('pt-BR'),
               osu.getModeLabel(mode),
               page + 1,
-              totalPages
+              totalPages,
+              // Status do mapa (ranked, loved, graveyard...). Só a API oficial
+              // manda esse campo; no bancho.py ele não existe e o rodapé sai
+              // sem ele, em vez de afirmar o que não dá para saber.
+              recent.beatmap?.status ?? null
             ),
           });
       }

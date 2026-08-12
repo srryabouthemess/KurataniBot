@@ -95,16 +95,17 @@ module.exports = ({ ADMIN }) => ({
   recent_acc:              'Acc',
   recent_combo:            'Combo',
   recent_hits:             'Hits',
-  pp_unranked_map:              "unranked map, doesn't count toward the profile",
   recent_pass:             '✅ **Pass**',
   recent_fail:             '❌ **Quit**',
   recent_error:            'Error fetching recent play. Check if the player exists.',
-  recent_footer:           (mode, date, label, page, total) => `Play ${page}/${total} • Mode: ${mode} | ${date} • ${label}`,
+  recent_footer:           (mode, date, label, page, total, status) =>
+    `Play ${page}/${total} • Mode: ${mode} | ${date}${status ? ` • ${status}` : ''} • ${label}`,
 
   score_no_map:            '❌ Provide a map (ID or link) — I found no recent map in this channel.',
   score_none:              (name, map, label) => `**${name}** has no scores on **${map}** in ${label}.`,
   score_no_mods:           'No Mods',
-  score_footer:            (page, total, count, label) => `Page ${page}/${total} • ${count} score(s) • ${label}`,
+  score_footer:            (page, total, count, label, status) =>
+    `Page ${page}/${total} • ${count} score(s)${status ? ` • ${status}` : ''} • ${label}`,
   score_error:             'Error fetching the scores for this map.',
 
   compare_title:           'osu! Comparison',

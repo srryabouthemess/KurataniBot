@@ -30,6 +30,12 @@ Estes sete vieram de uma segunda revisão, feita sobre o código que a própria 
 - **O `x-api-version` ia em toda requisição.** [`osu/officialApi.js`](src/osu/officialApi.js)
   - Conferido que hoje não muda nada nos endpoints de usuário e de beatmap, mas fixar versão de formato é um contrato: quanto menos endpoints presos a ela, menos coisa quebra na próxima. Agora só as três chamadas de score usam o `scoreGet`.
 
+- **O status do mapa virou informação do rodapé.** [`commands/recent.js`](src/commands/recent.js), [`commands/score.js`](src/commands/score.js)
+  - As ressalvas escritas na linha de PP saíram — tanto o *"play não terminada"* quanto o *"mapa não ranqueado, não conta para o perfil"*. Em vez de explicar em texto o que aquele número é, o rodapé passou a dizer **o que o mapa é**: `Play 1/50 • Modo: osu | 12/08/2026 • graveyard • Bancho`.
+  - Fica melhor por três motivos: a linha de PP já carrega valor, acurácia e o FC, e mais uma frase ali era ruído; o status vale para os cinco scores de uma página do `/score`, então repetir por linha era errado; e a informação passa a aparecer **sempre**, não só quando o mapa não paga — quem olha sabe se é ranked, loved ou graveyard sem ter que deduzir pela ausência de aviso.
+  - O que a play foi continua no campo **Status** (`❌ Quit`), e o `~` na frente do número segue marcando "calculado aqui, não é valor oficial". Só a API oficial manda o campo de status; no bancho.py o rodapé sai sem ele, em vez de afirmar o que não dá para saber.
+  - Com isso o `mapAwardsPP` e a chave `pp_unranked_map` ficaram sem leitor e foram removidos — a mesma limpeza que o `set_on_lazer` e a chave `#id` do cache já tinham exigido.
+
 - **Play não terminada deixou de repetir o óbvio.** [`commands/recent.js`](src/commands/recent.js)
   - O aviso *"play não terminada, valor só do trecho jogado"* saiu: o campo **Status** do embed já mostra **❌ Quit** bem na frente, e dizer de novo em texto era ruído numa linha que já carrega o pp, a ressalva do mapa e o valor de FC.
   - O que sobrou é o `~` na frente do número, que continua marcando "calculado aqui, não é valor oficial" — e a ressalva do mapa não ranqueado, que **independe** de a play ter terminado: essa é informação que o embed não carrega em nenhum outro lugar. Duas chaves de i18n a menos nos três idiomas.
