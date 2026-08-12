@@ -34,6 +34,11 @@ module.exports = ({ ADMIN }) => ({
   prefix_user_not_found:   (name) => `❌ Não achei o usuário em \`${name}\` — mencione a pessoa (@fulano) ou passe o ID.`,
   prefix_guild_only:       '❌ Esse comando só funciona dentro de um servidor.',
   prefix_no_permission:    '❌ Você não tem permissão para usar esse comando.',
+  // Resposta ao prefixo digitado sozinho — quem faz isso está tateando o bot.
+  prefix_welcome:          (prefix) =>
+    '👋 Oi! Eu mostro estatísticas de osu! aqui no Discord.\n' +
+    'Comece com `/link set <seu nick>` — depois disso `/profile`, `/recent` e `/topplays` já sabem quem você é.\n' +
+    `Para ver tudo que eu faço, use \`/help\` (ou \`${prefix}help\`).`,
 
   // ── /help ─────────────────────────────────────────────────────────────────
   // A ordem e o agrupamento dos comandos ficam no próprio commands/help.js;

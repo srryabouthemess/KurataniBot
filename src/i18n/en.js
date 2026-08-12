@@ -31,6 +31,11 @@ module.exports = ({ ADMIN }) => ({
   prefix_user_not_found:   (name) => `❌ Couldn't find the user in \`${name}\` — mention them (@someone) or pass the ID.`,
   prefix_guild_only:       '❌ This command only works inside a server.',
   prefix_no_permission:    '❌ You do not have permission to use this command.',
+  // Reply to the prefix typed on its own — whoever does that is poking around.
+  prefix_welcome:          (prefix) =>
+    '👋 Hi! I show osu! stats here on Discord.\n' +
+    'Start with `/link set <your name>` — after that `/profile`, `/recent` and `/topplays` already know who you are.\n' +
+    `To see everything I do, use \`/help\` (or \`${prefix}help\`).`,
 
   // ── /help ─────────────────────────────────────────────────────────────────
   // Order and grouping live in commands/help.js; this is only the wording.

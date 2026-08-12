@@ -83,7 +83,8 @@ function allowedByPermissions(spec, message) {
 /**
  * @returns {{command: object, spec: object, args: string[]}|null} null quando a
  *   mensagem não é um comando conhecido — e aí o bot fica em silêncio, porque
- *   `k!` é curto e vai colidir com conversa normal.
+ *   `k!` é curto e vai colidir com conversa normal. A única exceção é o
+ *   prefixo sozinho, tratada no `handleMessage` (ver isBarePrefix).
  */
 function resolveCommand(client, specs, content) {
   if (!content.startsWith(PREFIX)) return null;
@@ -99,11 +100,39 @@ function resolveCommand(client, specs, content) {
   return { command, spec, args: tokens, name };
 }
 
+/**
+ * Só o prefixo, nada mais: `k!`.
+ *
+ * É o único caso em que vale quebrar o silêncio da `resolveCommand`. Quem
+ * manda o prefixo sozinho está tateando o bot, e não existe conversa normal
+ * que seja exatamente isso. `k!qualquercoisa` continua calado de propósito:
+ * ali o texto pode ser qualquer frase que por acaso comece com o prefixo, e
+ * responder a cada uma viraria ruído no canal.
+ */
+function isBarePrefix(content) {
+  return content.trim() === PREFIX;
+}
+
+/** Por onde começar, para quem acabou de descobrir que o bot existe. */
+async function welcome(message) {
+  const context = new MessageCommand(message, 'help', { values: new Map(), subcommand: null });
+
+  // Mesmo balde do /help. Em cooldown fica em silêncio em vez de responder
+  // "espere Xs": ninguém pediu para executar nada, e trocar o convite por um
+  // erro seria pior do que não responder.
+  if (cooldowns.check(message.author.id, 'help') > 0) return;
+
+  await context.reply(t(context).prefix_welcome(PREFIX)).catch(() => {});
+}
+
 async function handleMessage(client, specs, message) {
   if (message.author.bot || message.webhookId) return;
 
   const resolved = resolveCommand(client, specs, message.content);
-  if (!resolved) return;
+  if (!resolved) {
+    if (isBarePrefix(message.content)) await welcome(message);
+    return;
+  }
 
   const { command, spec, args, name } = resolved;
 

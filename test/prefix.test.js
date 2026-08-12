@@ -219,6 +219,25 @@ test('travas de contexto e permissão', async t => {
   });
 });
 
+test('prefixo sozinho convida a começar', async t => {
+  // O contraste com o silêncio de `k!naoexiste` (logo abaixo) é o ponto: a
+  // exceção vale para o prefixo exato, não para tudo que começa com ele.
+  await t.test('responde com o caminho das pedras', async () => {
+    const { context, reply } = await run('k!');
+    assert.equal(context, null);
+    assert.match(reply, /\/link set/);
+    assert.match(reply, /\/help/);
+  });
+
+  await t.test('espaço sobrando não muda nada', async () => {
+    assert.match((await run('k!   ')).reply, /\/help/);
+  });
+
+  await t.test('sugere o modo texto com o prefixo configurado', async () => {
+    assert.match((await run('k!')).reply, /k!help/);
+  });
+});
+
 test('o que o bot deve ignorar', async t => {
   await t.test('texto normal', async () => {
     const { context, sent } = await run('bom dia pessoal');

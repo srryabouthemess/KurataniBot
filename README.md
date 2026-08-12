@@ -144,6 +144,7 @@ k!pp 10000 avg:700 -randomize
 - Opções podem vir na ordem do slash, pelo nome (`player:mrekk`), como flag, ou misturado.
 - Nick com espaço entre aspas: `k!rs "Some Player"`.
 - Errou a sintaxe? O bot responde com a linha de uso. Texto sem o prefixo é ignorado.
+- O prefixo sozinho (`k!`) responde com o caminho das pedras e aponta o `/help`. Já `k!qualqueroutracoisa` fica calado de propósito — o prefixo é curto e colide com conversa normal.
 - Valem as mesmas regras do slash: valores aceitos, faixas, cargos e cooldown.
 
 Só no modo texto: **responder** a uma mensagem usa o mapa dela, e link colado na conversa também vira contexto.
