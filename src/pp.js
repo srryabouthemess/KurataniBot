@@ -15,7 +15,7 @@ const db = require('./db');
 const servers = require('./servers');
 const rateLimiter = require('./rateLimiter');
 const { dedupe } = require('./inflight');
-const { modsToBits, displayMods } = require('./mods');
+const { modsToBits, stripClassic } = require('./mods');
 const { idSegment } = require('./urlSafe');
 const { withRetry } = require('./retry');
 const { logError } = require('./logger');
@@ -418,12 +418,13 @@ async function getAdjustedStars(beatmapId, mods, mode = DEFAULT_MODE) {
   // exato que o nosso — o rosu-pp está dois reworks atrás do osu! (medido: 6%
   // de diferença no DT, 0,7% sem mods).
   //
-  // O `displayMods` aqui não é cosmético. Todo score de stable chega com o mod
+  // O `stripClassic` aqui não é cosmético. Todo score de stable chega com o mod
   // CL desde que passamos a pedir o formato novo à API, e um `mods.length === 0`
   // deixou de ser verdade para score sem mods nenhum — de um dia para o outro o
   // bot passou a calcular localmente o que antes vinha pronto, e a estrela
-  // exibida deixou de bater com o site (7.08★ contra 7.13★).
-  if (displayMods(mods).length === 0) return null;
+  // exibida deixou de bater com o site (7.08★ contra 7.13★). O CL é exibido nos
+  // scores, mas não conta como mod de dificuldade.
+  if (stripClassic(mods).length === 0) return null;
 
   // Com mods a API não ajuda: ela só publica o valor sem mods. Aí é cálculo
   // local, na mesma mecânica que o PP exibido ao lado usa (shouldUseLazer),

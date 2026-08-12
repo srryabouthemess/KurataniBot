@@ -30,6 +30,11 @@ Estes sete vieram de uma segunda revisão, feita sobre o código que a própria 
 - **O `x-api-version` ia em toda requisição.** [`osu/officialApi.js`](src/osu/officialApi.js)
   - Conferido que hoje não muda nada nos endpoints de usuário e de beatmap, mas fixar versão de formato é um contrato: quanto menos endpoints presos a ela, menos coisa quebra na próxima. Agora só as três chamadas de score usam o `scoreGet`.
 
+- **O mod CL voltou a aparecer nos scores.** [`mods.js`](src/mods.js), [`commands/`](src/commands/)
+  - Eu o tinha escondido por achar que era ruído técnico. É o contrário: o CL é **o** sinal de como a play foi jogada — presente quer dizer mecânica clássica (stable, ou lazer com o mod Classic), ausente quer dizer lazer de verdade. É a mesma distinção que o bot usa para escolher o algoritmo de PP, e não havia nenhum outro indício disso no embed.
+  - Continua fora de dois lugares, e por motivo diferente do original: ele não é mod de **dificuldade**. No `getAdjustedStars`, contá-lo fazia um score sem mod nenhum deixar de ser "sem mods" e o bot calcular estrelas localmente em vez de usar o valor da API. E no `/simulate` a simulação já é sempre stable, então digitar CL não muda nada e ecoá-lo enganaria.
+  - Por isso o `displayMods` virou **`stripClassic`**: o nome antigo dizia "é assim que se exibem mods", e agora os comandos que exibem score justamente não o usam.
+
 - **Saiu a palavra "Modo" dos rodapés.** [`i18n/`](src/i18n/)
   - `Modo: osu` dizia duas vezes a mesma coisa. O bot atende **só osu!standard** — conferido: o ruleset está fixo na URL da API (`/users/{nome}/osu`), o `gameMode` é 0 (ou 4 no RX, que é standard com Relax), o `mode` é literal `'osu'` nos dois normalizadores e o `pp.js` não tem tratamento de ruleset nenhum. No dia em que atender outro, o valor vira `osu!taiko` / `osu!catch` / `osu!mania`, que já se explicam sozinhos.
   - De quebra saiu uma divergência: o `/recent` mostrava `osu` (vindo do campo) e o `/topplays` tinha `osu!` **cravado** no texto — dois comandos escrevendo a mesma coisa de dois jeitos.

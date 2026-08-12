@@ -6,7 +6,6 @@ const mapContext = require('../mapContext');
 const emojis = require('../emojis');
 const { paginate } = require('../pagination');
 const { localScorePP } = require('../scorePP');
-const { displayMods } = require('../mods');
 const { t } = require('../i18n');
 const { logError } = require('../logger');
 const { safeEditReply } = require('../replies');
@@ -95,8 +94,8 @@ module.exports = {
         pageMapId.set(page, recent.beatmap.id);
 
         const mapUrl = osu.getMapUrl(recent.beatmap.id, recent.beatmapset.id, mode);
-        const shown  = displayMods(recent.mods);
-        const mods   = shown.length > 0 ? `+${shown.join('')}` : 'No Mods';
+        // Com o CL: ele diz se a play foi em mecânica clássica ou no lazer.
+        const mods   = recent.mods.length > 0 ? `+${recent.mods.join('')}` : 'No Mods';
         const isPass = recent.passed;
 
         const hits  = recent.statistics ?? {};

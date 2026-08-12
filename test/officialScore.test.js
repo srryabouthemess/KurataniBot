@@ -18,7 +18,7 @@ const assert = require('node:assert');
 
 const officialApi = require('../src/osu/officialApi');
 const { normalizeScore } = officialApi;
-const { displayMods, modsToBits } = require('../src/mods');
+const { stripClassic, modsToBits } = require('../src/mods');
 const { shouldUseLazer } = require('../src/pp');
 
 /** Score como a API responde com x-api-version: um FC de stable, com CL. */
@@ -38,12 +38,19 @@ test('o mod CL chega — é dele que depende a mecânica do cálculo', () => {
   assert.deepEqual(s.mods, ['DT', 'CL']);
 });
 
-test('CL não entra no bitmask nem na exibição', () => {
+test('CL é exibido, mas não conta como mod de dificuldade', () => {
   const s = normalizeScore(FC_STABLE);
-  // Não tem bit legado: só DT (64) deve sobrar.
+
+  // Vai para a tela junto dos outros: é o que separa play de mecânica clássica
+  // de play de lazer, e não há outro sinal disso no embed.
+  assert.deepEqual(s.mods, ['DT', 'CL']);
+
+  // Mas não tem bit legado — só o DT (64) chega ao cálculo...
   assert.equal(modsToBits(s.mods), 64);
-  // E "+DTCL" seria ruído novo na tela — o formato antigo nem mandava o CL.
-  assert.deepEqual(displayMods(s.mods), ['DT']);
+  // ...e sai da conta de "tem mod que altera a dificuldade?", senão um score
+  // sem mod nenhum deixaria de usar a estrela que a API publica.
+  assert.deepEqual(stripClassic(s.mods), ['DT']);
+  assert.deepEqual(stripClassic(['CL']), []);
 });
 
 test('statistics esparso vira contagem completa', () => {

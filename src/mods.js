@@ -60,21 +60,28 @@ function modsToBits(mods) {
 }
 
 /**
- * Mods como o jogador os reconhece — o CL fica de fora.
+ * A lista sem o CL, para decisões em que ele não deve pesar.
  *
- * Ele não é escolha de ninguém: a API marca com CL todo score jogado no stable,
- * e é justamente por isso que o pedimos (é o que faz o cálculo de PP usar a
- * mecânica certa, ver osu/officialApi.js). Mas exibir "+CL" em toda play de
- * stable seria ruído — e ruído novo, porque o formato antigo simplesmente não
- * mandava esse mod.
+ * O CL é exibido normalmente nos scores: ele é o que separa play de mecânica
+ * clássica (stable, ou lazer com Classic) de play de lazer de verdade, e é essa
+ * mesma distinção que o bot usa para escolher o algoritmo de PP.
  *
- * @returns {string[]} pode ser vazio, e aí quem chama decide o texto de "sem mods"
+ * Mas ele não é mod de DIFICULDADE — não tem bit legado e não muda o mapa. Onde
+ * a pergunta é "tem mod que altera a dificuldade?", ele precisa sair da conta:
+ *
+ *   - getAdjustedStars: com o CL contando, um score sem mod nenhum deixava de
+ *     ser "sem mods" e o bot passava a calcular estrelas localmente em vez de
+ *     usar o valor da API — 7.08★ no lugar dos 7.13★ que o site mostra.
+ *   - /simulate: a simulação já é sempre stable, então digitar CL não muda
+ *     nada, e ecoá-lo daria a entender que mudou.
+ *
+ * @returns {string[]} pode ser vazio, e aí quem chama decide o que fazer
  */
-function displayMods(mods) {
+function stripClassic(mods) {
   return (mods ?? []).filter(mod => mod !== 'CL');
 }
 
 module.exports = {
   MOD_BITS, KNOWN_MOD_TOKENS,
-  decodeMods, parseModsString, modsToBits, displayMods,
+  decodeMods, parseModsString, modsToBits, stripClassic,
 };
