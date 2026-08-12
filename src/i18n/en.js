@@ -96,8 +96,6 @@ module.exports = ({ ADMIN }) => ({
   recent_combo:            'Combo',
   recent_hits:             'Hits',
   pp_unranked_map:              "unranked map, doesn't count toward the profile",
-  recent_pp_failed:        'unfinished play, value for the part played only',
-  recent_pp_failed_unranked: 'unfinished play on an unranked map, part played only',
   recent_pass:             '✅ **Pass**',
   recent_fail:             '❌ **Quit**',
   recent_error:            'Error fetching recent play. Check if the player exists.',

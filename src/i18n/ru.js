@@ -96,8 +96,6 @@ module.exports = ({ ADMIN }) => ({
   recent_combo:            'Комбо',
   recent_hits:             'Хиты',
   pp_unranked_map:              'карта не ранкед, в профиль не идёт',
-  recent_pp_failed:        'плей не доигран, значение только за сыгранную часть',
-  recent_pp_failed_unranked: 'плей не доигран на карте не ранкед, только за сыгранную часть',
   recent_pass:             '✅ **Pass**',
   recent_fail:             '❌ **Quit**',
   recent_error:            'Ошибка при получении последнего плея. Проверьте, существует ли игрок.',

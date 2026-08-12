@@ -30,6 +30,10 @@ Estes sete vieram de uma segunda revisão, feita sobre o código que a própria 
 - **O `x-api-version` ia em toda requisição.** [`osu/officialApi.js`](src/osu/officialApi.js)
   - Conferido que hoje não muda nada nos endpoints de usuário e de beatmap, mas fixar versão de formato é um contrato: quanto menos endpoints presos a ela, menos coisa quebra na próxima. Agora só as três chamadas de score usam o `scoreGet`.
 
+- **Play não terminada deixou de repetir o óbvio.** [`commands/recent.js`](src/commands/recent.js)
+  - O aviso *"play não terminada, valor só do trecho jogado"* saiu: o campo **Status** do embed já mostra **❌ Quit** bem na frente, e dizer de novo em texto era ruído numa linha que já carrega o pp, a ressalva do mapa e o valor de FC.
+  - O que sobrou é o `~` na frente do número, que continua marcando "calculado aqui, não é valor oficial" — e a ressalva do mapa não ranqueado, que **independe** de a play ter terminado: essa é informação que o embed não carrega em nenhum outro lugar. Duas chaves de i18n a menos nos três idiomas.
+
 - **Dois comentários que já mentiam.** [`commands/recent.js`](src/commands/recent.js), [`commands/simulate.js`](src/commands/simulate.js)
   - O docblock do `describePP` ainda dizia que em play fracassada "NÃO dá para calcular localmente" — o código calcula desde que o `passedObjects` entrou, na mesma sessão. E o `/simulate` era o único ponto de exibição sem `displayMods`: aceitava `CL` como token e ecoava `+DTCL`, dando a entender que o mod mudava alguma coisa quando a simulação já é sempre stable.
 

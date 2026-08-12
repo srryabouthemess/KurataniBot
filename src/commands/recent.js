@@ -21,36 +21,32 @@ const awardsPP = score => mapAwardsPP(score.beatmap?.status);
  *
  *  - Mapa que não paga pp (graveyard, loved): o servidor de fato não paga, mas
  *    "0pp" sozinho parece nota da play. Pior ao lado do "(FC: ~634pp)", que
- *    sugere que um FC pagaria isso — pagaria zero também. Mostramos o valor
- *    calculado com a ressalva de que ele não entra no perfil.
- *  - Play não terminada: também não paga, e o valor precisa do `passedObjects`
- *    para valer alguma coisa — sem ele a conta assume o mapa inteiro, inventa
- *    um 300 por objeto não jogado e devolve quase o valor de um FC.
+ *    sugere que um FC pagaria isso — pagaria zero também. Daí a ressalva.
+ *  - Play não terminada: o valor sai do trecho jogado, via `passedObjects` (sem
+ *    ele a conta assume o mapa inteiro, inventa um 300 por objeto não jogado e
+ *    devolve quase o valor de um FC). Aqui NÃO vai ressalva: o campo Status do
+ *    embed já mostra "❌ Quit" bem na frente, e repetir em texto era ruído.
  *  - Mapa ranqueado, play completa, pp nulo: é a API não ter pontuado o score
  *    (acontece com lazer + CL). Aí zero é simplesmente errado, e o valor dá
- *    para calcular — com `~` na frente, para não passar por número oficial.
+ *    para calcular.
+ *
+ * O `~` na frente é o que marca "calculado aqui, não é número oficial" — vale
+ * para os três casos, e é o que sobra de aviso quando a play não terminou.
  *
  * @returns {Promise<{text: string, note: string|null}>} `note` é chave de i18n
  */
 async function describePP(score, isPass, mode) {
   if (score.pp != null) return { text: `${score.pp.toFixed(2)}pp`, note: null };
 
-  // O status do mapa só vem da API oficial, então a ressalva de "não ranqueado"
-  // é na prática do Bancho: no bancho.py o campo não existe e o `awardsPP`
-  // assume que paga.
-  const semRank = !awardsPP(score);
+  // Só a ressalva do mapa sobrevive, e ela independe de a play ter terminado:
+  // é informação que o embed não carrega em nenhum outro lugar. O status só vem
+  // da API oficial — no bancho.py o campo não existe e o `awardsPP` assume que
+  // paga, porque afirmar "não ranqueado" sem saber seria pior.
+  const note = awardsPP(score) ? null : 'pp_unranked_map';
 
-  const note = !isPass
-    ? (semRank ? 'recent_pp_failed_unranked' : 'recent_pp_failed')
-    : (semRank ? 'pp_unranked_map' : null);
-
-  // `partial` numa play interrompida: sem ele a conta assume o mapa inteiro,
-  // inventa um 300 por objeto não jogado e devolve quase o valor de um FC.
   const local = await localScorePP(score, mode, { partial: !isPass });
   if (local === null) return { text: '?pp', note };
 
-  // Valor calculado aqui, com `~`: é tão real quanto o de um mapa ranqueado —
-  // mesmo algoritmo, mesmo .osu — só não entra no perfil.
   return { text: `~${local.toFixed(2)}pp`, note };
 }
 
