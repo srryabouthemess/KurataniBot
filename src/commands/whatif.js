@@ -4,6 +4,7 @@ const servers = require('../servers');
 const { resolvePlayer } = require('../userLink');
 const { t } = require('../i18n');
 const { logError } = require('../logger');
+const { safeEditReply } = require('../replies');
 
 /**
  * Calcula o PP total ponderado de uma lista de plays.
@@ -167,7 +168,7 @@ module.exports = {
       await interaction.editReply({ embeds: [embed] });
     } catch (error) {
       logError('whatif', error);
-      interaction.editReply(s.error_generic);
+      return safeEditReply(interaction, s.error_generic);
     }
   },
 };

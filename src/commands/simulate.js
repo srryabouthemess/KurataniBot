@@ -4,6 +4,7 @@ const servers = require('../servers');
 const mapContext = require('../mapContext');
 const { t } = require('../i18n');
 const { logError } = require('../logger');
+const { safeEditReply } = require('../replies');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -153,7 +154,7 @@ module.exports = {
       mapContext.remember(interaction, beatmapId, mode);
     } catch (error) {
       logError('simulate', error);
-      interaction.editReply(s.simulate_error);
+      return safeEditReply(interaction, s.simulate_error);
     }
   },
 };

@@ -12,6 +12,7 @@
  */
 
 const { ActionRowBuilder, ButtonBuilder, ButtonStyle, MessageFlags } = require('discord.js');
+const { logError } = require('./logger');
 
 // Inatividade, não tempo absoluto: o contador reinicia a cada clique, então uma
 // pessoa navegando devagar não perde os botões no meio.
@@ -87,13 +88,32 @@ async function paginate(interaction, { id, totalPages, buildEmbed, strings, onPa
         .catch(() => {});
     }
 
+    // Guardado antes de mexer no cursor: montar a página seguinte faz rede e
+    // cálculo de PP, e pode falhar. Sem voltar atrás, o `page` ficaria numa
+    // página que nunca chegou à tela e o clique seguinte partiria do lugar
+    // errado — pular uma página a cada falha.
+    const shown = page;
+
     if (i.customId === `${id}_prev` && page > 0) page--;
     if (i.customId === `${id}_next` && page < totalPages - 1) page++;
 
-    await i.deferUpdate();
-    const next = await getEmbed(page);
-    await interaction.editReply({ embeds: [next], components: [buildRow(id, page, totalPages)] });
-    warmNext(page);
+    await i.deferUpdate().catch(() => {});
+
+    try {
+      const next = await getEmbed(page);
+      await interaction.editReply({ embeds: [next], components: [buildRow(id, page, totalPages)] });
+      warmNext(page);
+    } catch (error) {
+      // Sem este catch a promise do handler rejeitava solta: o clique já tinha
+      // sido confirmado pelo deferUpdate, então a pessoa via a mensagem parada
+      // sem nenhum aviso, e o erro só aparecia no unhandledRejection global.
+      page = shown;
+      logError('pagination', error);
+      // A página em cache não falha de novo; devolve os botões ao estado certo.
+      await interaction
+        .editReply({ components: [buildRow(id, page, totalPages)] })
+        .catch(() => {});
+    }
   });
 
   collector.on('end', () => {

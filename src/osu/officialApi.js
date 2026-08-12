@@ -74,10 +74,30 @@ async function officialBeatmapScores(userId, beatmapId) {
   return res?.scores ?? [];
 }
 
-const fetchUser    = username => officialGet(`/users/${urlSegment(username)}/osu`);
-const bestScores   = (userId, limit) => officialGet(`/users/${idSegment(userId)}/scores/best`, { limit });
-const recentScores = (userId, limit) =>
-  officialGet(`/users/${idSegment(userId)}/scores/recent`, { limit, include_fails: 1 });
+/**
+ * 404 aqui é "esse jogador não existe" — resultado normal de uma busca por um
+ * nick errado, não falha de rede.
+ *
+ * O adaptador bancho.py já devolvia null nesse caso (o `banchoV1Get` aceita
+ * 404 e 422 como respostas válidas), e é isso que o contrato do osuClient
+ * promete. Enquanto só este lado lançava, o `if (!user)` dos comandos nunca
+ * rodava no Bancho: a exceção pulava direto para o catch, e quem errou o nick
+ * lia "ocorreu um erro" em vez de "jogador não encontrado".
+ */
+async function fetchUser(username) {
+  try {
+    return await officialGet(`/users/${urlSegment(username)}/osu`);
+  } catch (error) {
+    if (error?.response?.status === 404) return null;
+    throw error;
+  }
+}
+
+const bestScores = async (userId, limit) =>
+  normalizeScores(await officialGet(`/users/${idSegment(userId)}/scores/best`, { limit }));
+
+const recentScores = async (userId, limit) =>
+  normalizeScores(await officialGet(`/users/${idSegment(userId)}/scores/recent`, { limit, include_fails: 1 }));
 
 const userUrl = (userId, mode) => `${servers.get(mode).webUrl}/users/${userId}`;
 const mapUrl  = (mapId, setId, mode) => `${servers.get(mode).webUrl}/beatmapsets/${setId}#osu/${mapId}`;

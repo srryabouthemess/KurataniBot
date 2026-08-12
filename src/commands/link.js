@@ -4,6 +4,7 @@ const { t } = require('../i18n');
 const osu = require('../osuClient');
 const servers = require('../servers');
 const { logError } = require('../logger');
+const { safeEditReply } = require('../replies');
 
 const SERVER_CHOICES = servers.choices();
 
@@ -160,7 +161,7 @@ module.exports = {
       await interaction.editReply({ embeds: [embed] });
     } catch (error) {
       logError('link', error);
-      interaction.editReply(s.link_error);
+      return safeEditReply(interaction, s.link_error);
     }
   },
 };

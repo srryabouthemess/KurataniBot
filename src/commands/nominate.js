@@ -17,10 +17,11 @@ const { logError } = require('../logger');
 // nominators, exigir um segundo só trava mapa esperando alguém aparecer. Quem
 // quiser o modelo do osu! sobe o número no `.env`.
 //
-// ATENÇÃO ao subir para 2 ou mais: hoje a contagem é por conta do **Discord**
-// (a PK de map_nominations é discord_id), não por conta do jogo. Duas contas do
-// Discord ligadas ao mesmo osu! id valem como duas nomeações — então o limiar
-// só vale de verdade depois de trocar essa unicidade para osu_id.
+// Subir para 2 ou mais funciona: a contagem é por CONTA DE JOGO — a PK de
+// map_nominations é (set_id, target_status, osu_id). Já foi por discord_id, e
+// aí duas contas do Discord apontando para o mesmo osu! id valiam como duas
+// nomeações, o que deixava uma pessoa sozinha atingir um limiar de 2; a
+// migração em db.js reconstruiu a tabela justamente por causa disso.
 const DEFAULT_THRESHOLD = 1;
 
 // Tetos nas entradas de texto livre. Sem eles o Discord aceita até 6000

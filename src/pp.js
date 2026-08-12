@@ -18,6 +18,7 @@ const { dedupe } = require('./inflight');
 const { modsToBits } = require('./mods');
 const { idSegment } = require('./urlSafe');
 const { withRetry } = require('./retry');
+const { logError } = require('./logger');
 
 const DEFAULT_MODE = servers.defaultKey();
 
@@ -121,6 +122,26 @@ async function getDifficultyAttrs(mapId, modsBits, lazer) {
   }
 }
 
+// ─── Falha do Python: uma vez por processo ────────────────────────────────────
+/**
+ * O PP do Relax é opcional (ver README), e quem não instalou a lib tem SEMPRE
+ * o mesmo erro. Como isto é chamado uma vez por play, um `/topplays` de RX
+ * viraria cinco tracebacks idênticos por página — logar a cada chamada punia
+ * justamente quem escolheu não instalar.
+ *
+ * Uma vez por processo é o que faltava para diagnosticar, sem virar ruído.
+ * Mesma ideia do `_rosuTried` acima.
+ */
+const STDERR_MAX = 2000;
+let _pythonFailureLogged = false;
+
+function reportPythonFailure(context, detail) {
+  if (!detail || _pythonFailureLogged) return;
+  _pythonFailureLogged = true;
+  logError(context, new Error(detail));
+  console.error('[calcPPPython] PP do Relax indisponível; o erro acima é logado uma vez só.');
+}
+
 /**
  * Chama pp_calc.py como processo filho e retorna os atributos calculados pelo
  * akatsuki-pp-py — o mesmo sistema que o Daycore usa internamente para RX.
@@ -175,19 +196,43 @@ async function calcPPPython(beatmapId, modsBits, n300, n100, n50, nmiss, combo =
     proc.stdin.end(Buffer.from(beatmapBytes));
 
     let output = '';
+    let stderr = '';
     proc.stdout.on('data', (d) => { output += d.toString(); });
+
+    // Consumir o stderr não é só diagnóstico: o pipe tem buffer, e um filho que
+    // escreva mais do que cabe nele fica BLOQUEADO até o timeout matar o
+    // processo. O teto aqui é para um traceback repetido não virar memória.
+    proc.stderr.on('data', (d) => {
+      if (stderr.length < STDERR_MAX) stderr += d.toString();
+    });
+
     proc.on('close', () => {
+      let data = null;
       try {
         const data = JSON.parse(output.trim());
         // O script imprime `null` quando não consegue calcular
         if (!data || typeof data.pp !== 'number') return resolve(null);
         resolve({ pp: data.pp, stars: data.stars, maxCombo: data.max_combo });
+
+      if (data && typeof data.pp === 'number') {
+        return resolve({ pp: data.pp, stars: data.stars, maxCombo: data.max_combo });
+      }
+
+      // ATENÇÃO ao mexer aqui: o pp_calc.py trata os próprios erros — escreve a
+      // causa no stderr E imprime `null` no stdout. Ou seja, no caso mais comum
+      // o JSON.parse ACIMA FUNCIONA, e reportar só quando ele estoura deixaria
+      // no chão a mensagem que interessa: "akatsuki-pp-py nao instalado.
+      // Execute: pip install akatsuki-pp-py", que é a causa em toda instalação
+      // nova. Por isso o relato fica no caminho de "não veio número", não no
+      // catch do parse.
+      reportPythonFailure('calcPPPython', stderr.trim());
+      resolve(null);
       } catch {
-        resolve(null);
+        // Saída ilegível: o motivo, se houver, está no stderr.
       }
     });
     proc.on('error', (err) => {
-      console.error(`[calcPPPython] falha ao iniciar "${pythonBin}":`, err.message);
+      reportPythonFailure('calcPPPython:spawn', `falha ao iniciar "${pythonBin}": ${err.message}`);
       resolve(null);
     });
   });
@@ -197,11 +242,11 @@ async function calcPPPython(beatmapId, modsBits, n300, n100, n50, nmiss, combo =
 /**
  * Calcula o PP que o score teria rendido em Full Combo (sem misses).
  *
- * - official / private  → rosu-pp-js (algoritmo oficial osu!lazer, via Wasm)
- * - private_rx          → akatsuki-pp-js (algoritmo oppai-2019, via Neon/Rust)
+ * - servidor vanilla → rosu-pp-js (algoritmo oficial osu!lazer, via Wasm)
+ * - servidor com RX  → akatsuki-pp-py via Python (oppai-2019, o mesmo do Daycore)
  *
  * O arquivo .osu é público em https://osu.ppy.sh/osu/{beatmap_id}, então
- * funciona para Bancho e Daycore.
+ * funciona para Bancho e para servidor privado.
  *
  * Retorna null se a lib não estiver instalada, beatmap_id for desconhecido,
  * o score já for FC, ou qualquer erro de rede/parse.
@@ -234,8 +279,10 @@ async function getFCpp(score, mode = DEFAULT_MODE) {
 
   try {
     // ── Relax: akatsuki-pp-py via Python (oppai-2019, o mesmo dos servidores) ──
-    // O script Python baixa o .osu internamente, então não precisamos fazer
-    // o download aqui — evita que uma falha de rede neste trecho mate o PPFC.
+    // O download do .osu acontece dentro do calcPPPython, pelo mesmo
+    // getBeatmapFile do caminho do rosu-pp: cache em disco e rate limiter
+    // valem para os dois, e os bytes vão para o script por stdin. (O script
+    // já baixou por conta própria, o que escapava de ambos.)
     if (servers.get(mode).relax) {
       const result = await calcPPPython(beatmapId, modsBits, n300, n100, n50, misses);
       return result?.pp ?? null;
@@ -279,8 +326,8 @@ async function getFCpp(score, mode = DEFAULT_MODE) {
 /**
  * Simula o PP de um score hipotético em um mapa específico, dado mods e hits.
  *
- * - official / private  → rosu-pp-js (algoritmo oficial osu!lazer, via Wasm)
- * - private_rx          → akatsuki-pp-py via Python (oppai-2019, mesmo sistema do Daycore)
+ * - servidor vanilla → rosu-pp-js (algoritmo oficial osu!lazer, via Wasm)
+ * - servidor com RX  → akatsuki-pp-py via Python (oppai-2019, o mesmo do Daycore)
  *
  * @param {number} beatmapId
  * @param {string[]} mods       - acrônimos de mods, ex: ['DT', 'HR']

@@ -4,6 +4,7 @@ const servers = require('../servers');
 const { getLink, getPreferredServer } = require('../db');
 const { t } = require('../i18n');
 const { logError } = require('../logger');
+const { safeEditReply } = require('../replies');
 
 // O Discord mobile NÃO rola code block na horizontal: ele quebra a linha, e
 // uma tabela monoespaçada quebrada fica ilegível. A versão antiga tinha 40
@@ -154,7 +155,7 @@ module.exports = {
       await interaction.editReply({ embeds: [embed] });
     } catch (error) {
       logError('compare', error);
-      interaction.editReply(s.compare_error);
+      return safeEditReply(interaction, s.compare_error);
     }
   },
 };

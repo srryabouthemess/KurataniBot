@@ -5,6 +5,7 @@ const { resolvePlayer } = require('../userLink');
 const emojis = require('../emojis');
 const { t } = require('../i18n');
 const { logError } = require('../logger');
+const { safeEditReply } = require('../replies');
 
 const toDiscordTimestamp = (dateString, format = 'R') => {
   if (!dateString) return 'Unknown';
@@ -95,8 +96,10 @@ module.exports = {
       await interaction.editReply({ embeds: [embed] });
     } catch (error) {
       logError('profile', error);
-      if (error.response?.status === 404) return interaction.editReply(s.player_not_found);
-      interaction.editReply(s.error_generic);
+      // O adaptador oficial já devolve null em 404 (ver osu/officialApi.js), então
+      // isto cobre só os 404 das outras chamadas do comando — as top plays.
+      if (error.response?.status === 404) return safeEditReply(interaction, s.player_not_found);
+      return safeEditReply(interaction, s.error_generic);
     }
   },
 };

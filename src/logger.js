@@ -8,13 +8,46 @@
  * stack trace e vaza credenciais nos logs. Aqui só passam campos seguros.
  */
 
+/**
+ * Teto do corpo da resposta no log.
+ *
+ * Sem ele, dois casos reais enchiam disco sozinhos: um 502 de proxy devolve
+ * página HTML inteira, e o download de `.osu` usa `responseType: 'arraybuffer'`
+ * — um Buffer no `JSON.stringify` vira `{"type":"Buffer","data":[...]}`, com um
+ * número por byte. Multiplicado pelas tentativas do retry, uma queda da API
+ * escrevia megabytes por comando.
+ */
+const BODY_MAX = 500;
+
+/** Corpo da resposta em texto, sem expandir o que não vale a pena. */
+function bodyOf(data) {
+  if (data === null || data === undefined || data === '') return null;
+  if (typeof data === 'string') return data;
+  // Corpo binário: o tamanho diz tudo que o log precisa saber.
+  if (Buffer.isBuffer(data)) return `<${data.length} bytes>`;
+
+  try {
+    return JSON.stringify(data);
+  } catch {
+    // Corpo que não serializa (circular, BigInt) não deve derrubar o log de um
+    // erro que já estava acontecendo.
+    return String(data);
+  }
+}
+
 function logError(context, error) {
   const status = error?.response?.status;
-  const data   = error?.response?.data;
   const parts  = [`[${context}]`, error?.message ?? String(error)];
   if (status) parts.push(`status=${status}`);
-  if (data) parts.push(typeof data === 'string' ? data : JSON.stringify(data));
+
+  const body = bodyOf(error?.response?.data);
+  if (body) {
+    parts.push(body.length > BODY_MAX
+      ? `${body.slice(0, BODY_MAX)}… (+${body.length - BODY_MAX} caracteres)`
+      : body);
+  }
+
   console.error(...parts);
 }
 
-module.exports = { logError };
+module.exports = { logError, BODY_MAX };

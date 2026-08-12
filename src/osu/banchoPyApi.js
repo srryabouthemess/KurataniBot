@@ -106,6 +106,32 @@ function normalizeUserPrivate(playerData, statsData, mode, globalRank = null, co
 // ─── Normalização: score ──────────────────────────────────────────────────────
 // A tradução entre bitmask, acrônimos e texto vive em mods.js.
 
+/**
+ * `play_time` chega em três formatos, conforme o endpoint: ISO com `T`,
+ * datetime do SQL com espaço, ou epoch em segundos — o mesmo formato que
+ * `creation_time` e `latest_activity` já usam no normalizeUserPrivate.
+ *
+ * Isto era uma linha só, e ela testava o valor convertido (`String(raw)`) mas
+ * convertia o valor cru (`raw.replace(...)`): um epoch numérico estourava com
+ * "replace is not a function". O estrago passava do score: o catch do
+ * `enrichScores` chama esta mesma função de novo, batia na mesma linha e a
+ * segunda exceção escapava do try — derrubando a página inteira do /topplays
+ * ou do /recent, não só a play problemática.
+ */
+function parsePlayTime(raw) {
+  if (raw === null || raw === undefined || raw === '') return new Date();
+
+  // Epoch em segundos, venha como número ou como string de dígitos.
+  if (typeof raw === 'number' || /^\d+$/.test(String(raw))) return new Date(Number(raw) * 1000);
+
+  const text = String(raw);
+  const date = new Date(text.includes('T') ? text : `${text.replace(' ', 'T')}Z`);
+
+  // Formato desconhecido vira "agora": um Invalid Date aqui só estouraria mais
+  // adiante, no toISOString(), longe da causa.
+  return Number.isNaN(date.getTime()) ? new Date() : date;
+}
+
 // Mescla dados da v1 (map info) com dados da v2 (score detalhado)
 function normalizeScorePrivate(v1, v2) {
   if (!v1) return null;
@@ -119,13 +145,8 @@ function normalizeScorePrivate(v1, v2) {
     ? decodeMods(v2.mods ?? 0)
     : (Array.isArray(v1.mods) ? v1.mods : decodeMods(v1.mods ?? 0));
  
-  const playTimeRaw = v2?.play_time ?? v1.play_time;
-  const playTime = playTimeRaw
-    ? new Date(String(playTimeRaw).includes('T')
-        ? playTimeRaw
-        : playTimeRaw.replace(' ', 'T') + 'Z')
-    : new Date();
- 
+  const playTime = parsePlayTime(v2?.play_time ?? v1.play_time);
+
   const mapName = v1.map_name ?? '';
   const diffMatch = mapName.match(/\[(.+?)\](?:\.osu)?$/);
   const titleMatch = mapName.match(/^(.+?)\s*\(([^)]+)\)\s*\[/);
@@ -330,6 +351,10 @@ module.exports = {
   beatmapScores: privateBeatmapScores,
   userUrl,
   mapUrl,
+
+  // Exportado para o teste: é a normalização que já derrubou uma página
+  // inteira por causa do formato de um campo.
+  parsePlayTime,
 
   // Específicos deste tipo de servidor, usados pelos comandos administrativos.
   enrichScores,

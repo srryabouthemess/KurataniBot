@@ -42,6 +42,10 @@ function remember(interaction, mapId, mode) {
   const channelId = interaction?.channelId;
   if (!channelId || !mapId) return;
 
+  // delete antes do set para a reinserção mandar o canal para o fim: no Map,
+  // reatribuir uma chave existente não muda a posição dela, e é a ordem de
+  // inserção que a evicção abaixo trata como "mais antigo".
+  _last.delete(channelId);
   _last.set(channelId, { mapId: Number(mapId), mode, at: Date.now() });
 
   // Poda preguiçosa (mesma ideia do cache de usuário do osuClient): só corre a
@@ -50,6 +54,14 @@ function remember(interaction, mapId, mode) {
     const cutoff = Date.now() - TTL_MS;
     for (const [id, entry] of _last) {
       if (entry.at < cutoff) _last.delete(id);
+    }
+
+    // O TTL sozinho não é teto: se todos os canais estiverem dentro da janela,
+    // nada é descartado e o Map cresce sem limite. Num bot em muitas guilds
+    // isso é só questão de escala.
+    for (const id of _last.keys()) {
+      if (_last.size <= MAX_CHANNELS) break;
+      _last.delete(id);
     }
   }
 }

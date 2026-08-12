@@ -9,6 +9,7 @@ const { t } = require('../i18n');
 const { logError } = require('../logger');
 
 const PAGE_SIZE = 5;
+const { safeEditReply } = require('../replies');
 
 // Título de embed estoura em 256 caracteres — e "artista - título [diff]" de
 // mapa de maratona chega perto. Cortar aqui evita que o comando falhe ao
@@ -209,7 +210,7 @@ module.exports = {
       });
     } catch (error) {
       logError('score', error);
-      interaction.editReply(s.score_error);
+      return safeEditReply(interaction, s.score_error);
     }
   },
 };

@@ -58,7 +58,13 @@ db.exec('PRAGMA synchronous = NORMAL');
  * (transação atravessa os dois arquivos, `close()` fecha tudo), e a separação
  * aparece apenas no prefixo `cache.` das tabelas.
  */
-db.exec(`ATTACH DATABASE '${CACHE_PATH.replace(/\\/g, '/')}' AS cache`);
+// As aspas simples são dobradas porque é assim que o SQLite escapa uma aspa
+// dentro de literal de texto. O caminho vem do __dirname, não de usuário, então
+// não é injeção — mas basta um apóstrofo em `C:\Users\O'Brien\KurataniBot` para
+// o ATTACH virar SQL inválido e o bot não subir, com um erro de sintaxe que não
+// menciona o nome da pasta em lugar nenhum.
+const CACHE_DB_LITERAL = CACHE_PATH.replace(/\\/g, '/').replace(/'/g, "''");
+db.exec(`ATTACH DATABASE '${CACHE_DB_LITERAL}' AS cache`);
 db.exec('PRAGMA cache.journal_mode = WAL');
 db.exec('PRAGMA cache.synchronous = NORMAL');
 

@@ -236,6 +236,18 @@ async function unrestrictPlayer(targetOsuId, actor, reason) {
 
 // ─── Permissões ───────────────────────────────────────────────────────────────
 
+/**
+ * Subconjunto de bits, NÃO hierarquia — e de propósito.
+ *
+ * É o mesmo teste que o bancho.py faz ao despachar um comando
+ * (`player.priv & cmd.priv == cmd.priv`, em app/commands.py). Os docstrings do
+ * upstream dizem "manage users (level 1)" e "(level 2)", o que lê como escada,
+ * mas nada no servidor implementa isso: quem tem DEVELOPER sem o bit de
+ * ADMINISTRATOR também é recusado pelo `!restrict` dentro do jogo.
+ *
+ * Transformar isto numa hierarquia concederia pelo Discord um acesso que o
+ * próprio servidor nega — o oposto do que se quer num comando administrativo.
+ */
 function hasPriv(priv, flag) {
   return (Number(priv) & flag) === flag;
 }

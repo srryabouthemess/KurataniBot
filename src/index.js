@@ -125,13 +125,24 @@ client.on('interactionCreate', async interaction => {
   } catch (error) {
     logError(`command:${interaction.commandName}`, error);
 
+    // O texto vem do i18n, como em todo o resto — o caminho do prefixo já
+    // respondia traduzido a esta mesma falha, e só o slash saía em português
+    // cru para quem usa /language en ou ru.
+    //
+    // Resolver o idioma lê o banco, e o banco pode ser exatamente o que
+    // quebrou (ou já ter sido fechado por um shutdown em curso). Aqui, no
+    // último catch antes do usuário, uma segunda exceção significaria não
+    // responder nada: daí o fallback.
+    let content = 'Erro ao executar o comando.';
+    try { content = t(interaction).error_generic; } catch { /* fica o fallback */ }
+
     // A interação já pode ter sido respondida/deferida dentro do próprio
     // comando antes de falhar — usar reply() nesse caso lança
     // InteractionAlreadyReplied, e como isso roda sem outro catch por perto
     // vira uma unhandled rejection que derruba o processo (Node 15+). O
     // .catch(() => {}) no fim é a rede de segurança final caso a própria
     // interação já tenha expirado (token > 15min).
-    const payload = { content: 'Erro ao executar o comando.', flags: MessageFlags.Ephemeral };
+    const payload = { content, flags: MessageFlags.Ephemeral };
     const send = interaction.deferred || interaction.replied
       ? interaction.followUp(payload)
       : interaction.reply(payload);
@@ -153,13 +164,23 @@ process.on('unhandledRejection', (reason) => {
 // nos comandos que publicam no servidor de jogo. O correto é sair com código 1
 // e deixar um supervisor (systemd, pm2, Docker com restart) subir de novo.
 //
-// Continuamos logando e seguindo porque hoje não há supervisor configurado:
-// sair deixaria o bot fora do ar até alguém perceber, que é exatamente o que
-// este handler foi criado para evitar. Ao configurar o deploy, troque por
-// `process.exit(1)` — o `unhandledRejection` acima já cobre a maior parte dos
-// casos reais sem esse risco.
+// Só que sair SEM supervisor deixa o bot fora do ar até alguém perceber, que é
+// exatamente o que este handler foi criado para evitar. Os dois lados têm razão,
+// e qual vale depende de uma coisa que o código não tem como saber: se existe
+// alguém para reiniciar. Por isso a escolha é de quem hospeda.
+//
+// O padrão continua sendo seguir rodando, porque é o certo para quem roda o bot
+// na própria máquina. Com systemd/pm2/Docker configurado, ligue
+// EXIT_ON_UNCAUGHT no .env e o processo passa a sair para ser reiniciado limpo.
+const EXIT_ON_UNCAUGHT = /^(1|true|yes|sim)$/i.test((process.env.EXIT_ON_UNCAUGHT ?? '').trim());
+
 process.on('uncaughtException', (error) => {
   logError('uncaughtException', error);
+
+  if (EXIT_ON_UNCAUGHT) {
+    console.error('[uncaughtException] EXIT_ON_UNCAUGHT ativo: saindo com código 1 para o supervisor reiniciar.');
+    process.exit(1);
+  }
 });
 
 // ─── Encerramento gracioso ────────────────────────────────────────────────────

@@ -8,6 +8,7 @@ const { paginate } = require('../pagination');
 const { t } = require('../i18n');
 const { logError } = require('../logger');
 
+const { safeEditReply } = require('../replies');
 const PAGE_SIZE   = 5;
 const FETCH_LIMIT = 100;
 
@@ -149,7 +150,7 @@ module.exports = {
       });
     } catch (error) {
       logError('topplays', error);
-      interaction.editReply(s.topplays_error);
+      return safeEditReply(interaction, s.topplays_error);
     }
   },
 };

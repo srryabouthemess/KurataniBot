@@ -173,7 +173,22 @@ function parseBeatmapId(input) {
  * depois de uma play nova confunde mais do que a requisição economizada.
  */
 const USER_CACHE_TTL_MS = 60_000;
+const USER_CACHE_MAX    = 500;
 const _userCache = new Map();
+
+/**
+ * Chave do cache, com nome e ID apontando para lugares distintos de propósito.
+ *
+ * O mesmo usuário chega das duas formas: o `userLink` manda o `osu_id` quando o
+ * link tem (sobrevive a troca de nick), e quem digita o comando manda o nome.
+ * Numerando a chave com `#`, uma consulta aquece a outra — antes o `#id` era
+ * escrito e **nunca lido**, porque a leitura montava a chave só pelo texto: o
+ * cache carregava o dobro de entradas sem um acerto sequer.
+ */
+function _userCacheKey(mode, value) {
+  const raw = String(value);
+  return /^\d+$/.test(raw) ? `${mode}:#${raw}` : `${mode}:${raw.toLowerCase()}`;
+}
 
 function _userCacheGet(key) {
   const entry = _userCache.get(key);
@@ -187,30 +202,48 @@ function _userCacheGet(key) {
 }
 
 function _userCacheSet(key, data) {
+  // delete antes do set: no Map, reatribuir uma chave existente NÃO a move para
+  // o fim, e é a ordem de inserção que a evicção abaixo usa como "mais antigo".
+  // Sem isto, uma chave consultada o tempo todo ficaria parada na posição da
+  // primeira vez e seria descartada como se estivesse fria.
+  _userCache.delete(key);
   _userCache.set(key, { data, at: Date.now() });
+  _pruneUserCache();
+}
 
-  // Poda preguiçosa: só corre a lista quando ela cresce, evitando mais um timer
-  // no processo.
-  if (_userCache.size > 500) {
-    const cutoff = Date.now() - USER_CACHE_TTL_MS;
-    for (const [k, entry] of _userCache) {
-      if (entry.at < cutoff) _userCache.delete(k);
-    }
+/** Poda preguiçosa: só corre a lista quando ela passa do teto, sem mais um timer. */
+function _pruneUserCache() {
+  if (_userCache.size <= USER_CACHE_MAX) return;
+
+  const cutoff = Date.now() - USER_CACHE_TTL_MS;
+  for (const [key, entry] of _userCache) {
+    if (entry.at < cutoff) _userCache.delete(key);
+  }
+
+  // O TTL sozinho NÃO é teto: num bot com tráfego para 500 consultas distintas
+  // dentro de um minuto, todas estão frescas, nada é descartado e o Map cresce
+  // sem limite — a condição volta a ser verdadeira na inserção seguinte, e
+  // assim por diante. Descartar os mais antigos é o que fecha isso.
+  for (const key of _userCache.keys()) {
+    if (_userCache.size <= USER_CACHE_MAX) break;
+    _userCache.delete(key);
   }
 }
 
 // ─── Consulta ─────────────────────────────────────────────────────────────────
 
 async function getUser(username, mode = DEFAULT_MODE) {
-  const cacheKey = `${mode}:${String(username).toLowerCase()}`;
+  const cacheKey = _userCacheKey(mode, username);
   const cached = _userCacheGet(cacheKey);
   if (cached) return cached;
 
   const user = await apiFor(mode).fetchUser(username, mode);
   if (user) {
     _userCacheSet(cacheKey, user);
-    // Indexa também pelo ID, para quem resolve via link já com o osu_id.
-    _userCacheSet(`${mode}:#${user.id}`, user);
+    // Indexa também pelo ID: quem consultou pelo nome aquece a entrada de quem
+    // vier pelo link, e vice-versa. Quando a consulta já foi por ID, as duas
+    // chaves coincidem e a segunda escrita só renova a mesma entrada.
+    _userCacheSet(_userCacheKey(mode, user.id), user);
   }
   return user;
 }

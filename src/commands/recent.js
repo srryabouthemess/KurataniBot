@@ -9,6 +9,7 @@ const { t } = require('../i18n');
 const { logError } = require('../logger');
 
 const FETCH_LIMIT = 50;
+const { safeEditReply } = require('../replies');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -134,7 +135,7 @@ module.exports = {
       });
     } catch (error) {
       logError('recent', error);
-      interaction.editReply(s.recent_error);
+      return safeEditReply(interaction, s.recent_error);
     }
   },
 };
