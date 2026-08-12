@@ -81,7 +81,7 @@ module.exports = ({ ADMIN }) => ({
   profile_footer:          (label) => `osu! Stats • ${label}`,
 
   topplays_none:           'Плеев не найдено.',
-  topplays_footer:         (page, total, label) => `Страница ${page}/${total} • Режим: osu! • ${label}`,
+  topplays_footer:         (page, total, label) => `Страница ${page}/${total} • osu • ${label}`,
   topplays_error:          'Ошибка при получении топ плеев.',
   pagination_not_yours:    '❌ Только автор команды может переключать страницы.',
 
@@ -99,7 +99,7 @@ module.exports = ({ ADMIN }) => ({
   recent_fail:             '❌ **Quit**',
   recent_error:            'Ошибка при получении последнего плея. Проверьте, существует ли игрок.',
   recent_footer:           (mode, date, label, page, total, status) =>
-    `Плей ${page}/${total} • Режим: ${mode}${status ? ` • ${status}` : ''} • ${label} • ${date}`,
+    `Плей ${page}/${total} • ${mode}${status ? ` • ${status}` : ''} • ${label} • ${date}`,
 
   score_no_map:            '❌ Укажите карту (ID или ссылку) — недавних карт в этом канале не нашлось.',
   score_none:              (name, map, label) => `У **${name}** нет скоров на **${map}** в ${label}.`,

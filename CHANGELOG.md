@@ -30,6 +30,10 @@ Estes sete vieram de uma segunda revisão, feita sobre o código que a própria 
 - **O `x-api-version` ia em toda requisição.** [`osu/officialApi.js`](src/osu/officialApi.js)
   - Conferido que hoje não muda nada nos endpoints de usuário e de beatmap, mas fixar versão de formato é um contrato: quanto menos endpoints presos a ela, menos coisa quebra na próxima. Agora só as três chamadas de score usam o `scoreGet`.
 
+- **Saiu a palavra "Modo" dos rodapés.** [`i18n/`](src/i18n/)
+  - `Modo: osu` dizia duas vezes a mesma coisa. O bot atende **só osu!standard** — conferido: o ruleset está fixo na URL da API (`/users/{nome}/osu`), o `gameMode` é 0 (ou 4 no RX, que é standard com Relax), o `mode` é literal `'osu'` nos dois normalizadores e o `pp.js` não tem tratamento de ruleset nenhum. No dia em que atender outro, o valor vira `osu!taiko` / `osu!catch` / `osu!mania`, que já se explicam sozinhos.
+  - De quebra saiu uma divergência: o `/recent` mostrava `osu` (vindo do campo) e o `/topplays` tinha `osu!` **cravado** no texto — dois comandos escrevendo a mesma coisa de dois jeitos.
+
 - **A data foi para o fim do rodapé do `/recent`.** [`i18n/`](src/i18n/)
   - Estava espremida no meio, separada por um `|` que destoava dos `•` do resto: `Play 1/50 • Modo: osu | 12/08/2026 • graveyard • Bancho`. Agora fecha a linha, e o separador é o mesmo do começo ao fim: `Play 1/50 • Modo: osu • graveyard • Bancho • 12/08/2026, 15:59:20`.
 

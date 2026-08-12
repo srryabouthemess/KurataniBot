@@ -81,7 +81,7 @@ module.exports = ({ ADMIN }) => ({
   profile_footer:          (label) => `osu! Stats • ${label}`,
 
   topplays_none:           'No plays found.',
-  topplays_footer:         (page, total, label) => `Page ${page}/${total} • Mode: osu! • ${label}`,
+  topplays_footer:         (page, total, label) => `Page ${page}/${total} • osu • ${label}`,
   topplays_error:          'Error fetching top plays.',
   pagination_not_yours:    "❌ Only the person who ran the command can navigate the pages.",
 
@@ -99,7 +99,7 @@ module.exports = ({ ADMIN }) => ({
   recent_fail:             '❌ **Quit**',
   recent_error:            'Error fetching recent play. Check if the player exists.',
   recent_footer:           (mode, date, label, page, total, status) =>
-    `Play ${page}/${total} • Mode: ${mode}${status ? ` • ${status}` : ''} • ${label} • ${date}`,
+    `Play ${page}/${total} • ${mode}${status ? ` • ${status}` : ''} • ${label} • ${date}`,
 
   score_no_map:            '❌ Provide a map (ID or link) — I found no recent map in this channel.',
   score_none:              (name, map, label) => `**${name}** has no scores on **${map}** in ${label}.`,

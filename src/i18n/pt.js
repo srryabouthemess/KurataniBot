@@ -85,7 +85,10 @@ module.exports = ({ ADMIN }) => ({
   profile_footer:          (label) => `osu! Stats • ${label}`,
 
   topplays_none:           'Nenhuma play encontrada.',
-  topplays_footer:         (page, total, label) => `Página ${page}/${total} • Modo: osu! • ${label}`,
+  // `osu` sozinho, sem a palavra "Modo": o bot só atende osu!standard (o
+  // ruleset está fixo na URL da API), e no dia em que atender outro o valor
+  // vira osu!taiko / osu!catch / osu!mania, que já se explicam sozinhos.
+  topplays_footer:         (page, total, label) => `Página ${page}/${total} • osu • ${label}`,
   topplays_error:          'Erro ao buscar as top plays.',
   pagination_not_yours:    '❌ Apenas quem usou o comando pode navegar entre as páginas.',
 
@@ -105,7 +108,7 @@ module.exports = ({ ADMIN }) => ({
   // `status` é o do MAPA (ranked, loved, graveyard...) e pode faltar: só a
   // API oficial manda esse campo, o bancho.py não.
   recent_footer:           (mode, date, label, page, total, status) =>
-    `Play ${page}/${total} • Modo: ${mode}${status ? ` • ${status}` : ''} • ${label} • ${date}`,
+    `Play ${page}/${total} • ${mode}${status ? ` • ${status}` : ''} • ${label} • ${date}`,
 
   // O /score reaproveita simulate_invalid_map e simulate_map_not_found: a
   // orientação sobre ID/link do mapa é a mesma dos dois comandos.
