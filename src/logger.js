@@ -47,6 +47,16 @@ function logError(context, error) {
       : body);
   }
 
+  // Só quando NÃO houve resposta HTTP. Um 404 da API do osu! é resposta
+  // esperada e a mensagem já diz tudo — o stack ali seria ruído em log que
+  // enche sozinho. O que sobra neste ramo é o que precisa de endereço: erro de
+  // programação (um TypeError dentro de um comando) e falha de rede.
+  //
+  // O stack é seguro de imprimir: são nomes de função e posições de arquivo. O
+  // que este módulo existe para não vazar é o `.config` do axios, com o header
+  // Authorization — e esse continua fora.
+  if (!error?.response && error?.stack) parts.push(`\n${error.stack}`);
+
   console.error(...parts);
 }
 

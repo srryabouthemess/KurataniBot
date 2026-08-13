@@ -78,3 +78,46 @@ test('corpo que não serializa não derruba o log', () => {
   // tratamento de outro erro, que é o pior lugar para uma segunda exceção.
   assert.doesNotThrow(() => capture('teste', axiosError(circular)));
 });
+
+// ─── Stack trace ──────────────────────────────────────────────────────────────
+// O módulo nasceu para não imprimir o erro cru, e tinha corrigido demais: sobrava
+// só `error.message`. Um TypeError dentro de um comando virava uma linha sem
+// arquivo nem função, o que em produção não dá para depurar.
+
+test('erro de programação leva o stack junto', () => {
+  function funcaoComNomeReconhecivel() { return null.propriedade; }
+
+  let erro;
+  try { funcaoComNomeReconhecivel(); } catch (e) { erro = e; }
+
+  const saida = capture('comando:teste', erro);
+  assert.match(saida, /TypeError|Cannot read/);
+  assert.match(saida, /funcaoComNomeReconhecivel/, 'o stack deveria apontar onde quebrou');
+});
+
+test('resposta HTTP não arrasta stack para o log', () => {
+  // 404 da API é resposta esperada; stack aqui seria ruído em log que já enche
+  // sozinho durante uma queda.
+  const erro = new Error('Request failed with status code 404');
+  erro.response = { status: 404, data: 'not found' };
+
+  const saida = capture('osu', erro);
+  assert.match(saida, /status=404/);
+  assert.doesNotMatch(saida, /at .*logger\.test/);
+});
+
+test('valor rejeitado que não é Error não quebra o log', () => {
+  // unhandledRejection pode entregar qualquer coisa, inclusive string.
+  assert.match(capture('unhandledRejection', 'algo deu errado'), /algo deu errado/);
+  assert.doesNotThrow(() => capture('unhandledRejection', undefined));
+});
+
+test('o stack não carrega header de autorização', () => {
+  // A razão de o módulo existir continua valendo depois da mudança.
+  const erro = new Error('socket hang up');
+  erro.config = { headers: { Authorization: 'Bearer segredo-do-bot' } };
+
+  const saida = capture('rede', erro);
+  assert.doesNotMatch(saida, /segredo-do-bot/);
+  assert.doesNotMatch(saida, /Authorization/);
+});
