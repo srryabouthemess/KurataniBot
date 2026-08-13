@@ -317,6 +317,10 @@ module.exports = {
   getServerMap:       banchoPyApi.getServerMap,
   getServerMapsBySet: banchoPyApi.getServerMapsBySet,
 
+  // Contraparte oficial do anterior, para mapa que o servidor administrado
+  // ainda não conhece — ver resolveSet em commands/nominate.js.
+  getOfficialMapsBySet: officialApi.officialBeatmapset,
+
   // De mods.js e pp.js: quem chama continua pedindo tudo aqui, em vez de
   // precisar saber em qual módulo cada peça foi parar.
   parseModsString,

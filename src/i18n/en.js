@@ -204,7 +204,8 @@ module.exports = ({ ADMIN }) => ({
   admin_action_failed:     '❌ An error occurred while performing the action. Nothing was confirmed — check the state before retrying.',
 
   nom_invalid_map:         '❌ Could not identify that map. Use the beatmap/set ID or a link.',
-  nom_map_not_found:       `❌ Map not found on ${ADMIN}.`,
+  nom_map_not_found:       `❌ Map not found on ${ADMIN} or on osu!.`,
+  nom_not_on_server:       `ℹ️ Not on ${ADMIN} yet — difficulties read from osu!, and the server fetches the map when the status is applied.`,
   nom_set_line:            (setId, diffs) => `Set \`${setId}\` — ${diffs} difficulty(ies)`,
   nom_added_title:         (status) => `Nomination recorded (${status})`,
   nom_progress:            (have, need) => `**${have}/${need}** nominations.`,

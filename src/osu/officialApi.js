@@ -181,6 +181,46 @@ async function fetchUser(username) {
   }
 }
 
+/**
+ * Todas as dificuldades de um beatmapset.
+ *
+ * Contraparte de `getServerMapsBySet` para quando o bancho.py ainda não conhece
+ * o mapa. O canal `rank` age sobre UMA dificuldade por mensagem, então nomear
+ * um set exige a lista de IDs — e o servidor não tem como fornecê-la para um
+ * mapa que nunca viu. Aplicar ele aplica: ao receber o publish, o
+ * `Beatmap.from_bid` do bancho cai na API oficial e cacheia o set inteiro. O
+ * que faltava era só o bot saber quais IDs publicar.
+ *
+ * Artista, título e criador vivem no SET na resposta oficial, e repetidos em
+ * cada dificuldade no formato do bancho.py. Normalizamos para o segundo, que é
+ * o que o resto do código já lê.
+ *
+ * `status` fica de fora de propósito: o status que interessa é o do servidor
+ * administrado, e para um mapa que não está lá ele não existe. Preencher com o
+ * valor do osu! oficial faria um palpite passar por resposta do servidor.
+ */
+async function officialBeatmapset(setId) {
+  let data;
+  try {
+    data = await officialGet(`/beatmapsets/${idSegment(setId)}`);
+  } catch (error) {
+    // Mesmo contrato do fetchUser: 404 é "não existe", não falha de rede.
+    if (error?.response?.status === 404) return [];
+    throw error;
+  }
+
+  const diffs = Array.isArray(data?.beatmaps) ? data.beatmaps : [];
+  return diffs.map(diff => ({
+    id:      diff.id,
+    set_id:  data.id,
+    version: diff.version,
+    mode:    diff.mode,
+    artist:  data.artist,
+    title:   data.title,
+    creator: data.creator,
+  }));
+}
+
 const bestScores = async (userId, limit) =>
   normalizeScores(await scoreGet(`/users/${idSegment(userId)}/scores/best`, { limit }));
 
@@ -195,6 +235,7 @@ module.exports = {
   bestScores,
   recentScores,
   beatmapScores: officialBeatmapScores,
+  officialBeatmapset,
   userUrl,
   mapUrl,
 

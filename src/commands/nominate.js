@@ -42,11 +42,56 @@ function threshold() {
 }
 
 /**
+ * `getServerMap` levanta em 404, e aqui isso é resposta, não falha: quer dizer
+ * que o servidor não conhece o mapa — justamente o caso que o fallback trata.
+ *
+ * Qualquer outro erro (rede, 5xx) precisa subir. Tratá-lo como "não conhece"
+ * mandaria o fluxo para a API oficial e publicaríamos num servidor que não
+ * conseguimos nem reler para confirmar o efeito.
+ */
+async function serverMap(mapId) {
+  try {
+    return await osu.getServerMap(mapId);
+  } catch (error) {
+    if (error?.response?.status === 404) return null;
+    throw error;
+  }
+}
+
+/**
+ * Dificuldades de um set, do servidor administrado ou — se ele ainda não
+ * conhecer o mapa — da API oficial do osu!.
+ *
+ * O fallback existe porque o bancho é menos exigente do que o bot era: ao
+ * receber um publish no canal `rank` ele chama `Beatmap.from_bid`, que busca na
+ * API oficial e cacheia o set inteiro quando não tem o mapa no banco. Recusar
+ * aqui negava uma nomeação que o servidor daria conta de aplicar — e esse é o
+ * caso comum do mapa novo, que ninguém no servidor jogou ainda.
+ *
+ * @returns {Promise<{setId: number, diffs: object[], onServer: boolean} | {error: 'not_found'}>}
+ */
+async function diffsForSet(setId) {
+  const onServer = await osu.getServerMapsBySet(setId);
+  if (onServer.length > 0) return { setId, diffs: onServer, onServer: true };
+
+  // Falha da API oficial vira "não encontrei" em vez de subir: o efeito é
+  // recusar a nomeação, e recusar é o lado seguro — o outro seria publicar sem
+  // saber a lista de dificuldades.
+  const official = await osu.getOfficialMapsBySet(setId).catch(() => []);
+  if (official.length > 0) return { setId, diffs: official, onServer: false };
+
+  return { error: 'not_found' };
+}
+
+/**
  * Aceita ID de dificuldade, ID de set, ou link de qualquer um dos dois, e
  * devolve sempre o set inteiro — o status é uma propriedade da dificuldade no
  * bancho, mas ninguém rankeia meia dificuldade: o que se nomeia é o mapa todo.
  *
- * @returns {Promise<{setId: number, diffs: object[]} | {error: 'not_found'|'invalid'}>}
+ * `onServer` diz de onde veio a lista, para a resposta poder avisar que o mapa
+ * ainda vai ser buscado na hora de aplicar.
+ *
+ * @returns {Promise<{setId: number, diffs: object[], onServer: boolean} | {error: 'not_found'|'invalid'}>}
  */
 async function resolveSet(input) {
   const raw = String(input ?? '').trim();
@@ -54,26 +99,28 @@ async function resolveSet(input) {
 
   // Link de beatmapset (sem #diff) → o ID já é o do set.
   const setLink = raw.match(/beatmapsets?\/(\d+)/) ?? raw.match(/\/s\/(\d+)/);
-  if (setLink) {
-    const diffs = await osu.getServerMapsBySet(Number(setLink[1]));
-    return diffs.length > 0 ? { setId: Number(setLink[1]), diffs } : { error: 'not_found' };
-  }
+  if (setLink) return diffsForSet(Number(setLink[1]));
 
   // Link/ID de dificuldade → sobe para o set dela.
   const mapId = osu.parseBeatmapId(raw);
   if (mapId) {
-    const map = await osu.getServerMap(mapId);
+    const map = await serverMap(mapId);
     if (map?.set_id) {
-      const diffs = await osu.getServerMapsBySet(map.set_id);
-      return { setId: map.set_id, diffs: diffs.length > 0 ? diffs : [map] };
+      const resolved = await diffsForSet(map.set_id);
+      // O servidor conhece a dificuldade mas não devolveu o set: fica com a
+      // única que temos, em vez de descartar o que já está em mãos.
+      return resolved.error ? { setId: map.set_id, diffs: [map], onServer: true } : resolved;
     }
+
+    // O servidor não conhece essa dificuldade; a API oficial diz de qual set
+    // ela é, e daí o caminho volta a ser o mesmo.
+    const official = await osu.getBeatmap(mapId);
+    if (official?.beatmapset_id) return diffsForSet(official.beatmapset_id);
 
     // Número solto que não é dificuldade: tenta como ID de set antes de
     // desistir — quem copia da página do mapa costuma pegar o do set.
-    if (/^\d+$/.test(raw)) {
-      const diffs = await osu.getServerMapsBySet(Number(raw));
-      if (diffs.length > 0) return { setId: Number(raw), diffs };
-    }
+    if (/^\d+$/.test(raw)) return diffsForSet(Number(raw));
+
     return { error: 'not_found' };
   }
 
@@ -237,6 +284,9 @@ module.exports = {
 
       const { setId, diffs } = resolved;
       const label = mapLabel(diffs);
+      // Quando a lista veio do osu!, quem lê precisa saber que o servidor ainda
+      // não tem o mapa — o número de dificuldades é do osu!, não dali.
+      const origin = resolved.onServer ? '' : `\n${s.nom_not_on_server}`;
 
       db.cacheNominationMap(setId, {
         artist: diffs[0]?.artist, title: diffs[0]?.title,
@@ -286,7 +336,7 @@ module.exports = {
           .setColor(pending.length === 0 ? 0x99ff99 : 0xffcc66)
           .setTitle(s.nom_applied_title(daycore.STATUS_LABELS[status]))
           .setDescription(
-            `**${label}**\n${s.nom_set_line(setId, diffs.length)}\n\n` +
+            `**${label}**\n${s.nom_set_line(setId, diffs.length)}${origin}\n\n` +
             resultLine(s, confirmed, pending),
           )
           .setFooter({ text: s.nom_actor(staff.osuName) });
@@ -304,7 +354,7 @@ module.exports = {
           .setColor(0x99ccff)
           .setTitle(s.nom_added_title(daycore.STATUS_LABELS[targetStatus]))
           .setDescription(
-            `**${label}**\n${s.nom_set_line(setId, diffs.length)}\n\n` +
+            `**${label}**\n${s.nom_set_line(setId, diffs.length)}${origin}\n\n` +
             s.nom_progress(nominations.length, need) + `\n${s.nom_by(who)}`,
           );
         return interaction.editReply({ embeds: [embed] });
@@ -328,7 +378,7 @@ module.exports = {
         .setColor(pending.length === 0 ? 0x99ff99 : 0xffcc66)
         .setTitle(s.nom_applied_title(daycore.STATUS_LABELS[targetStatus]))
         .setDescription(
-          `**${label}**\n${s.nom_set_line(setId, diffs.length)}\n\n` +
+          `**${label}**\n${s.nom_set_line(setId, diffs.length)}${origin}\n\n` +
           // Com limiar 1 não houve espera nenhuma — anunciar "limiar atingido"
           // seria ruído.
           (need > 1 ? `${s.nom_threshold_reached(need)}\n` : '') +
@@ -345,4 +395,8 @@ module.exports = {
   // Exportado para poder ser verificado direto: é a leitura de uma configuração
   // que muda quanta gente precisa concordar antes de mexer no servidor.
   threshold,
+
+  // Idem: decide de qual fonte sai a lista de dificuldades, e errar aí é
+  // publicar no mapa errado ou recusar um que daria certo.
+  resolveSet,
 };
