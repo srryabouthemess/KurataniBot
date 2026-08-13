@@ -34,6 +34,24 @@ function generateCode() {
 }
 
 /**
+ * O que fazer com um pedido de vínculo, dado o que a conta de jogo já tem.
+ *
+ *   'taken'     — a conta é de outro Discord. Recusa; trocar exige /staff remove
+ *                 antes, para a substituição ser um ato explícito.
+ *   'unchanged' — o vínculo pedido já existe, idêntico. Emitir desafio aqui
+ *                 mandaria provar de novo o que já foi provado, para recriar o
+ *                 que já está no banco.
+ *   'challenge' — a conta está livre. Emite o código e espera o confirm.
+ *
+ * @param {object|null} vinculoExistente linha de staff_links daquele osu_id
+ * @param {string} memberId Discord que se quer vincular
+ */
+function decideRegister(vinculoExistente, memberId) {
+  if (!vinculoExistente) return 'challenge';
+  return vinculoExistente.discord_id === memberId ? 'unchanged' : 'taken';
+}
+
+/**
  * Vincula contas do Discord a contas do Daycore para fins de PERMISSÃO.
  *
  * Por que não reaproveitar o /link: aquele é auto-declarado — só confere que a
@@ -238,10 +256,16 @@ module.exports = {
       // /staff remove antes, e aí a substituição é um ato explícito de quem
       // administra, não efeito colateral de um register.
       const existente = db.getStaffLinkByOsuId(player.id);
-      if (existente && existente.discord_id !== member.id) {
-        return interaction.editReply(
-          s.staff_osu_already_linked(existente.discord_id, player.name, player.id),
-        );
+
+      switch (decideRegister(existente, member.id)) {
+        case 'taken':
+          return interaction.editReply(
+            s.staff_osu_already_linked(existente.discord_id, player.name, player.id),
+          );
+        case 'unchanged':
+          return interaction.editReply(
+            s.staff_link_unchanged(member.id, player.name, player.id, daycore.privLabel(player.priv)),
+          );
       }
 
       // Aqui o vínculo NÃO é criado: só emitimos o código. Quem cria é o
@@ -277,4 +301,8 @@ module.exports = {
   // estraga a garantia inteira sem aparecer em nenhuma saída do bot.
   generateCode,
   CODE_ALPHABET,
+
+  // Idem: decide entre pedir prova, recusar e não fazer nada. Errar aqui é
+  // mandar alguém provar o que já provou, ou pior, deixar passar o que não foi.
+  decideRegister,
 };

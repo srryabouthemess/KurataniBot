@@ -128,3 +128,35 @@ test('o código tem forma estável e não se repete', () => {
   // o caso em que "prova de posse" vira "chute".
   assert.equal(vistos.size, 500, 'houve código repetido em 500 sorteios');
 });
+
+// ─── Quando pedir a prova, e quando não pedir ────────────────────────────────
+// A pergunta que motivou isto: um staff JÁ registrado, sendo registrado de novo
+// pelo dono, precisa colocar o código no perfil outra vez? Não deve — seria
+// provar de novo o que já foi provado, para recriar o que já está no banco.
+
+test('conta livre pede a prova', () => {
+  const { decideRegister } = require('../src/commands/staff');
+  assert.equal(decideRegister(null, '111'), 'challenge');
+});
+
+test('vínculo idêntico não pede nada', () => {
+  const { decideRegister } = require('../src/commands/staff');
+  const existente = { discord_id: '111', osu_id: 6 };
+  assert.equal(decideRegister(existente, '111'), 'unchanged');
+});
+
+test('conta de outro Discord é recusada, não sobrescrita', () => {
+  // O caso que o furo original explorava: apontar o próprio Discord para a
+  // conta de outro staff.
+  const { decideRegister } = require('../src/commands/staff');
+  const existente = { discord_id: '999', osu_id: 6 };
+  assert.equal(decideRegister(existente, '111'), 'taken');
+});
+
+test('trocar de conta de jogo ainda pede a prova da nova', () => {
+  // @X vinculado a osu 13 e sendo registrado em osu 6, que está livre: o
+  // getStaffLinkByOsuId(6) devolve null, então a prova é exigida — a conta nova
+  // nunca foi provada por ninguém.
+  const { decideRegister } = require('../src/commands/staff');
+  assert.equal(decideRegister(null, '111'), 'challenge');
+});

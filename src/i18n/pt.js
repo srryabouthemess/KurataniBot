@@ -287,6 +287,8 @@ module.exports = ({ ADMIN }) => ({
     `\`\`\`\n${code}\n\`\`\`\n` +
     `2. Rodar \`/staff confirm\` aqui.\n\n` +
     `O código vale por **${minutos} minutos**. Só quem entra na conta consegue editar aquele perfil — é isso que prova que a conta é dela.`,
+  staff_link_unchanged:    (discordId, osuName, osuId, role) =>
+    `ℹ️ <@${discordId}> já está vinculado a **${osuName}** (\`${osuId}\`, ${role}). Nada mudou, e não precisa confirmar de novo.\n\nSe quiser exigir a prova de posse outra vez, rode \`/staff remove\` nesse membro antes.`,
   staff_no_challenge:      '❌ Você não tem nenhum vínculo pendente. Peça a um administrador para rodar `/staff register` com a sua conta primeiro.',
   staff_code_not_found:    (osuName, code) =>
     `❌ Não achei o código no perfil de **${osuName}**.\n\nColoque \`${code}\` no campo "sobre mim" do perfil, salve, e rode \`/staff confirm\` de novo. Se acabou de salvar, espere alguns segundos.`,

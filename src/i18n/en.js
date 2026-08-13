@@ -276,6 +276,8 @@ module.exports = ({ ADMIN }) => ({
     `\`\`\`\n${code}\n\`\`\`\n` +
     `2. Run \`/staff confirm\` here.\n\n` +
     `The code is valid for **${minutes} minutes**. Only someone signed in to that account can edit its profile — that is what proves the account is theirs.`,
+  staff_link_unchanged:    (discordId, osuName, osuId, role) =>
+    `ℹ️ <@${discordId}> is already linked to **${osuName}** (\`${osuId}\`, ${role}). Nothing changed, and there is nothing to confirm again.\n\nTo require proof of ownership once more, run \`/staff remove\` on that member first.`,
   staff_no_challenge:      '❌ You have no pending link. Ask an administrator to run `/staff register` with your account first.',
   staff_code_not_found:    (osuName, code) =>
     `❌ I could not find the code on **${osuName}**'s profile.\n\nPut \`${code}\` in the profile's "about me" field, save it, then run \`/staff confirm\` again. If you just saved, give it a few seconds.`,
