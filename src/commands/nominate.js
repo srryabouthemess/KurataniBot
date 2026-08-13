@@ -191,15 +191,20 @@ async function applyStatus(diffs, status) {
  * Não é esperado dar certo. Se o canal sumiu ou a permissão foi retirada, a
  * ação no Daycore continua valendo e quem rodou o comando ainda recebe a
  * resposta normal; o erro fica no log.
+ *
+ * Por isso também NÃO é aguardado por quem chama: o anúncio não faz parte do
+ * contrato do comando, e deixá-lo no caminho crítico fazia a resposta de quem
+ * rodou esperar a API do Discord entregar uma mensagem para outro canal. O
+ * try/catch de dentro já impedia a exceção — não a demora.
  */
-async function announceApplied(interaction, s, { setId, diffs, status, label, actorName, confirmed }) {
+function announceApplied(interaction, s, { setId, diffs, status, label, actorName, confirmed }) {
   if (confirmed.length === 0) return;
 
-  await announce.announceStatus(interaction.client, {
+  announce.announceStatus(interaction.client, {
     setId, diffs, status,
     statusLabel: daycore.STATUS_LABELS[status],
     label, actorName, confirmed: confirmed.length,
-  }, s);
+  }, s).catch(error => logError('announce', error));
 }
 
 /**
@@ -415,7 +420,7 @@ module.exports = {
           actorOsuName: staff.osuName,
         });
 
-        await announceApplied(interaction, s, {
+        announceApplied(interaction, s, {
           setId, diffs, status, label, actorName: staff.osuName, confirmed,
         });
 
@@ -469,7 +474,7 @@ module.exports = {
         actorOsuName: staff.osuName,
       });
 
-      await announceApplied(interaction, s, {
+      announceApplied(interaction, s, {
         setId, diffs, status: targetStatus, label,
         actorName: staff.osuName, confirmed,
       });

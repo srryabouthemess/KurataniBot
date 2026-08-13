@@ -33,9 +33,27 @@ client.commands = new Collection();
 const commandsPath = path.join(__dirname, 'commands');
 const commandFiles = fs.readdirSync(commandsPath).filter(file => file.endsWith('.js'));
 
+// Cada arquivo é validado antes de entrar: um helper solto nesta pasta, ou um
+// comando com erro de sintaxe, fazia `command.data.name` estourar aqui e o
+// processo morrer ANTES do login. Sob supervisor isso não é uma falha visível —
+// é loop de restart, e o bot fica fora do ar até alguém ler o log. Perder um
+// comando é bem melhor do que perder o bot inteiro por causa dele.
 for (const file of commandFiles) {
   const filePath = path.join(commandsPath, file);
-  const command = require(filePath);
+
+  let command;
+  try {
+    command = require(filePath);
+  } catch (error) {
+    logError(`commands:${file}`, error);
+    continue;
+  }
+
+  if (!command?.data?.name || typeof command.execute !== 'function') {
+    console.warn(`[commands] ${file} ignorado: não exporta data.name e execute.`);
+    continue;
+  }
+
   client.commands.set(command.data.name, command);
 }
 
