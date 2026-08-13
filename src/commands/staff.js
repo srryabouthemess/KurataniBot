@@ -52,6 +52,37 @@ function decideRegister(vinculoExistente, memberId) {
 }
 
 /**
+ * Quem pode avalizar o vínculo de outra pessoa, dispensando o código.
+ *
+ * Um DEVELOPER já tem controle total do servidor de jogo — exigir que ele
+ * também colete um código de terceiro não protege contra ele, só emperra o
+ * caminho legítimo de dar staff a alguém novo. O que o desafio fechou continua
+ * fechado: um Administrator do Discord SEM vínculo próprio provado não avaliza
+ * nada, e era exatamente por ali que a escalada passava.
+ *
+ * Duas exigências, e as duas importam:
+ *
+ *   - o vínculo de quem avaliza precisa ser `proof = 'self'`. Vínculo avalizado
+ *     ou legado não serve: senão uma identidade AFIRMADA viraria poder de
+ *     afirmar, em cadeia, e quem tivesse explorado o furo antes de ele ser
+ *     fechado continuaria com o poder que o furo dava;
+ *   - o privilégio é relido do servidor agora, não guardado. Perder DEVELOPER
+ *     lá tira o aval aqui na hora, como em todo o resto do bot.
+ *
+ * @returns {Promise<{osuId: number, osuName: string}|null>}
+ */
+async function resolveVoucher(discordId) {
+  const link = db.getStaffLink(discordId);
+  if (!link || link.proof !== 'self') return null;
+
+  const player = await daycore.getPlayerPrivileges(link.osu_id);
+  if (!player) return null;
+  if (!daycore.hasPriv(player.priv, daycore.Privileges.DEVELOPER)) return null;
+
+  return { osuId: player.id, osuName: player.name };
+}
+
+/**
  * Vincula contas do Discord a contas do Daycore para fins de PERMISSÃO.
  *
  * Por que não reaproveitar o /link: aquele é auto-declarado — só confere que a
@@ -85,9 +116,18 @@ function decideRegister(vinculoExistente, memberId) {
  * alheio — e portanto não consegue mais se vincular a uma conta que não é dele.
  *
  * As duas pontas ficam provadas: o código prova a posse da conta de jogo, e
- * rodar o `/staff confirm` prova o controle da conta do Discord. O
- * administrador continua sendo quem AUTORIZA (só ele emite o código), mas
- * deixou de ser quem decide sozinho de quem é a conta.
+ * rodar o `/staff confirm` prova o controle da conta do Discord.
+ *
+ * ── Aval, para o caminho legítimo não emperrar ────────────────────────────────
+ * Exigir o código de TODO vínculo novo cobrava o preço no lugar errado: dar
+ * staff a alguém passava a depender de a pessoa estar online para editar o
+ * perfil. Por isso quem já provou a própria conta E é DEVELOPER no jogo cria o
+ * vínculo direto (ver `resolveVoucher`).
+ *
+ * Isso não reabre nada. Um DEVELOPER já tem controle total do servidor — o
+ * código nunca protegeu contra ele. O que a escalada usava era outra coisa:
+ * Administrator no Discord SEM privilégio no jogo, e esse continua sem
+ * conseguir avalizar ninguém.
  *
  * O que continua fora do alcance: um administrador pode emitir código para
  * vincular OUTRO Discord a uma conta que aquela pessoa de fato controla. Isso
@@ -182,7 +222,9 @@ module.exports = {
           );
         }
 
-        db.setStaffLink(interaction.user.id, desafio.osu_id, player.name, desafio.requested_by);
+        // 'self': a posse foi provada por quem é dono da conta. É o único tipo
+        // de vínculo que depois pode avalizar o de outra pessoa.
+        db.setStaffLink(interaction.user.id, desafio.osu_id, player.name, desafio.requested_by, 'self');
         db.clearStaffChallenge(interaction.user.id);
 
         const embed = new EmbedBuilder()
@@ -217,12 +259,21 @@ module.exports = {
       const porOsuId = new Map();
       for (const r of rows) porOsuId.set(r.osu_id, (porOsuId.get(r.osu_id) ?? 0) + 1);
 
+      // A origem do vínculo decide quem pode avalizar outro, então precisa ser
+      // visível: sem isso ninguém descobre que o vínculo do dono é legado — e
+      // que é por isso que o aval dele não funciona.
+      const marca = { self: s.staff_proof_self, vouch: s.staff_proof_vouch };
+
       const embed = new EmbedBuilder()
         .setColor(0x99ccff)
         .setTitle(s.staff_list_title)
-        .setDescription(rows.map(r =>
-          s.staff_list_line(r.discord_id, r.osu_name ?? '?', r.osu_id) +
-          (porOsuId.get(r.osu_id) > 1 ? ` ${s.staff_list_duplicate}` : '')).join('\n'));
+        .setDescription(
+          rows.map(r =>
+            s.staff_list_line(r.discord_id, r.osu_name ?? '?', r.osu_id) +
+            ` ${marca[r.proof] ?? s.staff_proof_legacy}` +
+            (porOsuId.get(r.osu_id) > 1 ? ` ${s.staff_list_duplicate}` : '')).join('\n') +
+          `\n\n${s.staff_proof_legend}`,
+        );
       return interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
     }
 
@@ -268,8 +319,28 @@ module.exports = {
           );
       }
 
-      // Aqui o vínculo NÃO é criado: só emitimos o código. Quem cria é o
-      // /staff confirm, depois de o código aparecer no perfil da conta de jogo.
+      // Caminho do aval: quem já provou a própria conta e é DEVELOPER no jogo
+      // cria o vínculo direto, sem passar pelo código.
+      const avalista = await resolveVoucher(interaction.user.id);
+      if (avalista) {
+        db.setStaffLink(member.id, player.id, player.name, interaction.user.id, 'vouch');
+        // Um desafio pendente daquele membro vira obsoleto: o vínculo que ele
+        // criaria já existe, e deixar o código vivo só dá margem a confusão.
+        db.clearStaffChallenge(member.id);
+
+        const embed = new EmbedBuilder()
+          .setColor(0x99ff99)
+          .setTitle(s.staff_registered_title)
+          .setDescription(
+            s.staff_registered_body(
+              member.id, player.name, player.id, daycore.privLabel(player.priv),
+            ) + `\n\n${s.staff_vouched_note(avalista.osuName)}`,
+          );
+        return interaction.editReply({ embeds: [embed] });
+      }
+
+      // Sem aval, o vínculo NÃO é criado aqui: só emitimos o código. Quem cria
+      // é o /staff confirm, depois de o código aparecer no perfil da conta.
       const code = generateCode();
       db.setStaffChallenge({
         discordId:   member.id,
@@ -305,4 +376,5 @@ module.exports = {
   // Idem: decide entre pedir prova, recusar e não fazer nada. Errar aqui é
   // mandar alguém provar o que já provou, ou pior, deixar passar o que não foi.
   decideRegister,
+  resolveVoucher,
 };

@@ -278,6 +278,11 @@ module.exports = ({ ADMIN }) => ({
   staff_list_empty:        'Nenhum vínculo de staff registrado. Use `/staff register`.',
   staff_list_line:         (discordId, osuName, osuId) => `• <@${discordId}> → **${osuName}** (\`${osuId}\`)`,
   staff_list_duplicate:    '⚠️ conta repetida',
+  staff_proof_self:        '`provado`',
+  staff_proof_vouch:       '`avalizado`',
+  staff_proof_legacy:      '`antigo`',
+  staff_proof_legend:      '-# `provado` = a pessoa comprovou a posse da conta e pode avalizar outros (se for Developer). `avalizado` = criado por um Developer provado. `antigo` = anterior à comprovação existir; vale, mas não avaliza ninguém.',
+  staff_vouched_note:      (avalista) => `Vinculado sem código: avalizado por **${avalista}**, que é Developer e já comprovou a própria conta.`,
   staff_osu_already_linked:(discordId, osuName, osuId) => `❌ A conta **${osuName}** (\`${osuId}\`) já está vinculada a <@${discordId}>. Use \`/staff remove\` naquele membro antes de vincular a outro — duas contas do Discord na mesma conta de jogo deixam o log de auditoria do servidor sem saber quem agiu.`,
   staff_challenge_title:   '🔑 Falta a pessoa confirmar',
   staff_challenge_body:    (discordId, osuName, osuId, role, code, minutos) =>

@@ -302,11 +302,34 @@ db.exec(`
   if (!columns.some(c => c.name === 'osu_id')) {
     db.exec('ALTER TABLE users ADD COLUMN osu_id INTEGER');
   }
+  // (a coluna `proof` de staff_links é migrada mais abaixo, junto do resto do
+  // fluxo de vínculo)
   // Servidor usado quando o comando não especifica um. Guarda a chave completa
   // (com o `_rx` quando for o caso) para lembrar a preferência entre vanilla e
   // RX, que compartilham a mesma conta.
   if (!columns.some(c => c.name === 'preferred_server')) {
     db.exec('ALTER TABLE users ADD COLUMN preferred_server TEXT');
+  }
+}
+
+// ─── Migração: como cada vínculo de staff foi estabelecido ────────────────────
+// Três origens, e a diferença entre elas decide quem pode avalizar outro:
+//
+//   'self'   — a pessoa provou a posse da conta (código no perfil). Só estes,
+//              e com DEVELOPER no jogo, podem avalizar vínculo de terceiro.
+//   'vouch'  — criado por um DEVELOPER de vínculo 'self'. A identidade foi
+//              AFIRMADA, não provada, então não avaliza mais ninguém: sem isso
+//              uma afirmação viraria poder de afirmar, em cadeia.
+//   NULL     — anterior à prova existir. Continua valendo (revogá-los trancaria
+//              o dono fora do próprio bot), mas não avaliza: quem tivesse
+//              explorado o furo antes de ele ser fechado seguiria com o poder
+//              que o furo dava.
+//
+// SQLite não tem ADD COLUMN IF NOT EXISTS, então checamos antes.
+{
+  const columns = db.prepare('PRAGMA table_info(staff_links)').all();
+  if (!columns.some(c => c.name === 'proof')) {
+    db.exec('ALTER TABLE staff_links ADD COLUMN proof TEXT');
   }
 }
 
@@ -711,14 +734,19 @@ function setMeta(key, value) {
 
 // ─── Vínculo de staff ─────────────────────────────────────────────────────────
 
-function setStaffLink(discordId, osuId, osuName, addedBy) {
+/**
+ * @param {'self'|'vouch'} proof como a identidade foi estabelecida — ver a
+ *   migração da coluna. Vínculos anteriores a ela têm NULL.
+ */
+function setStaffLink(discordId, osuId, osuName, addedBy, proof = null) {
   db.prepare(`
-    INSERT INTO staff_links (discord_id, osu_id, osu_name, added_by, added_at)
-    VALUES (?, ?, ?, ?, ?)
+    INSERT INTO staff_links (discord_id, osu_id, osu_name, added_by, added_at, proof)
+    VALUES (?, ?, ?, ?, ?, ?)
     ON CONFLICT(discord_id) DO UPDATE SET
       osu_id = excluded.osu_id, osu_name = excluded.osu_name,
-      added_by = excluded.added_by, added_at = excluded.added_at
-  `).run(discordId, osuId, osuName ?? null, addedBy, Date.now());
+      added_by = excluded.added_by, added_at = excluded.added_at,
+      proof = excluded.proof
+  `).run(discordId, osuId, osuName ?? null, addedBy, Date.now(), proof);
 }
 
 function getStaffLink(discordId) {

@@ -160,3 +160,72 @@ test('trocar de conta de jogo ainda pede a prova da nova', () => {
   const { decideRegister } = require('../src/commands/staff');
   assert.equal(decideRegister(null, '111'), 'challenge');
 });
+
+// ─── Aval: quem dispensa o código, e quem não dispensa ───────────────────────
+// Exigir o código de todo vínculo novo cobrava o preço no lugar errado: dar
+// staff a alguém passava a depender de a pessoa estar online. Quem já provou a
+// própria conta E é DEVELOPER no jogo cria o vínculo direto.
+//
+// O que a escalada usava era Administrator no Discord SEM privilégio no jogo, e
+// é esse caso que precisa continuar recusado.
+
+const daycorePath = require.resolve('../src/daycoreAdmin');
+const dbPath      = require.resolve('../src/db');
+
+/** Carrega o staff.js com db e daycoreAdmin trocados. */
+function comMocks({ link, priv }) {
+  const daycoreReal = require('../src/daycoreAdmin');
+
+  require.cache[dbPath] = {
+    id: dbPath, filename: dbPath, loaded: true,
+    exports: { getStaffLink: () => link },
+  };
+  require.cache[daycorePath] = {
+    id: daycorePath, filename: daycorePath, loaded: true,
+    exports: {
+      ...daycoreReal,
+      getPlayerPrivileges: async () => (priv === null ? null : { id: 6, name: 'kyou', priv }),
+    },
+  };
+
+  delete require.cache[require.resolve('../src/commands/staff')];
+  return require('../src/commands/staff');
+}
+
+const P = require('../src/daycoreAdmin').Privileges;
+const DEV   = P.UNRESTRICTED | P.VERIFIED | P.DEVELOPER;
+const ADMIN = P.UNRESTRICTED | P.VERIFIED | P.ADMINISTRATOR;
+
+test('DEVELOPER com vínculo provado avaliza', async () => {
+  const staff = comMocks({ link: { osu_id: 6, proof: 'self' }, priv: DEV });
+  assert.notEqual(await staff.resolveVoucher('111'), null);
+});
+
+test('vínculo legado não avaliza, mesmo sendo DEVELOPER', async () => {
+  // Os vínculos do dono e do kyou são deste tipo. Aceitá-los deixaria quem
+  // tivesse explorado o furo antes de ele ser fechado seguir com aquele poder.
+  const staff = comMocks({ link: { osu_id: 6, proof: null }, priv: DEV });
+  assert.equal(await staff.resolveVoucher('111'), null);
+});
+
+test('vínculo avalizado não avaliza outro', async () => {
+  // Sem isto, uma identidade AFIRMADA viraria poder de afirmar, em cadeia.
+  const staff = comMocks({ link: { osu_id: 6, proof: 'vouch' }, priv: DEV });
+  assert.equal(await staff.resolveVoucher('111'), null);
+});
+
+test('provado mas sem DEVELOPER não avaliza', async () => {
+  const staff = comMocks({ link: { osu_id: 6, proof: 'self' }, priv: ADMIN });
+  assert.equal(await staff.resolveVoucher('111'), null);
+});
+
+test('quem não tem vínculo nenhum não avaliza', async () => {
+  // O caso exato da escalada: Administrator no Discord, nada no jogo.
+  const staff = comMocks({ link: null, priv: DEV });
+  assert.equal(await staff.resolveVoucher('111'), null);
+});
+
+test('conta que sumiu do servidor não avaliza', async () => {
+  const staff = comMocks({ link: { osu_id: 6, proof: 'self' }, priv: null });
+  assert.equal(await staff.resolveVoucher('111'), null);
+});

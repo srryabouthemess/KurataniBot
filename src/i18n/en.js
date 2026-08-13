@@ -267,6 +267,11 @@ module.exports = ({ ADMIN }) => ({
   staff_list_empty:        'No staff links registered. Use `/staff register`.',
   staff_list_line:         (discordId, osuName, osuId) => `• <@${discordId}> → **${osuName}** (\`${osuId}\`)`,
   staff_list_duplicate:    '⚠️ duplicate account',
+  staff_proof_self:        '`proven`',
+  staff_proof_vouch:       '`vouched`',
+  staff_proof_legacy:      '`legacy`',
+  staff_proof_legend:      '-# `proven` = the person proved they own the account and can vouch for others (if Developer). `vouched` = created by a proven Developer. `legacy` = predates the proof; still valid, but vouches for no one.',
+  staff_vouched_note:      (voucher) => `Linked without a code: vouched for by **${voucher}**, who is a Developer and has proven their own account.`,
   staff_osu_already_linked:(discordId, osuName, osuId) => `❌ The account **${osuName}** (\`${osuId}\`) is already linked to <@${discordId}>. Run \`/staff remove\` on that member first — two Discord accounts on one game account leave the server's audit log unable to tell who acted.`,
   staff_challenge_title:   '🔑 Waiting for them to confirm',
   staff_challenge_body:    (discordId, osuName, osuId, role, code, minutes) =>

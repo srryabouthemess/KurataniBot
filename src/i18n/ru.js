@@ -267,6 +267,11 @@ module.exports = ({ ADMIN }) => ({
   staff_list_empty:        'Привязок персонала нет. Используйте `/staff register`.',
   staff_list_line:         (discordId, osuName, osuId) => `• <@${discordId}> → **${osuName}** (\`${osuId}\`)`,
   staff_list_duplicate:    '⚠️ повтор аккаунта',
+  staff_proof_self:        '`подтверждён`',
+  staff_proof_vouch:       '`поручительство`',
+  staff_proof_legacy:      '`старый`',
+  staff_proof_legend:      '-# `подтверждён` = человек доказал владение аккаунтом и может ручаться за других (если Developer). `поручительство` = создан подтверждённым Developer. `старый` = создан до появления проверки; действует, но ни за кого не ручается.',
+  staff_vouched_note:      (voucher) => `Привязано без кода: поручился **${voucher}** — Developer, подтвердивший собственный аккаунт.`,
   staff_osu_already_linked:(discordId, osuName, osuId) => `❌ Аккаунт **${osuName}** (\`${osuId}\`) уже привязан к <@${discordId}>. Сначала выполните \`/staff remove\` для того участника — два Discord-аккаунта на одном игровом не дают журналу аудита понять, кто именно действовал.`,
   staff_challenge_title:   '🔑 Ожидается подтверждение',
   staff_challenge_body:    (discordId, osuName, osuId, role, code, minutes) =>
