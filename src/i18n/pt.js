@@ -214,6 +214,10 @@ module.exports = ({ ADMIN }) => ({
   admin_redis_unreachable: (err) => `❌ Não consegui falar com o ${ADMIN} agora (Redis inacessível${err ? `: ${err}` : ''}). Nada foi alterado.`,
   admin_action_failed:     '❌ Ocorreu um erro ao executar a ação. Nada foi confirmado — verifique o estado antes de tentar de novo.',
 
+  ann_title:               (status) => `Mapa agora está ${status}`,
+  ann_diffs:               (n) => `${n} dificuldade(s) no ${ADMIN}`,
+  ann_by:                  (who) => `Aplicado por ${who}`,
+
   nom_invalid_map:         '❌ Não entendi qual mapa é esse. Use o ID do beatmap/set ou um link.',
   nom_map_not_found:       `❌ Mapa não encontrado no ${ADMIN} nem no osu!.`,
   nom_not_on_server:       `ℹ️ Ainda não está no ${ADMIN} — as dificuldades vieram do osu!, e o servidor busca o mapa ao aplicar o status.`,

@@ -6,6 +6,7 @@ const {
 const osu = require('../osuClient');
 const daycore = require('../daycoreAdmin');
 const { resolveStaff, checkRedisOrError } = require('../staffGuard');
+const announce = require('../announce');
 const db = require('../db');
 const { t } = require('../i18n');
 const { logError } = require('../logger');
@@ -149,6 +150,27 @@ async function applyStatus(diffs, status) {
   }
 
   return daycore.verifyMapStatus(ids, status);
+}
+
+/**
+ * Anúncio no canal público, quando houver um configurado.
+ *
+ * Só sai com pelo menos uma dificuldade confirmada: anunciar "rankeado" depois
+ * de zero confirmações seria divulgar o que não aconteceu — e é justamente o
+ * caso que o `verifyMapStatus` existe para detectar.
+ *
+ * Não é esperado dar certo. Se o canal sumiu ou a permissão foi retirada, a
+ * ação no Daycore continua valendo e quem rodou o comando ainda recebe a
+ * resposta normal; o erro fica no log.
+ */
+async function announceApplied(interaction, s, { setId, diffs, status, label, actorName, confirmed }) {
+  if (confirmed.length === 0) return;
+
+  await announce.announceStatus(interaction.client, {
+    setId, diffs, status,
+    statusLabel: daycore.STATUS_LABELS[status],
+    label, actorName, confirmed: confirmed.length,
+  }, s);
 }
 
 function resultLine(s, confirmed, pending) {
@@ -332,6 +354,10 @@ module.exports = {
           actorOsuName: staff.osuName,
         });
 
+        await announceApplied(interaction, s, {
+          setId, diffs, status, label, actorName: staff.osuName, confirmed,
+        });
+
         const embed = new EmbedBuilder()
           .setColor(pending.length === 0 ? 0x99ff99 : 0xffcc66)
           .setTitle(s.nom_applied_title(daycore.STATUS_LABELS[status]))
@@ -372,6 +398,11 @@ module.exports = {
         actorDiscordId: interaction.user.id,
         actorOsuId: staff.osuId,
         actorOsuName: staff.osuName,
+      });
+
+      await announceApplied(interaction, s, {
+        setId, diffs, status: targetStatus, label,
+        actorName: staff.osuName, confirmed,
       });
 
       const embed = new EmbedBuilder()
