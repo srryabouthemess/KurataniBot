@@ -111,7 +111,7 @@ Confira com `node --version` — precisa ser 22.13 ou superior.
 ### Testes
 
 ```bash
-npm test     # 167 casos, poucos segundos, sem tocar rede nem o bot.db real
+npm test     # 243 casos, poucos segundos, sem tocar rede nem o bot.db real
 npm run lint
 npm run smoke  # confere contra as APIs de verdade
 ```
@@ -174,7 +174,7 @@ São **application emojis** — funcionam em qualquer servidor e em DM, sem prec
 
 ## Administração do servidor
 
-Habilita `/nominate`, `/moderate` e `/staff`, que **mudam o servidor de verdade**. Só interessa a quem hospeda o bot junto de um bancho.py-ex; com as variáveis vazias os comandos recusam tudo.
+Habilita `/nominate`, `/moderate`, `/wipe` e `/staff`, que **mudam o servidor de verdade**. Só interessa a quem hospeda o bot junto de um bancho.py-ex; com as variáveis vazias os comandos recusam tudo.
 
 > Diferente do resto, esta parte atende **um servidor só**: o primeiro do `SERVERS`, travado num Discord específico.
 
@@ -196,17 +196,29 @@ NOMINATION_THRESHOLD=1                # nomeações necessárias (padrão: 1)
 REDIS_HOST=127.0.0.1
 REDIS_PORT=6379
 REDIS_PASS=a_mesma_do_compose
+DAYCORE_ANNOUNCE_CHANNEL_ID=          # opcional: canal dos anúncios de status
 ```
 
-**3. Registre a staff.** O poder vem do cargo no servidor de jogo (`NOMINATOR`, `ADMINISTRATOR`) — tirar o cargo lá revoga o acesso na hora:
+**3. Registre a staff.** O poder vem do cargo no servidor de jogo (`NOMINATOR`, `ADMINISTRATOR`, `DEVELOPER`) — tirar o cargo lá revoga o acesso na hora.
+
+Vincular exige **prova de posse da conta**, em dois passos:
 
 ```
-/staff register member:@fulano player:<nick no servidor>
-/staff list
+/staff register member:@fulano player:<nick no servidor>   → emite um código
+                                                             (nada é vinculado ainda)
+/staff confirm                        → rodado por @fulano, cria o vínculo
+```
+
+O código vai no campo **"sobre mim"** do perfil daquela conta no site do servidor. Como só quem entra na conta edita aquele perfil, ninguém consegue se vincular a uma conta que não é sua — antes bastava ter Administrador no Discord para apontar o próprio Discord ao nick de um admin e herdar o cargo dele.
+
+**Atalho:** quem já provou a própria conta **e** é `DEVELOPER` no jogo vincula direto, sem código. Um Developer já controla o servidor todo — o código nunca protegeu contra ele, só emperrava o caminho normal de dar staff a alguém.
+
+```
+/staff list                           → mostra a origem de cada vínculo
 /staff remove member:@fulano
 ```
 
-Exige Administrador no Discord do `DAYCORE_GUILD_ID`. O `/link` comum **não** serve: ele é auto-declarado, então qualquer um linkaria o nick de um admin.
+Exige Administrador no Discord do `DAYCORE_GUILD_ID`, exceto o `confirm`, que é rodado pela própria pessoa. O `/link` comum **não** serve: ele é auto-declarado.
 
 ```
 /nominate add map:<id ou link>        → nomeia; ao atingir o limiar, aplica
@@ -214,9 +226,16 @@ Exige Administrador no Discord do `DAYCORE_GUILD_ID`. O `/link` comum **não** s
 /moderate check player:<nome>         → só lê, não altera nada
 /moderate restrict|unrestrict player:<nome> reason:<motivo>
 /moderate log                         → ações recentes feitas pelo bot
+/wipe player:<nome> mode:<modo> reason:<motivo>   → IRREVERSÍVEL, só Developer
 ```
 
-Como o bot não recebe confirmação ao publicar, ele relê o estado depois e avisa quando não conseguiu confirmar — em vez de reportar sucesso no escuro.
+- **`/nominate` aceita mapa que o servidor ainda não conhece.** As dificuldades vêm da API do osu!, e o bancho busca e cadastra o mapa ao aplicar o status.
+- **`/wipe` apaga os scores de um modo e zera as estatísticas, sem volta.** Pede confirmação por botão mostrando o que será destruído, e o log guarda esses números — depois do wipe eles não existem em lugar nenhum. Diferente dos outros, o bancho **não** confere privilégio nesse canal: a exigência de `DEVELOPER` é do bot, e é a única que existe.
+- `/nominate`, `/moderate`, `/wipe` e `/staff` **não** funcionam no modo texto: respondem em ephemeral, e o adaptador do prefixo precisa descartar essa flag.
+
+Com `DAYCORE_ANNOUNCE_CHANNEL_ID` preenchido, todo mapa que muda de status vira um anúncio nesse canal — o bancho.py-ex não avisa o Discord sozinho. Vazio desliga.
+
+Como o bot não recebe confirmação ao publicar, ele relê o estado depois e avisa quando não conseguiu confirmar — em vez de reportar sucesso no escuro. A janela de espera cresce com o tamanho do set, porque o servidor baixa o `.osu` de cada dificuldade que não tem.
 
 ## Cálculo de PP no Relax
 

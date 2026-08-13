@@ -2,6 +2,99 @@
 
 ---
 
+# Sessão de 2026-08-13
+
+Primeira sessão com acesso ao servidor de verdade. Os comandos administrativos, escritos em 08/08 e nunca testados contra um bancho.py real, foram exercitados em produção — e foi isso que expôs quase tudo que está aqui.
+
+## ✨ Novos recursos
+
+- **`/wipe`: apaga os scores de uma conta num modo.** [`commands/wipe.js`](src/commands/wipe.js), [`daycoreAdmin.js`](src/daycoreAdmin.js)
+  - Publica no canal `wipe`, que o bancho já escutava. É o **único comando irreversível do bot**: o `wipe_user` faz `DELETE FROM scores`, zera a linha de `stats` e tira o jogador dos sorted sets de leaderboard no Redis. Não há soft-delete nem cópia.
+  - **E o bancho não confere privilégio nesse canal.** O `restrict` recusa sozinho quem não é `DEVELOPER` mexendo em staff; o `wipe_user` só checa se o alvo existe. Nos outros comandos o servidor é uma segunda tranca — aqui não existe segunda tranca, e o que o bot decidir é o que acontece. Daí três travas que os outros não têm: exige `DEVELOPER` (o privilégio mais alto, e o único proporcional a uma ação sem volta que o servidor não filtra); confirmação por botão com os números que serão destruídos na tela, com janela de 60s; e o log de auditoria guardando esses números, porque depois do wipe eles não existem em lugar nenhum.
+  - O modo é obrigatório e sem padrão — o wipe age sobre **um** modo, e escolher por omissão seria apagar o que ninguém pediu.
+  - Validado em produção pelo dono do servidor: um teste no-op num modo zerado, e um real (10307pp e 7 plays apagados, confirmado pela releitura).
+
+- **`/nominate` aceita mapa que o servidor ainda não conhece.** [`commands/nominate.js`](src/commands/nominate.js), [`osu/officialApi.js`](src/osu/officialApi.js)
+  - O `resolveSet` pedia as dificuldades ao servidor administrado e desistia com "mapa não encontrado" quando ele não tinha o mapa no banco — que é o caso **comum** de mapa novo, o que ninguém no servidor jogou ainda.
+  - Só que o bancho é menos exigente do que o bot era: ao receber o publish no canal `rank` ele chama `Beatmap.from_bid`, que resolve em três degraus (cache → banco → **API do osu!**) e cacheia o set inteiro quando não conhece o mapa. A recusa negava uma nomeação que o servidor daria conta de aplicar.
+  - Agora o servidor continua tendo prioridade e a API oficial entra só como fallback, tanto para descobrir de qual set é uma dificuldade quanto para listar as dificuldades de um set. A resposta avisa quando a lista veio do osu!, já que aí a contagem de dificuldades não é do servidor.
+  - De quebra, 404 do `getServerMap` deixou de virar exceção: ID de dificuldade solto que o servidor não conhecia caía no catch geral e respondia "ocorreu um erro" em vez da mensagem certa.
+
+- **Anúncio de mudança de status no Discord.** [`announce.js`](src/announce.js)
+  - O bancho.py-ex não avisa o Discord quando um mapa é rankeado ou amado: quem acompanha só descobre entrando no site. O bot já sabe da mudança — é ele que publica e confirma —, então anunciar é aproveitar o que já está em mãos.
+  - Sai no canal de `DAYCORE_ANNOUNCE_CHANNEL_ID`, com capa do set, link para a página do mapa **no servidor**, quantas dificuldades pegaram e quem aplicou. Cobre os três caminhos que mudam status: nomeação atingindo o limiar, `force` e `disqualify`.
+  - **Vazio desliga.** Falhar fechado importa mais aqui que no resto do bot: o alvo é um canal público, e configuração errada não deixa de anunciar — ela anuncia no lugar errado.
+  - Só anuncia com pelo menos uma dificuldade confirmada, e o envio não é aguardado pela resposta do comando: o anúncio não faz parte do contrato dele, e a API do Discord lenta atrasaria quem rodou por causa de uma mensagem para outro canal.
+
+## 🔒 Segurança
+
+- **`/staff register` exigia apenas Administrator no Discord — e isso era uma escalada de privilégio.** [`commands/staff.js`](src/commands/staff.js), [`db.js`](src/db.js)
+  - Bastava ter Administrator no Discord para apontar o próprio Discord ao nick de outro staff e herdar o privilégio dele. Não é hipótese: foi feito nesta sessão, às 14:16, para testar o `restrict`.
+  - Enquanto o pior caso era uma restrição reversível, a assinatura no motivo (`signReason`) bastava como mitigação — dava para agir em nome de outro, mas não sem rastro. Com o `/wipe` no outro extremo, a cadeia virou "Administrator no Discord → conta Developer → perda permanente de dados", e deixou de bastar.
+  - Agora são dois passos, e quem cria o vínculo é o segundo: o `register` só **emite um código**, e o `/staff confirm` — rodado pela própria pessoa, sem exigir Administrator — cria o vínculo depois de achar o código no perfil daquela conta de jogo. As duas pontas ficam provadas: o código prova a posse da conta, e rodar o confirm prova o controle do Discord.
+  - **Aval, para o caminho legítimo não emperrar:** quem já provou a própria conta **e** é `DEVELOPER` no jogo vincula direto. Um Developer já tem controle total do servidor — o código nunca protegeu contra ele. O que a escalada usava era Administrator no Discord *sem* privilégio no jogo, e esse continua sem conseguir avalizar ninguém.
+  - A coluna `proof` guarda como cada vínculo foi estabelecido, e a diferença decide quem avaliza: `self` (provado, único que avaliza), `vouch` (afirmado por um Developer provado — não avaliza, senão uma afirmação viraria poder de afirmar, em cadeia) e `NULL` (anterior à prova existir; vale, mas não avaliza, senão quem tivesse explorado o furo seguiria com o poder que ele dava).
+
+- **Uma conta de jogo por vínculo.** [`db.js`](src/db.js), [`commands/staff.js`](src/commands/staff.js)
+  - A PK de `staff_links` é o `discord_id`, então o schema só garantia um osu! por Discord — nada impedia o contrário. Em produção isso produziu **duas contas do Discord vinculadas à mesma conta de staff ao mesmo tempo**: duas identidades agindo como a mesma pessoa no log de auditoria do servidor.
+  - Para nomeação não era problema (a PK de `map_nominations` é por `osu_id`, então não vira voto duplo), mas para moderação a auditoria do servidor deixava de saber quem agiu. O `register` agora recusa em vez de sobrescrever, e o `/staff list` marca `osu_id` repetido — vínculos anteriores à checagem continuam no banco, e uma lista que só enfileira linhas não os denuncia.
+
+- **Comando que responde em ephemeral saiu do modo texto.** [`prefix/spec.js`](src/prefix/spec.js), [`commands/moderate.js`](src/commands/moderate.js), [`commands/staff.js`](src/commands/staff.js), [`commands/wipe.js`](src/commands/wipe.js)
+  - Ephemeral só existe dentro de interação, então o adaptador do prefixo precisa tirar a flag — e a resposta que só o autor veria virava mensagem no canal. Um `k!moderate log` num canal público despejaria alvos e motivos de moderação; `k!staff list` diria quem no Discord é quem no jogo.
+  - Não era escalada: as travas de privilégio sempre valeram, e quem não é staff continuava recusado. Era vazamento por troca de canal. O comando agora declara `prefix.slashOnly` e o `buildSpec` o deixa de fora, reaproveitando o aviso de boot que já existia.
+
+## 🐛 Correções de bugs
+
+- **A fila de nomeação era apagada mesmo quando nada foi aplicado.** [`commands/nominate.js`](src/commands/nominate.js)
+  - `clearNominations` era incondicional depois de aplicar. Em 09/08 um `0/100 ok` apagou as nomeações sem que uma única dificuldade tivesse mudado no servidor. Com limiar 1 o custo é renomear; com limiar maior, uma queda transitória destrói os votos acumulados de várias pessoas.
+  - Agora só limpa com `pending.length === 0`. Em sucesso parcial a fila sobrevive e o set continua no `/nominate queue` — reexecutar é idempotente, recuperar voto perdido não é.
+
+- **Publicação parcial não deixava rastro de auditoria.** [`commands/nominate.js`](src/commands/nominate.js)
+  - Uma falha no meio do laço de publicação virava exceção, o comando respondia "ocorreu um erro" e o `logAdminAction` nunca rodava. Só que o que já tinha sido publicado **não é desfeito** — o bancho consome do Redis por conta própria e aplica. O servidor mudava e a auditoria do bot não registrava nada, que é o oposto do que ela existe para garantir.
+  - O `applyStatus` agora devolve o que saiu e a falha; o registro sai sempre, e a resposta distingue "não confirmou" (pode ser o bancho ainda processando) de "nem chegou a ser publicado" (certeza de que não vai mudar sozinho).
+
+- **A janela de verificação não crescia com o set.** [`daycoreAdmin.js`](src/daycoreAdmin.js)
+  - Eram três releituras de 1,2s para qualquer set. O trabalho do bancho, porém, é proporcional ao número de dificuldades — ele baixa o `.osu` de cada uma que não tem em disco. Ao rankear um set de 100 o comando reportou `90/100`, e a releitura seguinte mostrou `100/100`: nada tinha falhado, e mesmo assim a resposta chamou de parcial uma ação que deu certo inteira — justo na função que existe para não mentir sobre o resultado.
+  - Agora o laço roda até confirmar tudo ou a janela fechar, com orçamento de 4s + 900ms por dificuldade e teto de 3min. O teto é porque quem espera do outro lado é uma interação do Discord, que expira.
+
+- **O log de erro tinha deixado de dizer onde quebrou.** [`logger.js`](src/logger.js)
+  - O módulo nasceu para não imprimir o `AxiosError` cru, que carrega `.config` com o header `Authorization`. Acertou nisso e corrigiu demais: para erro que não é HTTP sobrava só `error.message`, então um `TypeError` dentro de um comando virava uma linha sem arquivo, sem função e sem linha — impossível de depurar em produção.
+  - O stack passou a acompanhar quando **não** houve resposta HTTP, que é onde ele importa. Um 404 da API continua uma linha só. O `.config` segue fora, com teste para não regredir.
+
+- **Clique concorrente na paginação revertia o cursor.** [`pagination.js`](src/pagination.js)
+  - O coletor não espera um handler terminar para entregar o próximo, e montar uma página faz rede e cálculo de PP — dois cliques seguidos rodam em paralelo. O handler que falhava fazia `page = shown` com o valor que **ele** tinha visto, desfazendo o avanço de um clique posterior bem-sucedido, e o clique seguinte partia do lugar errado.
+  - Um contador diz qual clique ainda manda: quem ficou para trás não pinta a tela nem mexe no cursor.
+
+- **`/moderate restrict` contra outro staff falhava em silêncio.** [`commands/moderate.js`](src/commands/moderate.js), [`daycoreAdmin.js`](src/daycoreAdmin.js)
+  - O `staffGuard` exige `ADMINISTRATOR`, mas o bancho exige `DEVELOPER` para mexer em quem é staff. Como pub/sub não responde ao publisher, a recusa dele não chegava a lugar nenhum: o bot publicava, o servidor ignorava, e a única pista era um "NÃO confirmado" seco — quem tentasse concluiria que o bot está quebrado.
+  - A regra agora é espelhada antes de publicar. O detalhe que exigiu função nova: `STAFF = MODERATOR | ADMINISTRATOR | DEVELOPER` é **máscara**, e o bancho testa `priv & STAFF` — qualquer um dos bits basta. O `hasPriv` do bot exige o conjunto inteiro, de propósito, então passar a máscara por lá deixaria o Moderator puro desprotegido: exatamente o cargo mais baixo dos três.
+
+- **Um arquivo solto em `commands/` derrubava o boot.** [`index.js`](src/index.js)
+  - O laço ia direto em `command.data.name`. Um helper `.js` naquela pasta, ou um comando com erro de sintaxe, matava o processo **antes** do login — sob supervisor isso não aparece como falha, aparece como loop de restart, e o bot fica fora do ar até alguém ler o log. Agora o arquivo ruim é ignorado com aviso.
+
+- **Guarda de `pp` não pegava NaN.** [`pp.js`](src/pp.js), [`scorePP.js`](src/scorePP.js), [`commands/recent.js`](src/commands/recent.js), [`commands/score.js`](src/commands/score.js), [`commands/simulate.js`](src/commands/simulate.js)
+  - Todos os sites usavam `pp == null`, e `NaN == null` é falso — então um NaN passava direto e `NaN.toFixed(2)` imprimia **"NaN pp"** no embed, pior que `?pp` porque parece resultado. O `typeof data.pp === 'number'` do caminho do Python deixava passar igual, já que `typeof NaN` é `'number'`.
+
+- **O registro de falhas do Python crescia sem teto.** [`pp.js`](src/pp.js)
+  - Guardava cada mensagem de stderr distinta para não repetir log, e nunca descartava nada — bastava a mensagem variar por mapa para virar uma entrada de até 2000 caracteres por mapa que falhou, num processo que fica semanas no ar. Mesmo cuidado que o `mapContext` e o `cooldowns` já tomavam.
+
+## ⚠️ Descoberto sobre o servidor
+
+- **O `userpage_content` da API v2 não é onde o perfil acaba parando.** [`osu/banchoPyApi.js`](src/osu/banchoPyApi.js)
+  - O bancho declara a coluna, o `READ_PARAMS` a inclui e o `fetch_one` faz `select(*READ_PARAMS)` — tudo aponta para ela ser o campo certo. E ela vem `null` mesmo com o perfil preenchido e visível no site.
+  - Não é cache (mudança de `priv` feita no mesmo dia aparece na API) nem base separada (bancho e Shiina-Web apontam para a mesma `bancho`). Quem grava o userpage é o Shiina-Web, e ele guarda noutro lugar da mesma base.
+  - O desafio de posse passou a procurar o código em duas fontes: o campo da API, que continua sendo o caminho certo e mais barato se um dia passarem a escrever nele, e a **página pública renderizada**, que é o que hoje reflete o que a pessoa salvou. Procurar a string na página inteira é robusto de propósito — não depende de classe de CSS nem de estrutura, e o código tem entropia suficiente para casar por acaso ser desprezível.
+
+- **Os `restrict` de 08/08 e os `rank` de 09/08 falhavam por causa do servidor, não do bot.** Toda a stack (`bancho`, `redis`, `mysql`, `shiina`) foi recriada em 09/08 às 21:53 — os quatro contêineres criados dentro de 100ms um do outro. Tudo que falhou aconteceu antes disso; tudo depois funcionou. O bot publicava e reportava honestamente "não confirmado" o tempo todo.
+
+## 🧪 Testes
+
+- De 167 para **243 casos**. Cobrem, entre outros: o fallback do `/nominate` para mapa fora do servidor, a janela de verificação proporcional, a publicação parcial, o desafio de posse e o aval, o alfabeto e a entropia do código, a máscara `STAFF`, o `slashOnly`, e o teto do registro de falhas do Python.
+- Nos casos da paginação e do teto de falhas, o teste novo foi rodado **contra a versão anterior do módulo** para confirmar que reprova o código antigo e passa no atual — um teste que passa nos dois não estaria testando a correção.
+- O fixture das travas genéricas do prefixo (opção de usuário, escopo de servidor, permissão exigida) deixou de ser o `/staff`: aquilo testa o dispatcher, e não devia depender de qual comando real por acaso tem as três propriedades.
+
+---
+
 # Sessão de 2026-08-12
 
 ## ✨ Novos recursos
