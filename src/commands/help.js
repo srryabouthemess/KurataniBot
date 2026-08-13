@@ -30,7 +30,7 @@ const GROUPS = [
  * Só entra no Discord que o bot administra. Fora dele estes comandos recusam
  * tudo (ver staffGuard.js), então citá-los seria oferecer o que não dá para usar.
  */
-const ADMIN_GROUP = { key: 'admin', commands: ['nominate', 'moderate', 'staff'] };
+const ADMIN_GROUP = { key: 'admin', commands: ['nominate', 'moderate', 'wipe', 'staff'] };
 
 /** Atalhos, mostrados junto do comando de origem em vez de em linha própria. */
 const ALIASES = {

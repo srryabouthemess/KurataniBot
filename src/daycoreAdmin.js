@@ -83,6 +83,23 @@ const CHANNELS = {
   RANK:       'rank',
   RESTRICT:   'restrict',
   UNRESTRICT: 'unrestrict',
+  WIPE:       'wipe',
+};
+
+/**
+ * Modos de jogo do bancho.py, com os nomes que ele mesmo usa no log
+ * (app/api/utils.py, dicionário `mode_names`). O wipe age sobre UM modo — os
+ * scores dos outros continuam intactos.
+ */
+const GameModes = {
+  0: 'vn!std',
+  1: 'vn!taiko',
+  2: 'vn!catch',
+  3: 'vn!mania',
+  4: 'rx!std',
+  5: 'rx!taiko',
+  6: 'rx!catch',
+  8: 'ap!std',
 };
 
 // ─── Conexão com o Redis ──────────────────────────────────────────────────────
@@ -251,6 +268,35 @@ async function unrestrictPlayer(targetOsuId, actor, reason) {
   });
 }
 
+/**
+ * Apaga os scores de um jogador NUM modo e zera as estatísticas dele ali.
+ *
+ * ── Por que este é diferente de todos os outros ───────────────────────────────
+ * É IRREVERSÍVEL. O `wipe_user` do bancho (app/api/utils.py) faz
+ * `DELETE FROM scores`, zera a linha de `stats` e tira o jogador dos sorted
+ * sets de leaderboard no Redis. Não há soft-delete, não há cópia: depois de
+ * publicado, nem o dono do servidor desfaz.
+ *
+ * E, ao contrário do `restrict`, ele **não confere privilégio nenhum** — só
+ * checa se o alvo existe. O `restrict` recusa sozinho quem não é DEVELOPER
+ * mexendo em staff; aqui o servidor aceita qualquer publish. Ou seja, quem
+ * chama daqui é a ÚNICA tranca que existe, e é por isso que o comando exige
+ * DEVELOPER em vez do ADMINISTRATOR que basta para restringir.
+ *
+ * O campo é `adminId` (e não `userId`, como no restrict): é o nome que o
+ * receptor lê, e ele usa isso para escrever o nome do autor no log do servidor.
+ *
+ * @param {number} modeNum chave de GameModes — o wipe é por modo
+ */
+async function wipePlayer(targetOsuId, modeNum, actor, reason) {
+  await publish(CHANNELS.WIPE, {
+    id:      Number(targetOsuId),
+    mode:    Number(modeNum),
+    adminId: Number(actor.osuId),
+    reason:  signReason(reason, actor),
+  });
+}
+
 // ─── Permissões ───────────────────────────────────────────────────────────────
 
 /**
@@ -372,10 +418,31 @@ async function verifyRestricted(osuId, expectRestricted, { attempts = 3, delayMs
   return false;
 }
 
+/**
+ * Confirma que o wipe pegou: pp e plays zerados naquele modo.
+ *
+ * Mesma necessidade das outras verificações — pub/sub não devolve resultado —,
+ * mas aqui ela pesa mais: sem confirmação, um comando destrutivo que falhou em
+ * silêncio deixaria quem rodou achando que o serviço foi feito.
+ */
+async function verifyWiped(osuId, modeNum, { attempts = 3, delayMs = 1200 } = {}) {
+  for (let i = 0; i < attempts; i++) {
+    await sleep(delayMs);
+    try {
+      const stats = await osu.getServerPlayerStats(osuId, modeNum);
+      if (stats && Number(stats.pp) === 0 && Number(stats.plays) === 0) return true;
+    } catch {
+      // tenta de novo
+    }
+  }
+  return false;
+}
+
 module.exports = {
   Privileges,
   RankedStatus,
   STATUS_LABELS,
+  GameModes,
   CHANNELS,
   isConfigured,
   checkConnection,
@@ -383,6 +450,8 @@ module.exports = {
   rankBeatmap,
   restrictPlayer,
   unrestrictPlayer,
+  wipePlayer,
+  verifyWiped,
   hasPriv,
   isStaff,
   STAFF_MASK,

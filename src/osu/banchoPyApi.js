@@ -281,6 +281,19 @@ async function getServerPlayerRaw(playerId, mode = PRIVATE_MODE) {
   return res?.data ?? null;
 }
 
+/**
+ * Estatísticas cruas de um jogador NUM modo: pp, plays, acc, tscore, combo.
+ *
+ * Existe para o /wipe: é o que permite mostrar o tamanho do estrago antes de
+ * causá-lo, e registrar no log o que foi destruído. Depois do wipe esses
+ * números não existem mais em lugar nenhum — o log do bot vira o único
+ * registro de que existiram.
+ */
+async function getServerPlayerStats(playerId, modeNum, mode = PRIVATE_MODE) {
+  const res = await banchoV2Get(mode, `/players/${idSegment(playerId)}/stats/${idSegment(modeNum)}`);
+  return res?.data ?? null;
+}
+
 /** Um beatmap (dificuldade única) pelo ID. */
 async function getServerMap(mapId, mode = PRIVATE_MODE) {
   const res = await banchoV2Get(mode, `/maps/${idSegment(mapId)}`);
@@ -360,6 +373,7 @@ module.exports = {
   enrichScores,
   resolvePlayerId,
   getServerPlayerRaw,
+  getServerPlayerStats,
   getServerMap,
   getServerMapsBySet,
 };

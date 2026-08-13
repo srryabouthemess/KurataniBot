@@ -314,6 +314,7 @@ module.exports = {
   // Só bancho.py: leitura crua para os comandos de staff.
   resolvePlayerId:    banchoPyApi.resolvePlayerId,
   getServerPlayerRaw: banchoPyApi.getServerPlayerRaw,
+  getServerPlayerStats: banchoPyApi.getServerPlayerStats,
   getServerMap:       banchoPyApi.getServerMap,
   getServerMapsBySet: banchoPyApi.getServerMapsBySet,
 
