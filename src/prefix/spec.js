@@ -21,6 +21,16 @@ function buildSpec(command) {
   const json    = command.data.toJSON();
   const options = json.options ?? [];
 
+  // Comando que responde em efêmero não pode existir em texto.
+  //
+  // Efêmero só existe dentro de interação: o adaptador precisa tirar a flag
+  // (ver toMessagePayload), e aí a resposta que só o autor veria vira mensagem
+  // no canal. A trava de privilégio continua valendo, então não é escalada —
+  // é o log de moderação, com alvo e motivo, aparecendo para quem estiver
+  // lendo o canal. Quem declara é o próprio comando, porque só ele sabe como
+  // responde.
+  if (command.prefix?.slashOnly) return null;
+
   // Grupos de subcomando (`/cmd grupo sub opções`) ninguém usa hoje. Em vez de
   // fingir que entende e resolver errado, o comando simplesmente não ganha
   // versão em texto — e o aviso no boot conta o porquê.

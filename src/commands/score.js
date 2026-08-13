@@ -164,13 +164,17 @@ module.exports = {
 
           // pp calculado por nós vai com ~ na frente, para não passar por
           // número oficial do servidor.
-          const ppValue = sc.pp ?? calcPPArray[index];
-          const ppText  = ppValue == null
+          // Finito, e não só "não-nulo": o `pp` do servidor não passa por nós, e
+          // um valor não numérico imprimiria "NaN pp" — pior que "?pp", porque
+          // parece resultado.
+          const doServidor = Number.isFinite(sc.pp);
+          const ppValue = doServidor ? sc.pp : calcPPArray[index];
+          const ppText  = !Number.isFinite(ppValue)
             ? '`?pp`'
-            : `\`${sc.pp != null ? '' : '~'}${ppValue.toFixed(2)}pp\``;
+            : `\`${doServidor ? '' : '~'}${ppValue.toFixed(2)}pp\``;
 
           const fcPP    = fcPPArray[index];
-          const fcText  = fcPP !== null && isChoke ? ` *(FC: ~${fcPP.toFixed(2)}pp)*` : '';
+          const fcText  = Number.isFinite(fcPP) && isChoke ? ` *(FC: ~${fcPP.toFixed(2)}pp)*` : '';
 
           const comboText = `${scoreCombo}x/${mapCombo !== null ? mapCombo + 'x' : '?x'}`;
 

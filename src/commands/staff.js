@@ -44,6 +44,11 @@ const { logError } = require('../logger');
  * de verdade contra um bancho.py real.
  */
 module.exports = {
+  // Efêmero em tudo: a lista de vínculos diz quem no Discord é quem no jogo, e
+  // o register confirma cargo. Em texto a flag some e vira mensagem no canal —
+  // ver o comentário em prefix/spec.js.
+  prefix: { slashOnly: true },
+
   data: new SlashCommandBuilder()
     .setName('staff')
     .setDescription('Manage which Discord accounts map to Daycore staff accounts')

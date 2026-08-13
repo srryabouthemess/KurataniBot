@@ -31,7 +31,9 @@ const FETCH_LIMIT = 50;
  * engordava uma linha que já carrega pp, acurácia e o valor de FC.
  */
 async function describePP(score, isPass, mode) {
-  if (score.pp != null) return `${score.pp.toFixed(2)}pp`;
+  // Finito, e não só "não-nulo": o `pp` vem do servidor, e um valor não
+  // numérico imprimiria "NaN pp" em vez de cair no cálculo local.
+  if (Number.isFinite(score.pp)) return `${score.pp.toFixed(2)}pp`;
 
   const local = await localScorePP(score, mode, { partial: !isPass });
   return local === null ? '?pp' : `~${local.toFixed(2)}pp`;

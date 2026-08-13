@@ -13,7 +13,7 @@ const prefixCommands = require('../src/prefixCommands');
 
 const NAMES = [
   'recent', 'rs', 'score', 'c', 'simulate', 'pp',
-  'link', 'language', 'staff', 'whatif', 'nominate',
+  'link', 'language', 'whatif', 'nominate',
 ];
 
 let captured = null;
@@ -26,6 +26,31 @@ for (const name of NAMES) {
     execute: async context => { captured = context; },
   });
 }
+
+/**
+ * Fixture próprio para as travas genéricas do dispatcher: opção de usuário,
+ * escopo de servidor e permissão exigida.
+ *
+ * Era o `/staff` que fazia esse papel, por ser o único comando real com as três
+ * coisas. Só que ele passou a ser `slashOnly` (responde em efêmero, ver
+ * prefix/spec.js) e sumiu do modo texto — levando junto a cobertura de máquina
+ * que nada tem a ver com ele. Um fixture próprio não depende de qual comando
+ * real por acaso tem as propriedades certas.
+ */
+const {
+  SlashCommandBuilder, PermissionFlagsBits, InteractionContextType,
+} = require('discord.js');
+
+commands.set('fixture', {
+  data: new SlashCommandBuilder()
+    .setName('fixture')
+    .setDescription('só para o teste')
+    .setContexts([InteractionContextType.Guild])
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+    .addUserOption(o => o.setName('member').setDescription('membro').setRequired(true))
+    .addStringOption(o => o.setName('player').setDescription('jogador').setRequired(false)),
+  execute: async context => { captured = context; },
+});
 
 const client = { commands, on(_event, handler) { this.handler = handler; } };
 prefixCommands.register(client);
@@ -113,7 +138,7 @@ test('estilos de argumento', async t => {
   });
 
   await t.test('menção de usuário', async () => {
-    const { context } = await run('k!staff register <@123456789012345678> fulano');
+    const { context } = await run('k!fixture <@123456789012345678> fulano');
     assert.equal(context.options.getUser('member').id, '123456789012345678');
     assert.equal(context.options.getString('player'), 'fulano');
   });
@@ -192,7 +217,7 @@ test('erros de sintaxe explicam o que fazer', async t => {
 
 test('travas de contexto e permissão', async t => {
   await t.test('comando de servidor é recusado em DM', async () => {
-    const { context, reply } = await run('k!staff list', { guildId: null });
+    const { context, reply } = await run('k!fixture <@1> ', { guildId: null });
     assert.equal(context, null);
     assert.match(reply, /servidor/);
   });
@@ -205,13 +230,13 @@ test('travas de contexto e permissão', async t => {
   // O Discord aplica setDefaultMemberPermissions só no slash; aqui é o
   // dispatcher que precisa repetir a conferência.
   await t.test('comando de admin é recusado para não-admin', async () => {
-    const { context, reply } = await run('k!staff list', { admin: false });
+    const { context, reply } = await run('k!fixture <@1> ', { admin: false });
     assert.equal(context, null);
     assert.match(reply, /permissão/);
   });
 
   await t.test('admin passa pela mesma porta', async () => {
-    assert.ok((await run('k!staff list', { admin: true })).context);
+    assert.ok((await run('k!fixture <@123456789012345678> ', { admin: true })).context);
   });
 
   await t.test('comando sem exigência não é afetado', async () => {

@@ -135,10 +135,25 @@ async function getDifficultyAttrs(mapId, modsBits, lazer) {
  * aparecer depois, ninguém ficaria sabendo até reiniciar o bot.
  */
 const STDERR_MAX = 2000;
+
+// Teto no conjunto de causas já vistas. Sem ele a estrutura só cresce: basta a
+// mensagem do script variar por mapa ("stdin vazio para o mapa X") para virar
+// uma entrada de até STDERR_MAX caracteres por mapa que falhou, num processo
+// que fica semanas no ar. O mesmo cuidado que o mapContext e o cooldowns já
+// tomam com os mapas deles.
+const FALHAS_MAX = 50;
 const _falhasPythonVistas = new Set();
 
 function reportPythonFailure(context, detail) {
   if (!detail || _falhasPythonVistas.has(detail)) return;
+
+  // Set preserva ordem de inserção: o primeiro é o mais antigo. Descartá-lo faz
+  // uma causa antiga poder ser logada de novo se voltar a acontecer, o que é
+  // justamente o comportamento desejável.
+  if (_falhasPythonVistas.size >= FALHAS_MAX) {
+    _falhasPythonVistas.delete(_falhasPythonVistas.values().next().value);
+  }
+
   _falhasPythonVistas.add(detail);
   logError(context, new Error(detail));
   console.error('[calcPPPython] PP do Relax indisponível; esta causa é logada uma vez só.');
@@ -216,7 +231,9 @@ async function calcPPPython(beatmapId, modsBits, n300, n100, n50, nmiss, combo =
         // Saída ilegível: o motivo, se houver, está no stderr.
       }
 
-      if (data && typeof data.pp === 'number') {
+      // isFinite e não `typeof === 'number'`: NaN e Infinity passam no typeof, e
+      // um deles escapando daqui vira "NaN pp" no embed lá na frente.
+      if (data && Number.isFinite(data.pp)) {
         return resolve({ pp: data.pp, stars: data.stars, maxCombo: data.max_combo });
       }
 
@@ -314,7 +331,10 @@ async function getFCpp(score, mode = DEFAULT_MODE) {
       const perf   = new rosu.Performance(perfParams);
       const result = perf.calculate(diffAttrs);
 
-      return result.pp ?? null;
+      // `?? null` deixava NaN passar. Ele chega aqui pelo ramo da accuracy
+      // acima: sem os hits reais o cálculo usa `score.accuracy * 100`, e uma
+      // accuracy ausente vira NaN — que o rosu aceita sem reclamar.
+      return Number.isFinite(result.pp) ? result.pp : null;
     } finally {
       beatmap.free();
     }
@@ -402,7 +422,7 @@ async function simulatePP(beatmapId, mods, hits, mode = DEFAULT_MODE, { lazer } 
       const stars    = diffAttrs.stars;
       const maxCombo = diffAttrs.maxCombo;
 
-      if (result.pp == null) return null;
+      if (!Number.isFinite(result.pp)) return null;
       return { pp: result.pp, stars, maxCombo };
     } finally {
       beatmap.free();
@@ -440,6 +460,10 @@ async function getAdjustedStars(beatmapId, mods, mode = DEFAULT_MODE) {
 module.exports = {
   shouldUseLazer,
   getBeatmapFile,
+  // Exportado para teste: guarda estado entre chamadas, e o defeito que ele
+  // pode ter (crescer sem fim, ou calar uma causa nova) não aparece em nenhuma
+  // saída do bot — só no consumo de memória semanas depois.
+  reportPythonFailure,
   getDifficultyAttrs,
   getAdjustedStars,
   getFCpp,

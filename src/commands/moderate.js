@@ -34,6 +34,11 @@ async function resolveTarget(input) {
 }
 
 module.exports = {
+  // Toda resposta daqui é efêmera: privilégio do alvo, status de restrição,
+  // motivo, e o log de moderação inteiro. Em texto a flag some e isso vira
+  // mensagem no canal — ver o comentário em prefix/spec.js.
+  prefix: { slashOnly: true },
+
   data: new SlashCommandBuilder()
     .setName('moderate')
     .setDescription('Daycore moderation (staff only)')

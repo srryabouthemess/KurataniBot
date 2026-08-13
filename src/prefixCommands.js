@@ -170,7 +170,11 @@ function register(client) {
   for (const [name, command] of client.commands) {
     const spec = buildSpec(command);
     if (spec) specs.set(name, spec);
-    else console.warn(`[prefix] ${name} usa grupo de subcomando e ficou só no slash.`);
+    else if (command.prefix?.slashOnly) {
+      console.log(`[prefix] ${name} fica só no slash: responde em efêmero.`);
+    } else {
+      console.warn(`[prefix] ${name} usa grupo de subcomando e ficou só no slash.`);
+    }
   }
 
   client.on('messageCreate', message => {

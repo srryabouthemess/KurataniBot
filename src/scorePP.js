@@ -56,7 +56,8 @@ async function localScorePP(score, mode, { partial = false } = {}) {
     mode,
   );
 
-  return result?.pp ?? null;
+  // Finito, não só "não-nulo": NaN passa no `?? null` e vira "NaN pp" na tela.
+  return Number.isFinite(result?.pp) ? result.pp : null;
 }
 
 module.exports = { localScorePP };

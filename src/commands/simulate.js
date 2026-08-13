@@ -118,7 +118,7 @@ module.exports = {
         { lazer: false },
       );
 
-      if (!result || result.pp == null) {
+      if (!result || !Number.isFinite(result.pp)) {
         return interaction.editReply(s.simulate_calc_error);
       }
 
