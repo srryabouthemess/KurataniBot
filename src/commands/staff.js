@@ -52,6 +52,38 @@ function decideRegister(vinculoExistente, memberId) {
 }
 
 /**
+ * O código está mesmo no perfil daquela conta?
+ *
+ * Duas fontes, e a ordem importa pouco porque as duas são baratas:
+ *
+ *   1. `userpage_content` da API v2. É onde o campo DEVERIA estar — o bancho
+ *      declara e seleciona a coluna. Hoje ela vem `null` mesmo com o perfil
+ *      preenchido, porque quem grava o userpage é o Shiina-Web e ele guarda
+ *      noutro lugar da mesma base. Fica aqui porque, se um dia passarem a
+ *      escrever na coluna, este é o caminho certo e mais barato.
+ *   2. A página pública renderizada. É a fonte que hoje reflete o que a pessoa
+ *      salvou de verdade — medido contra um perfil com código salvo.
+ *
+ * Procurar a string na página inteira é robusto de propósito: não depende de
+ * classe de CSS nem de estrutura de HTML, que mudam a cada tema. O código tem
+ * entropia suficiente para casar por acaso ser desprezível, e ninguém além de
+ * quem entra na conta consegue plantá-lo naquela página.
+ */
+async function codeIsOnProfile(player, code) {
+  if (String(player?.userpage_content ?? '').includes(code)) return true;
+
+  try {
+    const html = await osu.getServerProfilePage(player.id);
+    return html.includes(code);
+  } catch (error) {
+    // Site fora do ar não é "código ausente", mas o efeito para quem chamou é o
+    // mesmo: não dá para confirmar agora. Fica no log para não virar mistério.
+    logError('staff:profile', error);
+    return false;
+  }
+}
+
+/**
  * Quem pode avalizar o vínculo de outra pessoa, dispensando o código.
  *
  * Um DEVELOPER já tem controle total do servidor de jogo — exigir que ele
@@ -108,12 +140,12 @@ async function resolveVoucher(discordId) {
  *
  *   1. `/staff register` (Administrator) só EMITE um código. Nada é vinculado.
  *   2. A pessoa escreve o código no perfil dela no servidor de jogo e roda
- *      `/staff confirm`. O bot relê o `userpage_content` pela API v2 e, se o
- *      código estiver lá, cria o vínculo.
+ *      `/staff confirm`. O bot relê o perfil e, se o código estiver lá, cria o
+ *      vínculo (ver `codeIsOnProfile` para onde ele é procurado, e por quê).
  *
- * O que isso fecha: o `userpage_content` só é editável por quem entra na conta,
- * então um administrador do Discord não consegue plantar o código no perfil
- * alheio — e portanto não consegue mais se vincular a uma conta que não é dele.
+ * O que isso fecha: aquele perfil só é editável por quem entra na conta, então
+ * um administrador do Discord não consegue plantar o código no perfil alheio —
+ * e portanto não consegue mais se vincular a uma conta que não é dele.
  *
  * As duas pontas ficam provadas: o código prova a posse da conta de jogo, e
  * rodar o `/staff confirm` prova o controle da conta do Discord.
@@ -205,8 +237,7 @@ module.exports = {
         const player = await osu.getServerPlayerRaw(desafio.osu_id);
         if (!player) return interaction.editReply(s.player_not_found);
 
-        const userpage = String(player.userpage_content ?? '');
-        if (!userpage.includes(desafio.code)) {
+        if (!await codeIsOnProfile(player, desafio.code)) {
           return interaction.editReply(
             s.staff_code_not_found(desafio.osu_name ?? desafio.osu_id, desafio.code),
           );
@@ -377,4 +408,5 @@ module.exports = {
   // mandar alguém provar o que já provou, ou pior, deixar passar o que não foi.
   decideRegister,
   resolveVoucher,
+  codeIsOnProfile,
 };

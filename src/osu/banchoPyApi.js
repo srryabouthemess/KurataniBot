@@ -282,6 +282,32 @@ async function getServerPlayerRaw(playerId, mode = PRIVATE_MODE) {
 }
 
 /**
+ * A página pública de perfil, em HTML.
+ *
+ * Existe porque o `userpage_content` da API v2 **não** é onde o texto do perfil
+ * acaba parando. O bancho declara e seleciona a coluna (`READ_PARAMS` em
+ * app/repositories/users.py), mas quem grava o userpage é o front-end
+ * Shiina-Web, e ele guarda em outro lugar da mesma base — medido: perfil com
+ * texto salvo e visível no site, e a API devolvendo `null` para o mesmo jogador.
+ *
+ * A página renderizada é a fonte que reflete o que a pessoa realmente salvou.
+ * Procurar uma string de alta entropia dentro dela é robusto: não depende de
+ * classe de CSS nem de estrutura, só de o texto estar lá.
+ */
+async function getServerProfilePage(playerId, mode = PRIVATE_MODE) {
+  const server = servers.get(mode);
+  await rateLimiter.acquire(`server:${server.key}`);
+
+  const res = await axios.get(`${server.webUrl}/u/${idSegment(playerId)}`, {
+    timeout: 12000,
+    // Sem isto o axios tenta interpretar a resposta, e o que se quer é o texto.
+    responseType: 'text',
+    transformResponse: [(data) => data],
+  });
+  return typeof res.data === 'string' ? res.data : String(res.data ?? '');
+}
+
+/**
  * Estatísticas cruas de um jogador NUM modo: pp, plays, acc, tscore, combo.
  *
  * Existe para o /wipe: é o que permite mostrar o tamanho do estrago antes de
@@ -374,6 +400,7 @@ module.exports = {
   resolvePlayerId,
   getServerPlayerRaw,
   getServerPlayerStats,
+  getServerProfilePage,
   getServerMap,
   getServerMapsBySet,
 };

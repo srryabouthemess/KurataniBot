@@ -229,3 +229,55 @@ test('conta que sumiu do servidor não avaliza', async () => {
   const staff = comMocks({ link: { osu_id: 6, proof: 'self' }, priv: null });
   assert.equal(await staff.resolveVoucher('111'), null);
 });
+
+// ─── Onde o código é procurado ───────────────────────────────────────────────
+// O `userpage_content` da API v2 é onde o campo DEVERIA estar, e vem null mesmo
+// com o perfil preenchido: quem grava o userpage é o Shiina-Web, e ele guarda
+// noutro lugar da mesma base. Medido contra um perfil real com o código salvo.
+
+const osuPath = require.resolve('../src/osuClient');
+
+function comPerfil({ html, erro = null }) {
+  const osuReal = require('../src/osuClient');
+  require.cache[osuPath] = {
+    id: osuPath, filename: osuPath, loaded: true,
+    exports: {
+      ...osuReal,
+      getServerProfilePage: async () => {
+        if (erro) throw erro;
+        return html;
+      },
+    },
+  };
+  delete require.cache[require.resolve('../src/commands/staff')];
+  return require('../src/commands/staff');
+}
+
+test('acha o código na página renderizada', async () => {
+  const staff = comPerfil({ html: '<div class="userpage">KB-VSEBUPGE</div>' });
+  assert.equal(await staff.codeIsOnProfile({ id: 13, userpage_content: null }, 'KB-VSEBUPGE'), true);
+});
+
+test('página sem o código recusa', async () => {
+  const staff = comPerfil({ html: '<div class="userpage">outra coisa</div>' });
+  assert.equal(await staff.codeIsOnProfile({ id: 13, userpage_content: null }, 'KB-VSEBUPGE'), false);
+});
+
+test('o campo da API ainda vale, se um dia for preenchido', async () => {
+  // Sem chamar a página: é o caminho mais barato, e continua correto.
+  const staff = comPerfil({ erro: new Error('não deveria ter buscado a página') });
+  assert.equal(await staff.codeIsOnProfile({ id: 13, userpage_content: 'KB-VSEBUPGE' }, 'KB-VSEBUPGE'), true);
+});
+
+test('site fora do ar recusa em vez de estourar', async () => {
+  // Não é "código ausente", mas o efeito para quem chamou é o mesmo: não dá
+  // para confirmar agora. O que não pode é derrubar o comando.
+  const staff = comPerfil({ erro: new Error('ECONNREFUSED') });
+  const original = console.error;
+  console.error = () => {};
+  try {
+    assert.equal(await staff.codeIsOnProfile({ id: 13, userpage_content: null }, 'KB-VSEBUPGE'), false);
+  } finally {
+    console.error = original;
+  }
+});
