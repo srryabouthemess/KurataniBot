@@ -210,6 +210,7 @@ module.exports = ({ ADMIN }) => ({
   nom_invalid_map:         '❌ Не удалось определить карту. Укажите ID карты/сета или ссылку.',
   nom_map_not_found:       `❌ Карта не найдена ни на ${ADMIN}, ни на osu!.`,
   nom_not_on_server:       `ℹ️ Карты пока нет на ${ADMIN} — сложности взяты с osu!, сервер загрузит её при применении статуса.`,
+  nom_publish_interrupted: (published, total) => `⚠️ Публикация остановилась на **${published}/${total}** сложностях (сбой связи с ${ADMIN}). Уже отправленные всё равно применятся — запустите снова, чтобы завершить остальные.`,
   nom_set_line:            (setId, diffs) => `Сет \`${setId}\` — сложностей: ${diffs}`,
   nom_added_title:         (status) => `Номинация записана (${status})`,
   nom_progress:            (have, need) => `**${have}/${need}** номинаций.`,

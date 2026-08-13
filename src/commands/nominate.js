@@ -144,12 +144,41 @@ function mapLabel(diffs) {
  */
 async function applyStatus(diffs, status) {
   const ids = diffs.map(d => d.id);
+  const published = [];
+  let failure = null;
 
+  // A falha no meio do laço NÃO vira exceção, e isso é deliberado. O que já foi
+  // publicado não tem como ser desfeito: o bancho consome do Redis por conta
+  // própria e vai aplicar aquilo independente do que aconteça aqui. Deixar a
+  // exceção subir fazia o comando responder "ocorreu um erro" e pular o
+  // logAdminAction — ou seja, o servidor mudava e o log do bot não registrava
+  // nada. É o oposto do que a auditoria existe para garantir.
   for (const id of ids) {
-    await daycore.rankBeatmap(id, status, true);
+    try {
+      await daycore.rankBeatmap(id, status, true);
+      published.push(id);
+    } catch (error) {
+      failure = error;
+      break;
+    }
   }
 
-  return daycore.verifyMapStatus(ids, status);
+  const { confirmed, pending } = published.length > 0
+    ? await daycore.verifyMapStatus(published, status)
+    : { confirmed: [], pending: [] };
+
+  // O que nunca chegou a ser publicado entra como pendente: do ponto de vista
+  // de quem pediu, aquelas dificuldades não chegaram ao status alvo — e é isso
+  // que decide a cor do embed e se a fila de nomeação sobrevive.
+  const enviadas = new Set(published);
+
+  return {
+    confirmed,
+    pending: [...pending, ...ids.filter(id => !enviadas.has(id))],
+    published,
+    total: ids.length,
+    failure,
+  };
 }
 
 /**
@@ -173,10 +202,36 @@ async function announceApplied(interaction, s, { setId, diffs, status, label, ac
   }, s);
 }
 
+/**
+ * Sufixo de auditoria quando a publicação parou no meio.
+ *
+ * Vai para o `detail` do admin_actions porque é a única pista de que o servidor
+ * recebeu parte das dificuldades: quem ler o log depois precisa saber que o
+ * estado ficou pela metade por falha de transporte, e não porque alguém pediu
+ * assim.
+ */
+function failureDetail(result) {
+  if (!result.failure) return '';
+  return ` | publicacao interrompida em ${result.published.length}/${result.total}: ${result.failure.message}`;
+}
+
 function resultLine(s, confirmed, pending) {
   if (pending.length === 0) return s.nom_all_confirmed(confirmed.length);
   if (confirmed.length === 0) return s.nom_none_confirmed(pending.length);
   return s.nom_partial(confirmed.length, confirmed.length + pending.length, pending.join(', '));
+}
+
+/**
+ * Resultado como quem rodou o comando precisa ler.
+ *
+ * "Não confirmou" e "nem chegou a ser publicado" são coisas diferentes: a
+ * primeira pode ser o bancho ainda processando, a segunda é certeza de que
+ * aquela dificuldade não vai mudar sozinha. Sem separar, uma queda do Redis no
+ * meio do set se parecia com lentidão do servidor.
+ */
+function resultBlock(s, result) {
+  return resultLine(s, result.confirmed, result.pending) +
+    (result.failure ? `\n${s.nom_publish_interrupted(result.published.length, result.total)}` : '');
 }
 
 module.exports = {
@@ -337,18 +392,24 @@ module.exports = {
       // ── disqualify / force ───────────────────────────────────────────────
       if (sub === 'disqualify' || sub === 'force') {
         const status = sub === 'disqualify' ? daycore.RankedStatus.UNRANK : targetStatus;
-        const { confirmed, pending } = await applyStatus(diffs, status);
+        const result = await applyStatus(diffs, status);
+        const { confirmed, pending } = result;
 
         // Aplicar encerra qualquer fila pendente daquele set: as nomeações
-        // acumuladas se referem a um estado que não existe mais.
-        db.clearNominations(setId, daycore.RankedStatus.RANK);
-        db.clearNominations(setId, daycore.RankedStatus.LOVE);
+        // acumuladas se referem a um estado que não existe mais. Só que isso
+        // vale quando o estado MUDOU — antes a limpeza era incondicional, e uma
+        // queda do bancho apagava a fila sem que nada tivesse sido aplicado.
+        if (pending.length === 0) {
+          db.clearNominations(setId, daycore.RankedStatus.RANK);
+          db.clearNominations(setId, daycore.RankedStatus.LOVE);
+        }
 
         db.logAdminAction({
           action: sub === 'disqualify' ? 'disqualify' : 'force',
           target: setId,
           detail: `${daycore.STATUS_LABELS[status]} | ${confirmed.length}/${diffs.length} ok` +
-                  (interaction.options.getString('reason') ? ` | ${interaction.options.getString('reason')}` : ''),
+                  (interaction.options.getString('reason') ? ` | ${interaction.options.getString('reason')}` : '') +
+                  failureDetail(result),
           actorDiscordId: interaction.user.id,
           actorOsuId: staff.osuId,
           actorOsuName: staff.osuName,
@@ -363,7 +424,7 @@ module.exports = {
           .setTitle(s.nom_applied_title(daycore.STATUS_LABELS[status]))
           .setDescription(
             `**${label}**\n${s.nom_set_line(setId, diffs.length)}${origin}\n\n` +
-            resultLine(s, confirmed, pending),
+            resultBlock(s, result),
           )
           .setFooter({ text: s.nom_actor(staff.osuName) });
         return interaction.editReply({ embeds: [embed] });
@@ -387,14 +448,22 @@ module.exports = {
       }
 
       // Atingiu o limiar — aplica de verdade.
-      const { confirmed, pending } = await applyStatus(diffs, targetStatus);
-      db.clearNominations(setId, targetStatus);
+      const result = await applyStatus(diffs, targetStatus);
+      const { confirmed, pending } = result;
+
+      // Só descarta a fila se o set inteiro chegou ao status pedido. A limpeza
+      // era incondicional, e em 09/08 um `0/100 ok` apagou as nomeações sem que
+      // uma única dificuldade tivesse mudado no servidor. Com limiar 1 o custo é
+      // renomear; com limiar maior, uma falha transitória destruía os votos de
+      // várias pessoas. Reexecutar é idempotente — recuperar voto perdido não é.
+      if (pending.length === 0) db.clearNominations(setId, targetStatus);
 
       db.logAdminAction({
         action: 'rank',
         target: setId,
         detail: `${daycore.STATUS_LABELS[targetStatus]} | ${confirmed.length}/${diffs.length} ok | ` +
-                `nominators: ${nominations.map(n => n.osu_name ?? n.osu_id).join(', ')}`,
+                `nominators: ${nominations.map(n => n.osu_name ?? n.osu_id).join(', ')}` +
+                failureDetail(result),
         actorDiscordId: interaction.user.id,
         actorOsuId: staff.osuId,
         actorOsuName: staff.osuName,
@@ -414,7 +483,7 @@ module.exports = {
           // seria ruído.
           (need > 1 ? `${s.nom_threshold_reached(need)}\n` : '') +
           s.nom_by(nominations.map(n => n.osu_name ?? n.osu_id).join(', ')) + '\n\n' +
-          resultLine(s, confirmed, pending),
+          resultBlock(s, result),
         );
       return interaction.editReply({ embeds: [embed] });
     } catch (error) {
@@ -430,4 +499,8 @@ module.exports = {
   // Idem: decide de qual fonte sai a lista de dificuldades, e errar aí é
   // publicar no mapa errado ou recusar um que daria certo.
   resolveSet,
+
+  // Idem: é quem separa "publicado" de "confirmado". Errar aqui é apagar a fila
+  // de nomeação de um set que nunca mudou no servidor.
+  applyStatus,
 };
