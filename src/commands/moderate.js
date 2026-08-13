@@ -142,6 +142,18 @@ module.exports = {
 
       if (target.id === staff.osuId) return interaction.editReply(s.mod_cannot_self);
 
+      // Espelha a regra do bancho: `if target.priv & STAFF and not user.priv &
+      // DEVELOPER: return "Only developers can manage staff members."`
+      // (app/api/utils.py). O staffGuard só exige ADMINISTRATOR, então sem esta
+      // checagem o bot publicava, o bancho recusava — e como pub/sub não
+      // responde ao publisher, a única pista era um "NÃO confirmado" seco.
+      // Quem tentasse concluiria que o bot está quebrado.
+      if (daycore.isStaff(target.priv) && !daycore.hasPriv(staff.priv, daycore.Privileges.DEVELOPER)) {
+        return interaction.editReply(
+          s.mod_target_is_staff(target.name, daycore.privLabel(target.priv)),
+        );
+      }
+
       // O bancho recusa se o estado já for o pedido, mas ele não responde ao
       // publisher — sem checar aqui, o comando reportaria sucesso à toa.
       if (sub === 'restrict' && isRestricted)   return interaction.editReply(s.mod_already_restricted(target.name));

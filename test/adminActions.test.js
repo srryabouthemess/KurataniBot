@@ -71,3 +71,40 @@ test('sem nome do Discord, ainda assina o id', async () => {
   await daycore.restrictPlayer(1, { osuId: 13, discordId: '42' }, 'motivo');
   assert.match(lastPayload().reason, /\(42\)/);
 });
+
+// ─── Quem o bancho protege ────────────────────────────────────────────────────
+// `STAFF = MODERATOR | ADMINISTRATOR | DEVELOPER` (app/constants/privileges.py),
+// e o teste do servidor é `priv & STAFF` — QUALQUER um dos bits basta. O hasPriv
+// do bot exige o conjunto inteiro, então usá-lo aqui deixaria justamente o
+// Moderator puro (o cargo mais baixo dos três) desprotegido.
+
+test('isStaff reconhece cada cargo sozinho', () => {
+  const P = daycore.Privileges;
+  const base = P.UNRESTRICTED | P.VERIFIED;
+
+  assert.equal(daycore.isStaff(base | P.MODERATOR), true, 'Moderator puro é staff');
+  assert.equal(daycore.isStaff(base | P.ADMINISTRATOR), true);
+  assert.equal(daycore.isStaff(base | P.DEVELOPER), true);
+});
+
+test('quem não é staff não é protegido', () => {
+  const P = daycore.Privileges;
+  const base = P.UNRESTRICTED | P.VERIFIED;
+
+  assert.equal(daycore.isStaff(base), false, 'jogador comum');
+  // NOMINATOR fica de fora do STAFF do bancho: gerencia mapa, não usuário.
+  assert.equal(daycore.isStaff(base | P.NOMINATOR), false, 'nominator não é staff');
+  assert.equal(daycore.isStaff(base | P.SUPPORTER | P.ALUMNI), false);
+});
+
+test('a máscara bate com a do bancho', () => {
+  assert.equal(daycore.STAFF_MASK, 4096 | 8192 | 16384);
+});
+
+test('hasPriv com a máscara daria o resultado errado — por isso isStaff existe', () => {
+  const P = daycore.Privileges;
+  const moderador = P.UNRESTRICTED | P.VERIFIED | P.MODERATOR;
+
+  assert.equal(daycore.hasPriv(moderador, daycore.STAFF_MASK), false, 'hasPriv exige os três bits');
+  assert.equal(daycore.isStaff(moderador), true, 'o bancho protege com um só');
+});

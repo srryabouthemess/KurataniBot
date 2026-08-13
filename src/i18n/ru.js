@@ -234,6 +234,7 @@ module.exports = ({ ADMIN }) => ({
   mod_restricted:          '🔴 **Ограничен**',
   mod_not_restricted:      '🟢 Без ограничений',
   mod_cannot_self:         '❌ Нельзя применить это к своему аккаунту.',
+  mod_target_is_staff:     (name, role) => `❌ **${name}** — сотрудник сервера (${role}), а модерировать сотрудников может только **Developer**. Ничего не опубликовано.`,
   mod_already_restricted:  (name) => `❌ **${name}** уже ограничен.`,
   mod_not_currently_restricted: (name) => `❌ **${name}** не ограничен.`,
   mod_restrict_title:      'Игрок ограничен',

@@ -245,6 +245,7 @@ module.exports = ({ ADMIN }) => ({
   mod_restricted:          '🔴 **Restrito**',
   mod_not_restricted:      '🟢 Sem restrição',
   mod_cannot_self:         '❌ Você não pode aplicar isso na sua própria conta.',
+  mod_target_is_staff:     (name, role) => `❌ **${name}** é da staff do servidor (${role}), e só quem tem **Developer** pode moderar membros da staff. Nada foi publicado.`,
   mod_already_restricted:  (name) => `❌ **${name}** já está restrito.`,
   mod_not_currently_restricted: (name) => `❌ **${name}** não está restrito.`,
   mod_restrict_title:      'Jogador restrito',

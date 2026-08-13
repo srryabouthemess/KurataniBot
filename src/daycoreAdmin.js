@@ -49,6 +49,23 @@ const Privileges = {
   DEVELOPER:       1 << 14,  // 16384 — controle total
 };
 
+/**
+ * Quem o bancho considera staff: `STAFF = MODERATOR | ADMINISTRATOR | DEVELOPER`
+ * (app/constants/privileges.py). NOMINATOR fica de fora — quem só gerencia mapa
+ * não é alvo protegido.
+ *
+ * ATENÇÃO: isto é MÁSCARA, e o teste é `priv & STAFF` — qualquer um dos bits
+ * basta. Não dá para passar no `hasPriv`, que exige o conjunto inteiro: por lá,
+ * um Moderator puro não seria reconhecido como staff e a proteção não valeria
+ * justamente para quem tem o cargo mais baixo dos três.
+ */
+const STAFF_MASK = Privileges.MODERATOR | Privileges.ADMINISTRATOR | Privileges.DEVELOPER;
+
+/** Se o bancho trataria essa conta como membro da staff. */
+function isStaff(priv) {
+  return (Number(priv) & STAFF_MASK) !== 0;
+}
+
 // Valores aceitos pelo comando !map do bancho, e portanto pelo canal `rank`.
 const RankedStatus = {
   UNRANK: 0,
@@ -367,6 +384,8 @@ module.exports = {
   restrictPlayer,
   unrestrictPlayer,
   hasPriv,
+  isStaff,
+  STAFF_MASK,
   privLabel,
   getPlayerPrivileges,
   verifyMapStatus,
