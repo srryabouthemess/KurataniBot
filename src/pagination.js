@@ -82,6 +82,13 @@ async function paginate(interaction, { id, totalPages, buildEmbed, strings, onPa
 
   const collector = message.createMessageComponentCollector({ idle: IDLE_MS });
 
+  // Cliques seguidos rodam handlers concorrentes: o coletor não espera um
+  // terminar para entregar o próximo. Sem saber quem é o mais recente, um
+  // handler antigo que demora podia sobrescrever a tela com uma página velha,
+  // e — pior — um que falhasse revertia o cursor por cima do avanço de outro
+  // que tinha dado certo. O contador diz quem ainda manda.
+  let clique = 0;
+
   collector.on('collect', async (i) => {
     if (i.user.id !== interaction.user.id) {
       return i.reply({ content: strings.pagination_not_yours, flags: MessageFlags.Ephemeral })
@@ -93,6 +100,7 @@ async function paginate(interaction, { id, totalPages, buildEmbed, strings, onPa
     // página que nunca chegou à tela e o clique seguinte partiria do lugar
     // errado — pular uma página a cada falha.
     const shown = page;
+    const meu   = ++clique;
 
     if (i.customId === `${id}_prev` && page > 0) page--;
     if (i.customId === `${id}_next` && page < totalPages - 1) page++;
@@ -101,14 +109,20 @@ async function paginate(interaction, { id, totalPages, buildEmbed, strings, onPa
 
     try {
       const next = await getEmbed(page);
+      // Outro clique assumiu enquanto esta página era montada: quem chegou
+      // depois é que representa o que a pessoa quer ver agora.
+      if (meu !== clique) return;
+
       await interaction.editReply({ embeds: [next], components: [buildRow(id, page, totalPages)] });
       warmNext(page);
     } catch (error) {
       // Sem este catch a promise do handler rejeitava solta: o clique já tinha
       // sido confirmado pelo deferUpdate, então a pessoa via a mensagem parada
       // sem nenhum aviso, e o erro só aparecia no unhandledRejection global.
-      page = shown;
       logError('pagination', error);
+      if (meu !== clique) return;
+
+      page = shown;
       // A página em cache não falha de novo; devolve os botões ao estado certo.
       await interaction
         .editReply({ components: [buildRow(id, page, totalPages)] })
