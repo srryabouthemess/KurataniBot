@@ -111,7 +111,7 @@ Confira com `node --version` — precisa ser 22.13 ou superior.
 ### Testes
 
 ```bash
-npm test     # 243 casos, poucos segundos, sem tocar rede nem o bot.db real
+npm test     # 250 casos, poucos segundos, sem tocar rede nem o bot.db real
 npm run lint
 npm run smoke  # confere contra as APIs de verdade
 ```
@@ -233,7 +233,9 @@ Exige Administrador no Discord do `DAYCORE_GUILD_ID`, exceto o `confirm`, que é
 - **`/wipe` apaga os scores de um modo e zera as estatísticas, sem volta.** Pede confirmação por botão mostrando o que será destruído, e o log guarda esses números — depois do wipe eles não existem em lugar nenhum. Diferente dos outros, o bancho **não** confere privilégio nesse canal: a exigência de `DEVELOPER` é do bot, e é a única que existe.
 - `/nominate`, `/moderate`, `/wipe` e `/staff` **não** funcionam no modo texto: respondem em ephemeral, e o adaptador do prefixo precisa descartar essa flag.
 
-Com `DAYCORE_ANNOUNCE_CHANNEL_ID` preenchido, todo mapa que muda de status vira um anúncio nesse canal — o bancho.py-ex não avisa o Discord sozinho. Vazio desliga.
+Com `DAYCORE_ANNOUNCE_CHANNEL_ID` preenchido, todo mapa que vira **ranked** ou **loved** é anunciado nesse canal — inclusive os rankeados **dentro do jogo** com `!map`, que o bot escuta pelo evento que o próprio bancho publica. Vazio desliga.
+
+> O anúncio de quem foi aplicado in-game só traz o nome se o fork incluir `author_id`/`author_name` no publish do `_map` (`app/commands.py`). Sem isso ele sai como "aplicado pelo jogo", sem autor.
 
 Como o bot não recebe confirmação ao publicar, ele relê o estado depois e avisa quando não conseguiu confirmar — em vez de reportar sucesso no escuro. A janela de espera cresce com o tamanho do set, porque o servidor baixa o `.osu` de cada dificuldade que não tem.
 

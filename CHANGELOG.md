@@ -20,6 +20,14 @@ Primeira sessão com acesso ao servidor de verdade. Os comandos administrativos,
   - Agora o servidor continua tendo prioridade e a API oficial entra só como fallback, tanto para descobrir de qual set é uma dificuldade quanto para listar as dificuldades de um set. A resposta avisa quando a lista veio do osu!, já que aí a contagem de dificuldades não é do servidor.
   - De quebra, 404 do `getServerMap` deixou de virar exceção: ID de dificuldade solto que o servidor não conhecia caía no catch geral e respondia "ocorreu um erro" em vez da mensagem certa.
 
+- **Mapa rankeado DENTRO DO JOGO também vira anúncio.** [`daycoreEvents.js`](src/daycoreEvents.js), [`announce.js`](src/announce.js)
+  - O bancho já publicava em `ex:map_status_change` a cada `!map rank/unrank/love`, com os IDs afetados e o tipo. **Ninguém assinava o canal**, então o evento existia e se perdia: mapa rankeado in-game não aparecia em lugar nenhum do Discord, só o que passava pelo `/nominate`.
+  - Não há duplicação. O caminho do bot publica no canal `rank`, e o `change_bm_status` que o atende **não** publica o `ex:map_status_change` — as duas fontes não se cruzam, uma completa a outra.
+  - Só `rank` e `love` viram anúncio. `unrank` fica de fora por decisão de produto: desqualificar é rotina de curadoria e encheria o canal sem informar ninguém — quem acompanha quer saber o que **entrou**.
+  - A assinatura usa conexão própria: um client em modo subscribe não aceita outros comandos, então não pode dividir a conexão que o `daycoreAdmin` usa para publicar. E ao contrário do publisher, aqui a reconexão é infinita (com teto de 30s): é uma assinatura de vida longa, e desistir dela deixaria o bot mudo para sempre sem ninguém perceber.
+  - **Uma linha no servidor**, aplicada com autorização do dono: o publish passou a incluir `author_id` e `author_name`, senão o anúncio in-game sairia sem dizer quem aplicou. Os campos são opcionais do lado do bot — sem eles a linha vira "Aplicado pelo jogo" em vez de o anúncio sair errado ou não sair. A linha do embed distingue as duas origens, porque aplicado pelo bot é rastreável até uma conta do Discord e aplicado no jogo não é.
+  - **Registro de um erro de investigação:** a conclusão inicial foi de que o `!map` não publicava nada, e daí saíram duas propostas ruins — varrer ~3800 mapas por ciclo, ou pedir ao dono do servidor que construísse o evento. As duas eram desnecessárias. O `grep publish` não achou porque o código chama `execute_command("PUBLISH", ...)`, em **maiúsculo**. O mesmo motivo pelo qual o canal não aparecia num `PUBSUB CHANNELS`: aquele comando lista canais com assinante **ativo**, e ninguém assinava.
+
 - **Anúncio de mudança de status no Discord.** [`announce.js`](src/announce.js)
   - O bancho.py-ex não avisa o Discord quando um mapa é rankeado ou amado: quem acompanha só descobre entrando no site. O bot já sabe da mudança — é ele que publica e confirma —, então anunciar é aproveitar o que já está em mãos.
   - Sai no canal de `DAYCORE_ANNOUNCE_CHANNEL_ID`, com capa do set, link para a página do mapa **no servidor**, quantas dificuldades pegaram e quem aplicou. Cobre os três caminhos que mudam status: nomeação atingindo o limiar, `force` e `disqualify`.
@@ -89,7 +97,7 @@ Primeira sessão com acesso ao servidor de verdade. Os comandos administrativos,
 
 ## 🧪 Testes
 
-- De 167 para **243 casos**. Cobrem, entre outros: o fallback do `/nominate` para mapa fora do servidor, a janela de verificação proporcional, a publicação parcial, o desafio de posse e o aval, o alfabeto e a entropia do código, a máscara `STAFF`, o `slashOnly`, e o teto do registro de falhas do Python.
+- De 167 para **250 casos**. Cobrem, entre outros: o fallback do `/nominate` para mapa fora do servidor, a janela de verificação proporcional, a publicação parcial, o desafio de posse e o aval, o alfabeto e a entropia do código, a máscara `STAFF`, o `slashOnly`, e o teto do registro de falhas do Python.
 - Nos casos da paginação e do teto de falhas, o teste novo foi rodado **contra a versão anterior do módulo** para confirmar que reprova o código antigo e passa no atual — um teste que passa nos dois não estaria testando a correção.
 - O fixture das travas genéricas do prefixo (opção de usuário, escopo de servidor, permissão exigida) deixou de ser o `/staff`: aquilo testa o dispatcher, e não devia depender de qual comando real por acaso tem as três propriedades.
 
