@@ -250,6 +250,8 @@ module.exports = ({ ADMIN }) => ({
   staff_list_title:        `🔑 ${ADMIN} staff links`,
   staff_list_empty:        'No staff links registered. Use `/staff register`.',
   staff_list_line:         (discordId, osuName, osuId) => `• <@${discordId}> → **${osuName}** (\`${osuId}\`)`,
+  staff_list_duplicate:    '⚠️ duplicate account',
+  staff_osu_already_linked:(discordId, osuName, osuId) => `❌ The account **${osuName}** (\`${osuId}\`) is already linked to <@${discordId}>. Run \`/staff remove\` on that member first — two Discord accounts on one game account leave the server's audit log unable to tell who acted.`,
   staff_registered_title:  '✅ Staff link registered',
   staff_registered_body:   (discordId, osuName, osuId, role) =>
     `<@${discordId}> → **${osuName}** (\`${osuId}\`)

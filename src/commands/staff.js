@@ -98,11 +98,18 @@ module.exports = {
       if (rows.length === 0) {
         return interaction.reply({ content: s.staff_list_empty, flags: MessageFlags.Ephemeral });
       }
+      // O register agora recusa duplicata, mas vínculos criados antes disso
+      // continuam no banco — e são invisíveis numa lista que só enfileira
+      // linhas. Marcar aqui é o que faz alguém notar e resolver.
+      const porOsuId = new Map();
+      for (const r of rows) porOsuId.set(r.osu_id, (porOsuId.get(r.osu_id) ?? 0) + 1);
+
       const embed = new EmbedBuilder()
         .setColor(0x99ccff)
         .setTitle(s.staff_list_title)
         .setDescription(rows.map(r =>
-          s.staff_list_line(r.discord_id, r.osu_name ?? '?', r.osu_id)).join('\n'));
+          s.staff_list_line(r.discord_id, r.osu_name ?? '?', r.osu_id) +
+          (porOsuId.get(r.osu_id) > 1 ? ` ${s.staff_list_duplicate}` : '')).join('\n'));
       return interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
     }
 
@@ -126,6 +133,21 @@ module.exports = {
 
       const player = await daycore.getPlayerPrivileges(osuId);
       if (!player) return interaction.editReply(s.player_not_found);
+
+      // Um osu! por Discord, e vice-versa. O schema só garante o primeiro lado
+      // (a PK é o discord_id), e a falta do segundo já produziu duas contas do
+      // Discord vinculadas à mesma conta de staff ao mesmo tempo — duas
+      // identidades agindo como a mesma pessoa no log de auditoria do servidor.
+      //
+      // Recusar em vez de sobrescrever: quem trocou de conta do Discord faz o
+      // /staff remove antes, e aí a substituição é um ato explícito de quem
+      // administra, não efeito colateral de um register.
+      const existente = db.getStaffLinkByOsuId(player.id);
+      if (existente && existente.discord_id !== member.id) {
+        return interaction.editReply(
+          s.staff_osu_already_linked(existente.discord_id, player.name, player.id),
+        );
+      }
 
       db.setStaffLink(member.id, player.id, player.name, interaction.user.id);
 

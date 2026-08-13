@@ -703,6 +703,19 @@ function getStaffLink(discordId) {
   return db.prepare('SELECT * FROM staff_links WHERE discord_id = ?').get(discordId) ?? null;
 }
 
+/**
+ * Quem já está vinculado àquela conta de jogo.
+ *
+ * A PK da tabela é o `discord_id`, então nada no schema impede dois Discords
+ * apontando para o mesmo `osu_id` — e isso já aconteceu em produção. Para
+ * nomeação não era problema (a PK de map_nominations é por osu_id, então não
+ * vira voto duplo), mas para moderação são duas identidades do Discord agindo
+ * como a mesma pessoa no log do servidor de jogo.
+ */
+function getStaffLinkByOsuId(osuId) {
+  return db.prepare('SELECT * FROM staff_links WHERE osu_id = ?').get(osuId) ?? null;
+}
+
 function removeStaffLink(discordId) {
   return db.prepare('DELETE FROM staff_links WHERE discord_id = ?').run(discordId).changes > 0;
 }
@@ -818,7 +831,7 @@ module.exports = {
   getBeatmapMeta, setBeatmapMeta,
   getMapDifficulty, setMapDifficulty,
   getMeta, setMeta,
-  setStaffLink, getStaffLink, removeStaffLink, listStaffLinks,
+  setStaffLink, getStaffLink, getStaffLinkByOsuId, removeStaffLink, listStaffLinks,
   addNomination, removeNomination, getNominations, clearNominations,
   listPendingNominations, cacheNominationMap,
   logAdminAction, listAdminActions,

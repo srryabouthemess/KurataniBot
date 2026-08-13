@@ -250,6 +250,8 @@ module.exports = ({ ADMIN }) => ({
   staff_list_title:        `🔑 Привязки персонала ${ADMIN}`,
   staff_list_empty:        'Привязок персонала нет. Используйте `/staff register`.',
   staff_list_line:         (discordId, osuName, osuId) => `• <@${discordId}> → **${osuName}** (\`${osuId}\`)`,
+  staff_list_duplicate:    '⚠️ повтор аккаунта',
+  staff_osu_already_linked:(discordId, osuName, osuId) => `❌ Аккаунт **${osuName}** (\`${osuId}\`) уже привязан к <@${discordId}>. Сначала выполните \`/staff remove\` для того участника — два Discord-аккаунта на одном игровом не дают журналу аудита понять, кто именно действовал.`,
   staff_registered_title:  '✅ Привязка персонала создана',
   staff_registered_body:   (discordId, osuName, osuId, role) =>
     `<@${discordId}> → **${osuName}** (\`${osuId}\`)

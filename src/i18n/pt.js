@@ -261,6 +261,8 @@ module.exports = ({ ADMIN }) => ({
   staff_list_title:        `🔑 Vínculos de staff do ${ADMIN}`,
   staff_list_empty:        'Nenhum vínculo de staff registrado. Use `/staff register`.',
   staff_list_line:         (discordId, osuName, osuId) => `• <@${discordId}> → **${osuName}** (\`${osuId}\`)`,
+  staff_list_duplicate:    '⚠️ conta repetida',
+  staff_osu_already_linked:(discordId, osuName, osuId) => `❌ A conta **${osuName}** (\`${osuId}\`) já está vinculada a <@${discordId}>. Use \`/staff remove\` naquele membro antes de vincular a outro — duas contas do Discord na mesma conta de jogo deixam o log de auditoria do servidor sem saber quem agiu.`,
   staff_registered_title:  '✅ Vínculo de staff registrado',
   staff_registered_body:   (discordId, osuName, osuId, role) =>
     `<@${discordId}> → **${osuName}** (\`${osuId}\`)
