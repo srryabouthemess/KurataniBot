@@ -121,6 +121,28 @@ db.exec(`
     added_at    INTEGER NOT NULL
   );
 
+  -- Desafio pendente de vínculo: o código que prova posse da conta de jogo.
+  --
+  -- O /staff register nasceu auto-declarado — quem tinha Administrator no
+  -- Discord apontava o próprio Discord para o nick de qualquer staff e herdava
+  -- o privilégio dele. Enquanto o pior caso era uma restrição reversível isso
+  -- passou; com o /wipe, que apaga scores sem volta, deixou de passar.
+  --
+  -- Agora o register só emite um código. Quem controla a conta de jogo escreve
+  -- esse código no perfil dela (userpage_content, editável apenas por quem
+  -- entra na conta) e roda /staff confirm — e é o confirm que cria o vínculo.
+  -- Um administrador do Discord não consegue escrever no perfil alheio, então
+  -- não consegue mais se vincular a uma conta que não é dele.
+  CREATE TABLE IF NOT EXISTS staff_link_challenges (
+    discord_id   TEXT    PRIMARY KEY,
+    osu_id       INTEGER NOT NULL,
+    osu_name     TEXT,
+    code         TEXT    NOT NULL,
+    requested_by TEXT    NOT NULL,
+    created_at   INTEGER NOT NULL,
+    expires_at   INTEGER NOT NULL
+  );
+
   -- ── Nomeação de mapas do Daycore ───────────────────────────────────────────
   -- O bancho.py-ex não tem conceito de "fila de nomeação": ele só sabe aplicar
   -- um status final num mapa. Todo o processo social (quem nomeou, quantos
@@ -720,6 +742,45 @@ function removeStaffLink(discordId) {
   return db.prepare('DELETE FROM staff_links WHERE discord_id = ?').run(discordId).changes > 0;
 }
 
+// ─── Desafio de posse de conta ────────────────────────────────────────────────
+
+/**
+ * Cria (ou substitui) o desafio pendente daquele Discord.
+ *
+ * Um por Discord: pedir um vínculo novo cancela o anterior, para não ficarem
+ * dois códigos válidos ao mesmo tempo apontando para contas diferentes.
+ */
+function setStaffChallenge({ discordId, osuId, osuName, code, requestedBy, ttlMs }) {
+  const agora = Date.now();
+  db.prepare(`
+    INSERT INTO staff_link_challenges
+      (discord_id, osu_id, osu_name, code, requested_by, created_at, expires_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(discord_id) DO UPDATE SET
+      osu_id = excluded.osu_id, osu_name = excluded.osu_name,
+      code = excluded.code, requested_by = excluded.requested_by,
+      created_at = excluded.created_at, expires_at = excluded.expires_at
+  `).run(discordId, osuId, osuName ?? null, code, requestedBy, agora, agora + ttlMs);
+}
+
+/** O desafio pendente, ou null se não existir ou já ter expirado. */
+function getStaffChallenge(discordId) {
+  const row = db.prepare('SELECT * FROM staff_link_challenges WHERE discord_id = ?').get(discordId);
+  if (!row) return null;
+
+  // Expirado é o mesmo que inexistente, e some na leitura: sem isso um código
+  // velho ficaria no banco esperando alguém tentar usá-lo.
+  if (row.expires_at <= Date.now()) {
+    clearStaffChallenge(discordId);
+    return null;
+  }
+  return row;
+}
+
+function clearStaffChallenge(discordId) {
+  return db.prepare('DELETE FROM staff_link_challenges WHERE discord_id = ?').run(discordId).changes > 0;
+}
+
 function listStaffLinks() {
   return db.prepare('SELECT * FROM staff_links ORDER BY added_at ASC').all();
 }
@@ -832,6 +893,7 @@ module.exports = {
   getMapDifficulty, setMapDifficulty,
   getMeta, setMeta,
   setStaffLink, getStaffLink, getStaffLinkByOsuId, removeStaffLink, listStaffLinks,
+  setStaffChallenge, getStaffChallenge, clearStaffChallenge,
   addNomination, removeNomination, getNominations, clearNominations,
   listPendingNominations, cacheNominationMap,
   logAdminAction, listAdminActions,

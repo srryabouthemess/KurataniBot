@@ -279,6 +279,18 @@ module.exports = ({ ADMIN }) => ({
   staff_list_line:         (discordId, osuName, osuId) => `• <@${discordId}> → **${osuName}** (\`${osuId}\`)`,
   staff_list_duplicate:    '⚠️ conta repetida',
   staff_osu_already_linked:(discordId, osuName, osuId) => `❌ A conta **${osuName}** (\`${osuId}\`) já está vinculada a <@${discordId}>. Use \`/staff remove\` naquele membro antes de vincular a outro — duas contas do Discord na mesma conta de jogo deixam o log de auditoria do servidor sem saber quem agiu.`,
+  staff_challenge_title:   '🔑 Falta a pessoa confirmar',
+  staff_challenge_body:    (discordId, osuName, osuId, role, code, minutos) =>
+    `Vínculo pedido: <@${discordId}> → **${osuName}** (\`${osuId}\`, ${role})\n\n` +
+    `**Nada foi vinculado ainda.** Para concluir, <@${discordId}> precisa:\n` +
+    `1. Entrar na conta **${osuName}** no site do servidor e colocar este código no perfil (campo "sobre mim"):\n` +
+    `\`\`\`\n${code}\n\`\`\`\n` +
+    `2. Rodar \`/staff confirm\` aqui.\n\n` +
+    `O código vale por **${minutos} minutos**. Só quem entra na conta consegue editar aquele perfil — é isso que prova que a conta é dela.`,
+  staff_no_challenge:      '❌ Você não tem nenhum vínculo pendente. Peça a um administrador para rodar `/staff register` com a sua conta primeiro.',
+  staff_code_not_found:    (osuName, code) =>
+    `❌ Não achei o código no perfil de **${osuName}**.\n\nColoque \`${code}\` no campo "sobre mim" do perfil, salve, e rode \`/staff confirm\` de novo. Se acabou de salvar, espere alguns segundos.`,
+  staff_code_can_be_removed: 'Pode tirar o código do perfil agora.',
   staff_registered_title:  '✅ Vínculo de staff registrado',
   staff_registered_body:   (discordId, osuName, osuId, role) =>
     `<@${discordId}> → **${osuName}** (\`${osuId}\`)

@@ -3,11 +3,35 @@ const {
   InteractionContextType, MessageFlags, PermissionFlagsBits,
 } = require('discord.js');
 
+const crypto = require('crypto');
+
 const osu = require('../osuClient');
 const daycore = require('../daycoreAdmin');
 const db = require('../db');
 const { t } = require('../i18n');
 const { logError } = require('../logger');
+
+// Vale para o tempo de ir ao site, editar o perfil e voltar, sem deixar código
+// válido pendurado por horas.
+const CHALLENGE_TTL_MS = 30 * 60 * 1000;
+
+/**
+ * Código do desafio.
+ *
+ * Alfabeto sem 0/O e 1/I/L: quem lê da tela e digita no site erra justamente
+ * nesses, e um código recusado por engano manda a pessoa refazer tudo.
+ * `randomInt` e não `Math.random`: é o gerador criptográfico, e este código é o
+ * que separa "prova de posse" de "chute".
+ */
+const CODE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+
+function generateCode() {
+  let out = '';
+  for (let i = 0; i < 8; i++) {
+    out += CODE_ALPHABET[crypto.randomInt(CODE_ALPHABET.length)];
+  }
+  return `KB-${out}`;
+}
 
 /**
  * Vincula contas do Discord a contas do Daycore para fins de PERMISSÃO.
@@ -24,24 +48,32 @@ const { logError } = require('../logger');
  * Daycore. Em qualquer outro servidor, onde "ser admin" não significa nada, o
  * comando é recusado antes de olhar permissão.
  *
- * ── O que este comando AINDA não garante ──────────────────────────────────────
- * O vínculo é auto-declarado do lado do jogo: nada prova que a conta informada
- * pertence ao membro sendo vinculado. Quem tem Administrator no Discord pode
- * apontar a própria conta do Discord para o nick de outro staff e passar a agir
- * com o privilégio dele. E "Administrator no Discord" não é o mesmo conjunto de
- * pessoas que "staff do servidor de jogo" — um community manager entra num, não
- * no outro.
+ * ── Prova de posse da conta ───────────────────────────────────────────────────
+ * O vínculo já foi auto-declarado: bastava ter Administrator no Discord para
+ * apontar o próprio Discord ao nick de outro staff e herdar o privilégio dele.
+ * Enquanto o pior caso era uma restrição reversível, a assinatura no motivo
+ * (ver `signReason`) bastava como mitigação — dava para agir em nome de outro,
+ * mas não sem rastro. Com o /wipe, que apaga scores sem volta, deixou de bastar.
  *
- * Mitigado, não resolvido: toda ação publicada leva o Discord de quem pediu
- * assinado no motivo (ver `signReason` em daycoreAdmin.js), então o log do
- * **servidor** registra as duas pontas e a auditoria não depende de o bot estar
- * íntegro. Continua sendo possível agir em nome de outro; deixa de ser possível
- * fazer isso sem rastro.
+ * Agora são dois passos, e quem cria o vínculo é o segundo:
  *
- * A correção de raiz é provar posse da conta antes de vincular — código
- * temporário que a pessoa cola no perfil do osu!, ou OAuth do próprio servidor.
- * Está em aberto de propósito, para quando o fluxo administrativo for testado
- * de verdade contra um bancho.py real.
+ *   1. `/staff register` (Administrator) só EMITE um código. Nada é vinculado.
+ *   2. A pessoa escreve o código no perfil dela no servidor de jogo e roda
+ *      `/staff confirm`. O bot relê o `userpage_content` pela API v2 e, se o
+ *      código estiver lá, cria o vínculo.
+ *
+ * O que isso fecha: o `userpage_content` só é editável por quem entra na conta,
+ * então um administrador do Discord não consegue plantar o código no perfil
+ * alheio — e portanto não consegue mais se vincular a uma conta que não é dele.
+ *
+ * As duas pontas ficam provadas: o código prova a posse da conta de jogo, e
+ * rodar o `/staff confirm` prova o controle da conta do Discord. O
+ * administrador continua sendo quem AUTORIZA (só ele emite o código), mas
+ * deixou de ser quem decide sozinho de quem é a conta.
+ *
+ * O que continua fora do alcance: um administrador pode emitir código para
+ * vincular OUTRO Discord a uma conta que aquela pessoa de fato controla. Isso
+ * concede privilégio a terceiro, não a si mesmo — e exige a colaboração dela.
  */
 module.exports = {
   // Efêmero em tudo: a lista de vínculos diz quem no Discord é quem no jogo, e
@@ -79,6 +111,10 @@ module.exports = {
         .addUserOption(o => o.setName('member')
           .setDescription('Discord member').setRequired(true)))
     .addSubcommand(sub =>
+      sub.setName('confirm')
+        .setDescription('Confirm your own link by proving you own the game account')
+        .setDescriptionLocalizations({ 'pt-BR': 'Confirma seu próprio vínculo provando que a conta de jogo é sua' }))
+    .addSubcommand(sub =>
       sub.setName('list')
         .setDescription('List all staff links')
         .setDescriptionLocalizations({ 'pt-BR': 'Lista todos os vínculos de staff' })),
@@ -94,6 +130,60 @@ module.exports = {
     if (interaction.guildId !== guildId) {
       return interaction.reply({ content: s.admin_wrong_guild, flags: MessageFlags.Ephemeral });
     }
+
+    // ── /staff confirm — o único que NÃO exige Administrator ─────────────────
+    // Quem confirma é a pessoa sendo vinculada, provando que a conta de jogo é
+    // dela. Exigir Administrator aqui devolveria a decisão a quem o desafio
+    // existe justamente para tirar do meio.
+    if (sub === 'confirm') {
+      const desafio = db.getStaffChallenge(interaction.user.id);
+      if (!desafio) {
+        return interaction.reply({ content: s.staff_no_challenge, flags: MessageFlags.Ephemeral });
+      }
+
+      await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
+      try {
+        const player = await osu.getServerPlayerRaw(desafio.osu_id);
+        if (!player) return interaction.editReply(s.player_not_found);
+
+        const userpage = String(player.userpage_content ?? '');
+        if (!userpage.includes(desafio.code)) {
+          return interaction.editReply(
+            s.staff_code_not_found(desafio.osu_name ?? desafio.osu_id, desafio.code),
+          );
+        }
+
+        // Revalidado na confirmação, e não só na emissão: entre um passo e o
+        // outro alguém pode ter vinculado aquela conta de jogo a outro Discord.
+        const existente = db.getStaffLinkByOsuId(desafio.osu_id);
+        if (existente && existente.discord_id !== interaction.user.id) {
+          db.clearStaffChallenge(interaction.user.id);
+          return interaction.editReply(
+            s.staff_osu_already_linked(existente.discord_id, desafio.osu_name ?? '?', desafio.osu_id),
+          );
+        }
+
+        db.setStaffLink(interaction.user.id, desafio.osu_id, player.name, desafio.requested_by);
+        db.clearStaffChallenge(interaction.user.id);
+
+        const embed = new EmbedBuilder()
+          .setColor(0x99ff99)
+          .setTitle(s.staff_registered_title)
+          .setDescription(
+            s.staff_registered_body(
+              interaction.user.id, player.name, player.id,
+              daycore.privLabel(Number(player.priv ?? 0)),
+            ) + `\n\n${s.staff_code_can_be_removed}`,
+          );
+        return interaction.editReply({ embeds: [embed] });
+      } catch (error) {
+        logError('staff:confirm', error);
+        return interaction.editReply(s.admin_action_failed);
+      }
+    }
+
+    // Os demais mexem em vínculo de terceiro: continuam sendo de administrador.
     if (!interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
       return interaction.reply({ content: s.staff_need_admin, flags: MessageFlags.Ephemeral });
     }
@@ -154,15 +244,26 @@ module.exports = {
         );
       }
 
-      db.setStaffLink(member.id, player.id, player.name, interaction.user.id);
+      // Aqui o vínculo NÃO é criado: só emitimos o código. Quem cria é o
+      // /staff confirm, depois de o código aparecer no perfil da conta de jogo.
+      const code = generateCode();
+      db.setStaffChallenge({
+        discordId:   member.id,
+        osuId:       player.id,
+        osuName:     player.name,
+        code,
+        requestedBy: interaction.user.id,
+        ttlMs:       CHALLENGE_TTL_MS,
+      });
 
-      // Mostra o cargo atual só como conferência: o vínculo não concede nada
-      // por si só — a permissão vem do priv, relido a cada comando.
+      // O cargo atual sai como conferência: o vínculo não concede nada por si
+      // só — a permissão vem do priv, relido a cada comando.
       const embed = new EmbedBuilder()
-        .setColor(0x99ff99)
-        .setTitle(s.staff_registered_title)
-        .setDescription(s.staff_registered_body(
-          member.id, player.name, player.id, daycore.privLabel(player.priv),
+        .setColor(0xffcc66)
+        .setTitle(s.staff_challenge_title)
+        .setDescription(s.staff_challenge_body(
+          member.id, player.name, player.id,
+          daycore.privLabel(player.priv), code, CHALLENGE_TTL_MS / 60000,
         ));
       return interaction.editReply({ embeds: [embed] });
     } catch (error) {
@@ -170,4 +271,10 @@ module.exports = {
       return interaction.editReply(s.admin_action_failed);
     }
   },
+
+  // Exportado para teste: é o que separa "prova de posse" de "chute". Um código
+  // curto demais, previsível, ou com caracteres que se confundem na digitação
+  // estraga a garantia inteira sem aparecer em nenhuma saída do bot.
+  generateCode,
+  CODE_ALPHABET,
 };

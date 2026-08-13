@@ -268,6 +268,18 @@ module.exports = ({ ADMIN }) => ({
   staff_list_line:         (discordId, osuName, osuId) => `• <@${discordId}> → **${osuName}** (\`${osuId}\`)`,
   staff_list_duplicate:    '⚠️ повтор аккаунта',
   staff_osu_already_linked:(discordId, osuName, osuId) => `❌ Аккаунт **${osuName}** (\`${osuId}\`) уже привязан к <@${discordId}>. Сначала выполните \`/staff remove\` для того участника — два Discord-аккаунта на одном игровом не дают журналу аудита понять, кто именно действовал.`,
+  staff_challenge_title:   '🔑 Ожидается подтверждение',
+  staff_challenge_body:    (discordId, osuName, osuId, role, code, minutes) =>
+    `Запрошена привязка: <@${discordId}> → **${osuName}** (\`${osuId}\`, ${role})\n\n` +
+    `**Пока ничего не привязано.** Чтобы завершить, <@${discordId}> нужно:\n` +
+    `1. Войти в аккаунт **${osuName}** на сайте сервера и вписать этот код в профиль (поле «обо мне»):\n` +
+    `\`\`\`\n${code}\n\`\`\`\n` +
+    `2. Выполнить \`/staff confirm\` здесь.\n\n` +
+    `Код действует **${minutes} минут**. Редактировать тот профиль может только тот, кто вошёл в аккаунт — это и доказывает, что аккаунт его.`,
+  staff_no_challenge:      '❌ У вас нет ожидающих привязок. Попросите администратора сначала выполнить `/staff register` с вашим аккаунтом.',
+  staff_code_not_found:    (osuName, code) =>
+    `❌ Не нашёл код в профиле **${osuName}**.\n\nВпишите \`${code}\` в поле «обо мне», сохраните и снова выполните \`/staff confirm\`. Если только что сохранили — подождите несколько секунд.`,
+  staff_code_can_be_removed: 'Код из профиля можно убрать.',
   staff_registered_title:  '✅ Привязка персонала создана',
   staff_registered_body:   (discordId, osuName, osuId, role) =>
     `<@${discordId}> → **${osuName}** (\`${osuId}\`)

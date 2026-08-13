@@ -268,6 +268,18 @@ module.exports = ({ ADMIN }) => ({
   staff_list_line:         (discordId, osuName, osuId) => `• <@${discordId}> → **${osuName}** (\`${osuId}\`)`,
   staff_list_duplicate:    '⚠️ duplicate account',
   staff_osu_already_linked:(discordId, osuName, osuId) => `❌ The account **${osuName}** (\`${osuId}\`) is already linked to <@${discordId}>. Run \`/staff remove\` on that member first — two Discord accounts on one game account leave the server's audit log unable to tell who acted.`,
+  staff_challenge_title:   '🔑 Waiting for them to confirm',
+  staff_challenge_body:    (discordId, osuName, osuId, role, code, minutes) =>
+    `Link requested: <@${discordId}> → **${osuName}** (\`${osuId}\`, ${role})\n\n` +
+    `**Nothing has been linked yet.** To finish, <@${discordId}> must:\n` +
+    `1. Sign in to **${osuName}** on the server's site and put this code in their profile ("about me"):\n` +
+    `\`\`\`\n${code}\n\`\`\`\n` +
+    `2. Run \`/staff confirm\` here.\n\n` +
+    `The code is valid for **${minutes} minutes**. Only someone signed in to that account can edit its profile — that is what proves the account is theirs.`,
+  staff_no_challenge:      '❌ You have no pending link. Ask an administrator to run `/staff register` with your account first.',
+  staff_code_not_found:    (osuName, code) =>
+    `❌ I could not find the code on **${osuName}**'s profile.\n\nPut \`${code}\` in the profile's "about me" field, save it, then run \`/staff confirm\` again. If you just saved, give it a few seconds.`,
+  staff_code_can_be_removed: 'You can remove the code from your profile now.',
   staff_registered_title:  '✅ Staff link registered',
   staff_registered_body:   (discordId, osuName, osuId, role) =>
     `<@${discordId}> → **${osuName}** (\`${osuId}\`)
