@@ -279,14 +279,41 @@ async function getPlayerPrivileges(osuId) {
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 /**
+ * Quanto tempo esperar o bancho terminar, em função do tamanho do set.
+ *
+ * O trabalho dele é proporcional ao número de dificuldades — baixa o .osu de
+ * cada uma que não tem em disco —, então a janela fixa que servia para uma
+ * dificuldade fechava cedo demais para um set grande. O `Hardtekk Jump
+ * Training` (100 diffs) reportou 90/100, e a releitura seguinte mostrou
+ * 100/100: nada tinha falhado, a janela é que era curta. O efeito prático era
+ * a resposta chamar de "parcial" uma ação que deu certo inteira.
+ *
+ * O teto existe porque quem espera do outro lado é uma interação do Discord,
+ * que expira — melhor reportar pendente do que não conseguir responder.
+ */
+const VERIFY_BASE_MS    = 4000;
+const VERIFY_PER_MAP_MS = 900;
+const VERIFY_MAX_MS     = 180000;
+
+function verifyBudget(mapCount) {
+  return Math.min(VERIFY_BASE_MS + mapCount * VERIFY_PER_MAP_MS, VERIFY_MAX_MS);
+}
+
+/**
  * Confirma que as dificuldades chegaram no status esperado.
+ *
+ * Repete até todas confirmarem ou a janela fechar, sempre com pelo menos uma
+ * releitura — cada passada custa uma requisição por dificuldade ainda pendente,
+ * e a lista encolhe conforme elas confirmam.
+ *
  * @returns {Promise<{confirmed: number[], pending: number[]}>}
  */
-async function verifyMapStatus(beatmapIds, expectedStatus, { attempts = 3, delayMs = 1200 } = {}) {
+async function verifyMapStatus(beatmapIds, expectedStatus, { delayMs = 1200, budgetMs } = {}) {
   let pending = [...beatmapIds];
   const confirmed = [];
+  const deadline = Date.now() + (budgetMs ?? verifyBudget(pending.length));
 
-  for (let i = 0; i < attempts && pending.length > 0; i++) {
+  do {
     await sleep(delayMs);
 
     const still = [];
@@ -300,12 +327,18 @@ async function verifyMapStatus(beatmapIds, expectedStatus, { attempts = 3, delay
       }
     }
     pending = still;
-  }
+  } while (pending.length > 0 && Date.now() < deadline);
 
   return { confirmed, pending };
 }
 
-/** Confirma se o jogador ficou (ou deixou de estar) restrito. */
+/**
+ * Confirma se o jogador ficou (ou deixou de estar) restrito.
+ *
+ * Aqui a janela continua fixa, e não escalonada como a de mapa: o alvo é sempre
+ * um só, e restringir é uma escrita no banco do bancho — não tem download pelo
+ * meio para fazer o tempo depender do tamanho de nada.
+ */
 async function verifyRestricted(osuId, expectRestricted, { attempts = 3, delayMs = 1200 } = {}) {
   for (let i = 0; i < attempts; i++) {
     await sleep(delayMs);
@@ -338,4 +371,8 @@ module.exports = {
   getPlayerPrivileges,
   verifyMapStatus,
   verifyRestricted,
+
+  // Exportado para teste: é o que decide entre reportar "parcial" e esperar o
+  // servidor terminar.
+  verifyBudget,
 };
