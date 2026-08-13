@@ -50,7 +50,7 @@ function workspace(t) {
 const DESAFIO = {
   discordId: '100000000000000001',
   osuId: 6,
-  osuName: 'kyou',
+  osuName: 'conta-de-jogo',
   code: 'KB-ABC12345',
   requestedBy: '100000000000000002',
   ttlMs: 30 * 60 * 1000,

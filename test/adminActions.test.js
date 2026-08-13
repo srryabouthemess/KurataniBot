@@ -23,7 +23,7 @@ redis.createClient = () => ({
 
 const daycore = require('../src/daycoreAdmin');
 
-const ACTOR = { osuId: 13, discordId: '100000000000000001', discordName: 'kuratani' };
+const ACTOR = { osuId: 13, discordId: '100000000000000001', discordName: 'staff-um' };
 const lastPayload = () => published[published.length - 1][1];
 
 test('restrict publica alvo, autor de jogo e assinatura', async () => {
@@ -35,7 +35,7 @@ test('restrict publica alvo, autor de jogo e assinatura', async () => {
   assert.equal(payload.id, 999);
   assert.equal(payload.userId, 13);
   assert.match(payload.reason, /^multiaccount/);
-  assert.match(payload.reason, /@kuratani/);
+  assert.match(payload.reason, /@staff-um/);
   assert.match(payload.reason, /100000000000000001/);
 });
 

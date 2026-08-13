@@ -25,7 +25,7 @@ redis.createClient = () => ({
 const daycore = require('../src/daycoreAdmin');
 const wipe = require('../src/commands/wipe');
 
-const ACTOR = { osuId: 3, discordId: '100000000000000002', discordName: 'nunca' };
+const ACTOR = { osuId: 3, discordId: '100000000000000002', discordName: 'staff-dois' };
 
 test('exige DEVELOPER, e não ADMINISTRATOR', () => {
   // O /moderate restrict se contenta com ADMINISTRATOR porque o bancho recusa
