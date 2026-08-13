@@ -35,4 +35,16 @@ function t(interaction) {
   return translations[lang] ?? translations.pt;
 }
 
-module.exports = { t, SUPPORTED_LANGS };
+/**
+ * Strings do idioma do SERVIDOR, para mensagem que não nasce de interação.
+ *
+ * O anúncio de mapa rankeado dentro do jogo não tem quem o rodou — não existe
+ * usuário cuja preferência consultar, então a escala de prioridade perde o
+ * primeiro degrau e começa no idioma do servidor.
+ */
+function forGuild(guildId) {
+  const lang = (guildId ? db.getServerLang(guildId) : null) ?? 'pt';
+  return translations[lang] ?? translations.pt;
+}
+
+module.exports = { t, forGuild, SUPPORTED_LANGS };

@@ -25,6 +25,7 @@
 const { EmbedBuilder, PermissionFlagsBits } = require('discord.js');
 
 const osu = require('./osuClient');
+const daycore = require('./daycoreAdmin');
 const { logError } = require('./logger');
 
 // Cores por status: verde para ranked, rosa para loved, cinza para unranked.
@@ -96,7 +97,12 @@ async function announceStatus(client, info, s) {
       .setDescription(
         `**[${info.label}](${mapUrl})**\n` +
         s.ann_diffs(info.confirmed) +
-        (info.actorName ? `\n${s.ann_by(info.actorName)}` : ''),
+        // De onde veio muda a linha: aplicado pelo bot é rastreável até uma
+        // conta do Discord, aplicado no jogo não — e quem lê o canal precisa
+        // saber a diferença em vez de supor que todo anúncio passou por aqui.
+        (info.actorName
+          ? `\n${info.fromGame ? s.ann_by_ingame(info.actorName) : s.ann_by(info.actorName)}`
+          : (info.fromGame ? `\n${s.ann_ingame_unknown}` : '')),
       )
       .setImage(coverUrl(info.setId))
       .setTimestamp();
@@ -110,4 +116,42 @@ async function announceStatus(client, info, s) {
   }
 }
 
-module.exports = { isConfigured, announceStatus, coverUrl };
+/**
+ * Anuncia uma mudança de status feita DENTRO DO JOGO (`!map`).
+ *
+ * O bancho publica esse evento sozinho, e ele traz os IDs afetados mas não os
+ * metadados do mapa — daí a releitura de uma dificuldade, que é de onde saem
+ * artista, título e criador para o embed. Uma só: o anúncio é do set, e o
+ * evento já vem agrupado (um `!map rank set` de 100 dificuldades é UMA
+ * mensagem, não cem).
+ *
+ * @param {import('discord.js').Client} client
+ * @param {object} evento saída do `parseEvent` do daycoreEvents
+ * @param {object} s strings de i18n já resolvidas
+ */
+async function announceGameStatus(client, evento, s) {
+  if (!isConfigured()) return false;
+
+  const primeira = await osu.getServerMap(evento.mapIds[0]).catch(() => null);
+  if (!primeira?.set_id) {
+    logError('announce:game', new Error(`sem metadados para o mapa ${evento.mapIds[0]}`));
+    return false;
+  }
+
+  // Metadados vêm do .osu enviado por terceiro; o mesmo teto do /nominate.
+  const label = `${primeira.artist ?? '?'} - ${primeira.title ?? '?'} (${primeira.creator ?? '?'}`
+    .slice(0, 149) + ')';
+
+  return announceStatus(client, {
+    setId:       primeira.set_id,
+    diffs:       [{ id: primeira.id }],
+    status:      evento.status,
+    statusLabel: daycore.STATUS_LABELS[evento.status] ?? String(evento.status),
+    label,
+    actorName:   evento.authorName,
+    confirmed:   evento.mapIds.length,
+    fromGame:    true,
+  }, s);
+}
+
+module.exports = { isConfigured, announceStatus, announceGameStatus, coverUrl };

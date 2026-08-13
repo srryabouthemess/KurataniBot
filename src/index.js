@@ -11,6 +11,9 @@ const prefixCommands = require('./prefixCommands');
 const mapContext = require('./mapContext');
 const emojis = require('./emojis');
 const daycoreAdmin = require('./daycoreAdmin');
+const daycoreEvents = require('./daycoreEvents');
+const announce = require('./announce');
+const { forGuild } = require('./i18n');
 
 const client = new Client({
   // INTENTS vem vazio quando o modo texto (`k!comando`) está desligado: ler o
@@ -103,6 +106,17 @@ async function syncCommandsIfChanged() {
   console.log(`[deploy] ${payload.length} comandos registrados globalmente.`);
 }
 
+/**
+ * Anuncia o que foi rankeado dentro do jogo.
+ *
+ * Sem interação por trás: o idioma vem do servidor administrado, e não da
+ * preferência de alguém — ninguém rodou comando nenhum aqui.
+ */
+async function announceGameRank(client, evento) {
+  const s = forGuild(process.env.DAYCORE_GUILD_ID);
+  await announce.announceGameStatus(client, evento, s);
+}
+
 client.once('clientReady', async () => {
   console.log(`Bot online como ${client.user.tag}`);
 
@@ -119,6 +133,16 @@ client.once('clientReady', async () => {
   } catch (error) {
     // Sem emoji o bot mostra a grade em texto, então não vale travar o boot.
     logError('emojis', error);
+  }
+
+  // Mapa rankeado PELO JOGO (`!map`) também vira anúncio. O bancho já publica
+  // esse evento; até aqui ninguém escutava, e ele se perdia.
+  try {
+    await daycoreEvents.listen(evento => announceGameRank(client, evento));
+  } catch (error) {
+    // Extra: sem isto o bot segue inteiro, só não anuncia o que foi feito
+    // in-game — o que passa pelo /nominate continua saindo normalmente.
+    logError('daycoreEvents', error);
   }
 });
 
@@ -217,6 +241,7 @@ async function shutdown(signal) {
     // Desconecta do gateway antes de fechar o banco, para não atender uma
     // interação com o db já fechado.
     await client.destroy();
+    await daycoreEvents.close().catch(() => {});
     await daycoreAdmin.closeRedis().catch(() => {});
     db.close();
     console.log('[shutdown] Concluído.');

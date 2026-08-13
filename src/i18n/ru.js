@@ -207,6 +207,8 @@ module.exports = ({ ADMIN }) => ({
   ann_title:               (status) => `Карта теперь ${status}`,
   ann_diffs:               (n) => `сложностей на ${ADMIN}: ${n}`,
   ann_by:                  (who) => `Применил: ${who}`,
+  ann_by_ingame:           (who) => `Применил ${who}, из игры`,
+  ann_ingame_unknown:      'Применено из игры',
 
   nom_invalid_map:         '❌ Не удалось определить карту. Укажите ID карты/сета или ссылку.',
   nom_map_not_found:       `❌ Карта не найдена ни на ${ADMIN}, ни на osu!.`,
