@@ -20,14 +20,19 @@ const { idSegment } = require('./urlSafe');
 const { withRetry } = require('./retry');
 const { logErrorOnce } = require('./logger');
 const pythonWorker = require('./pythonWorker');
+const rosuWorker = require('./rosuWorker');
 
 const DEFAULT_MODE = servers.defaultKey();
 
-// ─── rosu-pp, carregado sob demanda ───────────────────────────────────────────
-// A lib é nativa (Wasm) e opcional: sem ela o bot continua respondendo, só sem
-// os valores de PP calculados localmente.
-let _rosu;
-let _rosuTried = false;
+// ─── rosu-pp ──────────────────────────────────────────────────────────────────
+// A lib é nativa (Wasm), síncrona e opcional. Ela roda num worker thread, e não
+// aqui: o cálculo parava o event loop, e uma página de mapas inéditos são vinte
+// paradas dessas seguidas — inclusive para o heartbeat do gateway. O
+// rosuWorker.js explica o desenho; o que sobra neste arquivo é decidir O QUE
+// calcular, e onde guardar o resultado.
+//
+// Sem a lib instalada, o worker relata uma vez e passa a devolver null: o bot
+// continua respondendo, só sem os valores calculados localmente.
 
 /**
  * Decide se o cálculo deve usar a mecânica lazer (sliders novos) ou
@@ -80,24 +85,18 @@ async function getBeatmapFile(mapId) {
   });
 }
 
-function loadRosu() {
-  if (!_rosuTried) {
-    _rosuTried = true;
-    try {
-      _rosu = require('rosu-pp-js');
-    } catch (error) {
-      // Sem esta lib, TODO o PP de servidor vanilla some — e sumia calado, que
-      // e a pior forma de um recurso inteiro desaparecer.
-      logErrorOnce('pp:rosu', error);
-      _rosu = null;
-    }
-  }
-  return _rosu;
-}
+/**
+ * Manda uma operação para a thread do rosu-pp.
+ *
+ * Os bytes do mapa só são buscados se a thread não tiver aquele mapa parseado —
+ * ela pede, e só então o download/cache é consultado (ver rosuWorker.js).
+ */
+const noRosu = (op, mapId, args) =>
+  rosuWorker.calcular(op, mapId, args, () => getBeatmapFile(mapId));
 
 /**
  * Calcula estrelas e combo máximo de um mapa com um dado conjunto de mods,
- * localmente via rosu-pp, e persiste o resultado.
+ * e persiste o resultado.
  *
  * Isto substitui o POST em /beatmaps/{id}/attributes que o getAdjustedStars
  * fazia a cada exibição: o rosu-pp já estava no projeto e o simulatePP já
@@ -110,27 +109,19 @@ async function getDifficultyAttrs(mapId, modsBits, lazer) {
   const cached = db.getMapDifficulty(mapId, modsBits, lazer);
   if (cached) return cached;
 
-  const rosu = loadRosu();
-  if (!rosu) return null;
+  const attrs = await noRosu('difficulty', mapId, { mods: modsBits, lazer });
+  if (!attrs || !Number.isFinite(attrs.stars)) return null;
 
-  try {
-    const bytes = await getBeatmapFile(mapId);
-    const beatmap = new rosu.Beatmap(bytes);
-    try {
-      const attrs = new rosu.Difficulty({ mods: modsBits, lazer }).calculate(beatmap);
-      const result = { stars: attrs.stars, maxCombo: attrs.maxCombo ?? null };
-      db.setMapDifficulty(mapId, modsBits, lazer, result.stars, result.maxCombo);
-      return result;
-    } finally {
-      // free() em finally: se o calculate lançar, o buffer Wasm vazava.
-      beatmap.free();
-    }
-  } catch (error) {
-    // O `?★` que aparece no embed tem duas causas bem diferentes — download que
-    // falhou e mapa que o rosu recusou — e nenhuma delas deixava rastro.
-    logErrorOnce('pp:difficulty', error);
-    return null;
-  }
+  // Combo zero quer dizer "mapa sem objeto nenhum", que não existe de verdade.
+  // O rosu-pp NÃO recusa um .osu corrompido: ele parseia o que der e devolve um
+  // mapa degenerado — medido com lixo puro na entrada, 0.14★ e combo 0, sem
+  // erro nenhum. Sem esta guarda, um download truncado virava estrela sem
+  // sentido E ficava gravado no cache, onde não vence nunca (a map_difficulty
+  // não tem TTL, porque o resultado deveria ser função pura do arquivo).
+  if (!attrs.maxCombo) return null;
+
+  db.setMapDifficulty(mapId, modsBits, lazer, attrs.stars, attrs.maxCombo);
+  return attrs;
 }
 
 // ─── Motor do Relax ───────────────────────────────────────────────────────────
@@ -288,37 +279,17 @@ async function getFCpp(score, mode = DEFAULT_MODE) {
 
     // ── Oficial / bancho.py vanilla: rosu-pp-js (algoritmo oficial) ───────────
     // O arquivo .osu (público no Bancho, mesmo para mapa exclusivo de servidor
-    // privado) vem do cache em disco quando já foi baixado antes.
-    const rosu = loadRosu();
-    if (!rosu) return null;
+    // privado) vem do cache em disco quando a thread pedir por ele.
+    const resultado = await noRosu('fc', beatmapId, {
+      mods: modsBits,
+      lazer: useLazer,
+      n300, n100, n50, misses,
+      // Só usado quando os hits reais não vieram. `score.accuracy` ausente vira
+      // NaN, que o rosu aceita sem reclamar — o rememberFCpp faz a guarda.
+      accuracy: score.accuracy * 100,
+    });
 
-    const beatmapBytes = await getBeatmapFile(beatmapId);
-
-    const beatmap = new rosu.Beatmap(beatmapBytes);
-    try {
-      const difficulty = new rosu.Difficulty({ mods: modsBits, lazer: useLazer });
-      const diffAttrs  = difficulty.calculate(beatmap);
-
-      const perfParams = { mods: modsBits, misses: 0, lazer: useLazer };
-      if (n300 !== null && n100 !== null && n50 !== null) {
-        perfParams.n300 = n300 + misses;
-        perfParams.n100 = n100;
-        perfParams.n50  = n50;
-      } else {
-        perfParams.accuracy = score.accuracy * 100;
-      }
-
-      const perf   = new rosu.Performance(perfParams);
-      const result = perf.calculate(diffAttrs);
-
-      // `?? null` deixava NaN passar. Ele chega aqui pelo ramo da accuracy
-      // acima: sem os hits reais o cálculo usa `score.accuracy * 100`, e uma
-      // accuracy ausente vira NaN — que o rosu aceita sem reclamar. O
-      // rememberFCpp faz a mesma guarda antes de gravar.
-      return rememberFCpp(cacheKey, result.pp);
-    } finally {
-      beatmap.free();
-    }
+    return rememberFCpp(cacheKey, resultado?.pp);
   } catch (error) {
     // Sem isto, o "(FC: ~Xpp)" simplesmente não aparece na linha da play e não
     // há como distinguir "não era choke" de "o cálculo quebrou".
@@ -380,37 +351,18 @@ async function simulatePP(beatmapId, mods, hits, mode = DEFAULT_MODE, { lazer } 
       return await calcPPPython(beatmapId, modsBits, n300 ?? -1, n100, n50, misses, combo);
     }
 
-    const rosu = loadRosu();
-    if (!rosu) return null;
+    const useLazer = lazer ?? shouldUseLazer(mode, mods);
 
-    const beatmapBytes = await getBeatmapFile(beatmapId);
-    const useLazer     = lazer ?? shouldUseLazer(mode, mods);
+    const resultado = await noRosu('simulate', beatmapId, {
+      mods: modsBits,
+      lazer: useLazer,
+      n300, n100, n50, misses, combo,
+      // Play interrompida: a dificuldade passa a ser a do trecho jogado.
+      passedObjects: passed,
+    });
 
-    const beatmap = new rosu.Beatmap(beatmapBytes);
-    try {
-      const diffArgs = { mods: modsBits, lazer: useLazer };
-      // Play interrompida: a dificuldade é a do trecho jogado, não a do mapa.
-      if (passed !== null) diffArgs.passedObjects = passed;
-
-      const difficulty = new rosu.Difficulty(diffArgs);
-      const diffAttrs  = difficulty.calculate(beatmap);
-
-      const perfParams = { mods: modsBits, n100, n50, misses, lazer: useLazer };
-      if (combo >= 0) perfParams.combo = combo;
-      // Só quando quem chamou soube dizer: sem isto a lib deduz, e a dedução
-      // é justamente o que estraga o número de uma play interrompida.
-      if (n300 !== null) perfParams.n300 = n300;
-
-      const perf     = new rosu.Performance(perfParams);
-      const result   = perf.calculate(diffAttrs);
-      const stars    = diffAttrs.stars;
-      const maxCombo = diffAttrs.maxCombo;
-
-      if (!Number.isFinite(result.pp)) return null;
-      return { pp: result.pp, stars, maxCombo };
-    } finally {
-      beatmap.free();
-    }
+    if (!resultado || !Number.isFinite(resultado.pp)) return null;
+    return resultado;
   } catch (error) {
     // O /simulate e o /whatif respondem "não consegui calcular" a partir daqui,
     // e o motivo ficava só na cabeça de quem escreveu o catch.
@@ -452,7 +404,8 @@ module.exports = {
   // cobre o registro de falhas já pedia por este caminho.
   reportPythonFailure: pythonWorker.reportPythonFailure,
   closePythonWorker:   pythonWorker.close,
-  pythonWorkerStats:   pythonWorker.stats,
+  closeRosuWorker:     rosuWorker.close,
+  workerStats:         () => ({ python: pythonWorker.stats(), rosu: rosuWorker.stats() }),
   getDifficultyAttrs,
   getAdjustedStars,
   getFCpp,

@@ -244,9 +244,10 @@ async function shutdown(signal) {
     await client.destroy();
     await daycoreEvents.close().catch(() => {});
     await daycoreAdmin.closeRedis().catch(() => {});
-    // O cálculo de PP do Relax roda num processo Python de vida longa; sem
-    // fechá-lo aqui ele ficaria órfão a cada restart do bot.
+    // Os dois motores de PP são recursos de vida longa — um processo Python e
+    // um worker thread. Sem fechá-los aqui, ficariam órfãos a cada restart.
     pp.closePythonWorker();
+    pp.closeRosuWorker();
     db.close();
     console.log('[shutdown] Concluído.');
   } catch (error) {
