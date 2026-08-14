@@ -18,6 +18,7 @@
 
 const osu = require('./osuClient');
 const servers = require('./servers');
+const { TtlCache } = require('./ttlCache');
 
 // Uma conversa esfria bem antes disso; o TTL existe mais para o mapa de ontem
 // não voltar do além num canal parado do que para economizar memória.
@@ -28,8 +29,10 @@ const TTL_MS = 6 * 60 * 60 * 1000;
 // fica semanas no ar.
 const MAX_CHANNELS = 1000;
 
-// channelId → { mapId, mode, at }
-const _last = new Map();
+// channelId → { mapId, mode }. O prazo e o teto são do próprio cache (ver
+// ttlCache.js), que é a mesma peça usada pelos caches do osuClient — as três
+// cópias à mão desta lógica já tinham custado a mesma correção cada uma.
+const _last = new TtlCache({ ttlMs: TTL_MS, max: MAX_CHANNELS });
 
 /**
  * Registra o mapa que acabou de aparecer no canal.
@@ -42,28 +45,7 @@ function remember(interaction, mapId, mode) {
   const channelId = interaction?.channelId;
   if (!channelId || !mapId) return;
 
-  // delete antes do set para a reinserção mandar o canal para o fim: no Map,
-  // reatribuir uma chave existente não muda a posição dela, e é a ordem de
-  // inserção que a evicção abaixo trata como "mais antigo".
-  _last.delete(channelId);
-  _last.set(channelId, { mapId: Number(mapId), mode, at: Date.now() });
-
-  // Poda preguiçosa (mesma ideia do cache de usuário do osuClient): só corre a
-  // lista quando ela passa do teto, evitando mais um timer no processo.
-  if (_last.size > MAX_CHANNELS) {
-    const cutoff = Date.now() - TTL_MS;
-    for (const [id, entry] of _last) {
-      if (entry.at < cutoff) _last.delete(id);
-    }
-
-    // O TTL sozinho não é teto: se todos os canais estiverem dentro da janela,
-    // nada é descartado e o Map cresce sem limite. Num bot em muitas guilds
-    // isso é só questão de escala.
-    for (const id of _last.keys()) {
-      if (_last.size <= MAX_CHANNELS) break;
-      _last.delete(id);
-    }
-  }
+  _last.set(channelId, { mapId: Number(mapId), mode });
 }
 
 /**
@@ -157,15 +139,9 @@ async function recall(interaction) {
 function recallFromMemory(channelId) {
   if (!channelId) return null;
 
+  // O vencimento é do cache: entrada fora do TTL some na leitura.
   const entry = _last.get(channelId);
-  if (!entry) return null;
-
-  if (Date.now() - entry.at > TTL_MS) {
-    _last.delete(channelId);
-    return null;
-  }
-
-  return { mapId: entry.mapId, mode: entry.mode };
+  return entry ? { mapId: entry.mapId, mode: entry.mode } : null;
 }
 
 /** Quantas mensagens olhar para trás — uma chamada só, e só quando dá miss. */

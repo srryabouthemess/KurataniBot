@@ -40,6 +40,58 @@ test('consultar por nome e por ID gasta uma chamada só', async () => {
   }
 });
 
+// ─── Cache negativo: mapa que a API oficial não conhece ───────────────────────
+
+/** Faz o officialGet falhar com o status pedido, contando as chamadas. */
+async function comFalha(status, fn) {
+  let chamadas = 0;
+  const original = officialApi.officialGet;
+  const originalErro = console.error;
+
+  officialApi.officialGet = async () => {
+    chamadas++;
+    throw Object.assign(new Error(`falha ${status}`), { response: { status } });
+  };
+  console.error = () => {};
+
+  try {
+    await fn();
+  } finally {
+    officialApi.officialGet = original;
+    console.error = originalErro;
+  }
+  return chamadas;
+}
+
+test('mapa que a API não conhece não é pedido de novo', async () => {
+  // Sem cache negativo, o `precisaEnriquecer` continua verdadeiro para aquele
+  // score para sempre: cada renderização gastava balde do rate limiter para
+  // receber o mesmo 404. É o caso do mapa exclusivo de servidor privado.
+  const id = 900000001;
+
+  const chamadas = await comFalha(404, async () => {
+    assert.equal(await osu.getBeatmap(id), null);
+    assert.equal(await osu.getBeatmap(id), null);
+    assert.equal(await osu.getBeatmap(id), null);
+  });
+
+  assert.equal(chamadas, 1, 'o 404 deveria ter ficado em cache');
+});
+
+test('falha passageira não vira cache negativo', async () => {
+  // Um 5xx ou uma queda de rede passam em segundos. Guardá-los faria um blip
+  // esconder o mapa por dez minutos — trocando uma falha visível por dados
+  // faltando no embed, que é bem pior de diagnosticar.
+  const id = 900000002;
+
+  const chamadas = await comFalha(502, async () => {
+    await osu.getBeatmap(id);
+    await osu.getBeatmap(id);
+  });
+
+  assert.equal(chamadas, 2, 'o 502 não deveria ter sido guardado');
+});
+
 // ─── Contexto de mapa: o teto precisa segurar ─────────────────────────────────
 
 const fakeInteraction = channelId => ({ channelId });

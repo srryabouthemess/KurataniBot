@@ -33,6 +33,8 @@ const rippleApi = require('./osu/rippleApi');
 const { dedupe } = require('./inflight');
 const { parseModsString } = require('./mods');
 const { idSegment } = require('./urlSafe');
+const { TtlCache } = require('./ttlCache');
+const { logErrorOnce } = require('./logger');
 
 const DEFAULT_MODE = servers.defaultKey();
 
@@ -68,6 +70,19 @@ function apiFor(mode) {
 // individual, e o servidor privado não devolve estrelas nem combo máximo.
 
 /**
+ * Mapas que a API oficial não conhece.
+ *
+ * Sem isto, um mapa exclusivo de servidor privado (ou apagado do osu!) era
+ * pedido DE NOVO a cada renderização: o `precisaEnriquecer` continua verdadeiro
+ * para aquele score para sempre, então cada página gastava balde do rate
+ * limiter para receber o mesmo 404. O TTL é curto porque a resposta pode mudar
+ * — mapa novo aparece no osu! depois de submetido.
+ */
+const MISSING_TTL_MS = 10 * 60_000;
+const MISSING_MAX    = 500;
+const _missingBeatmaps = new TtlCache({ ttlMs: MISSING_TTL_MS, max: MISSING_MAX });
+
+/**
  * Metadados de um beatmap, do cache quando possível.
  * O dedupe compartilha a requisição com quem pedir o mesmo mapa enquanto ela
  * está em voo (ver inflight.js).
@@ -75,13 +90,21 @@ function apiFor(mode) {
 async function fetchBeatmap(id) {
   const cached = beatmapCache.get(id);
   if (cached) return cached;
+  if (_missingBeatmaps.has(id)) return null;
 
   return dedupe(`meta:${id}`, async () => {
     try {
       const data = await officialApi.officialGet(`/beatmaps/${idSegment(id)}`);
       beatmapCache.set(id, data);
       return data;
-    } catch {
+    } catch (error) {
+      // SÓ o 404 vira cache negativo. Um 5xx ou uma queda de rede são
+      // passageiros, e guardá-los faria um blip de dez segundos esconder o mapa
+      // por dez minutos — trocando uma falha visível por dados faltando no
+      // embed, que é bem pior de diagnosticar.
+      if (error?.response?.status === 404) _missingBeatmaps.set(id, true);
+      else logErrorOnce('osuClient:beatmap', error);
+
       return null;
     }
   });
@@ -187,7 +210,7 @@ function parseBeatmapId(input) {
  */
 const USER_CACHE_TTL_MS = 60_000;
 const USER_CACHE_MAX    = 500;
-const _userCache = new Map();
+const _userCache = new TtlCache({ ttlMs: USER_CACHE_TTL_MS, max: USER_CACHE_MAX });
 
 /**
  * Chave do cache, com nome e ID apontando para lugares distintos de propósito.
@@ -203,60 +226,20 @@ function _userCacheKey(mode, value) {
   return /^\d+$/.test(raw) ? `${mode}:#${raw}` : `${mode}:${raw.toLowerCase()}`;
 }
 
-function _userCacheGet(key) {
-  const entry = _userCache.get(key);
-  if (!entry) return null;
-
-  if (Date.now() - entry.at > USER_CACHE_TTL_MS) {
-    _userCache.delete(key);
-    return null;
-  }
-  return entry.data;
-}
-
-function _userCacheSet(key, data) {
-  // delete antes do set: no Map, reatribuir uma chave existente NÃO a move para
-  // o fim, e é a ordem de inserção que a evicção abaixo usa como "mais antigo".
-  // Sem isto, uma chave consultada o tempo todo ficaria parada na posição da
-  // primeira vez e seria descartada como se estivesse fria.
-  _userCache.delete(key);
-  _userCache.set(key, { data, at: Date.now() });
-  _pruneUserCache();
-}
-
-/** Poda preguiçosa: só corre a lista quando ela passa do teto, sem mais um timer. */
-function _pruneUserCache() {
-  if (_userCache.size <= USER_CACHE_MAX) return;
-
-  const cutoff = Date.now() - USER_CACHE_TTL_MS;
-  for (const [key, entry] of _userCache) {
-    if (entry.at < cutoff) _userCache.delete(key);
-  }
-
-  // O TTL sozinho NÃO é teto: num bot com tráfego para 500 consultas distintas
-  // dentro de um minuto, todas estão frescas, nada é descartado e o Map cresce
-  // sem limite — a condição volta a ser verdadeira na inserção seguinte, e
-  // assim por diante. Descartar os mais antigos é o que fecha isso.
-  for (const key of _userCache.keys()) {
-    if (_userCache.size <= USER_CACHE_MAX) break;
-    _userCache.delete(key);
-  }
-}
-
 // ─── Consulta ─────────────────────────────────────────────────────────────────
 
 async function getUser(username, mode = DEFAULT_MODE) {
   const cacheKey = _userCacheKey(mode, username);
-  const cached = _userCacheGet(cacheKey);
+  const cached = _userCache.get(cacheKey);
   if (cached) return cached;
 
   const user = await apiFor(mode).fetchUser(username, mode);
   if (user) {
-    _userCacheSet(cacheKey, user);
+    _userCache.set(cacheKey, user);
     // Indexa também pelo ID: quem consultou pelo nome aquece a entrada de quem
     // vier pelo link, e vice-versa. Quando a consulta já foi por ID, as duas
     // chaves coincidem e a segunda escrita só renova a mesma entrada.
-    _userCacheSet(_userCacheKey(mode, user.id), user);
+    _userCache.set(_userCacheKey(mode, user.id), user);
   }
   return user;
 }
