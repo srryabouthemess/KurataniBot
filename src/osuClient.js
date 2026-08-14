@@ -294,13 +294,24 @@ async function getUserBeatmapScores(userId, beatmapId, mode = DEFAULT_MODE) {
 /**
  * Completa scores crus com os detalhes que só uma segunda chamada traz.
  *
- * A API oficial já devolve o score completo, então lá isto não faz nada — e é
- * de propósito que a decisão more aqui: antes cada comando escrevia
- * `isOfficial(mode) ? página : await enrichScores(página)`, espalhando por
- * quatro arquivos o conhecimento de qual servidor precisa de quê.
+ * Nem todo servidor precisa: quem já devolve o score completo na primeira
+ * resposta passa direto. A decisão mora aqui de propósito — antes cada comando
+ * escrevia `isOfficial(mode) ? página : await enrichScores(página)`, espalhando
+ * por quatro arquivos o conhecimento de qual servidor precisa de quê.
+ *
+ * ATENÇÃO ao que esta função NÃO pode voltar a ser: um `if (isOfficial)`. Ela
+ * já foi isso, e dividia o mundo em "oficial" e "bancho.py" — o que era verdade
+ * enquanto existiam só dois tipos. Com o adaptador Ripple, todo score do
+ * Akatsuki era mandado para o enriquecedor do bancho.py, que consultava uma API
+ * inexistente e devolvia os campos zerados: o /profile mostrava o pp certo com
+ * `rank F`, `0.00%` de acurácia e o nome do mapa como `[?]`.
+ *
+ * Agora é o próprio adaptador que diz se precisa, pelo mesmo despacho do resto.
  */
-const enrichScores = (scores, mode = DEFAULT_MODE) =>
-  servers.isOfficial(mode) ? scores : banchoPyApi.enrichScores(scores, mode);
+const enrichScores = (scores, mode = DEFAULT_MODE) => {
+  const api = apiFor(mode);
+  return typeof api.enrichScores === 'function' ? api.enrichScores(scores, mode) : scores;
+};
 
 const getUserUrl = (userId, mode = DEFAULT_MODE) => apiFor(mode).userUrl(userId, mode);
 const getMapUrl  = (mapId, setId, mode = DEFAULT_MODE) => apiFor(mode).mapUrl(mapId, setId, mode);
