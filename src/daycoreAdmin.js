@@ -32,6 +32,7 @@ require('dotenv').config();
 const { createClient } = require('redis');
 const osu = require('./osuClient');
 const { logError } = require('./logger');
+const { mapLimit } = require('./concurrency');
 
 // ─── Constantes espelhadas do bancho.py-ex ────────────────────────────────────
 // Fonte: app/constants/privileges.py. Mantenha em sincronia se o fork mudar.
@@ -371,6 +372,16 @@ function verifyBudget(mapCount) {
  *
  * @returns {Promise<{confirmed: number[], pending: number[]}>}
  */
+/**
+ * Quantas releituras ao mesmo tempo.
+ *
+ * Alinhado ao balde `server:` do rate limiter, que é quem de fato limita a
+ * vazão. Em série, cada dificuldade pagava o tempo de ida e volta sozinha, uma
+ * depois da outra — num set de 100, isso é 100 viagens enfileiradas antes de a
+ * primeira passada terminar.
+ */
+const VERIFY_CONCURRENCY = 5;
+
 async function verifyMapStatus(beatmapIds, expectedStatus, { delayMs = 1200, budgetMs } = {}) {
   let pending = [...beatmapIds];
   const confirmed = [];
@@ -379,16 +390,19 @@ async function verifyMapStatus(beatmapIds, expectedStatus, { delayMs = 1200, bud
   do {
     await sleep(delayMs);
 
-    const still = [];
-    for (const id of pending) {
+    // O erro é tratado DENTRO do fn de propósito: um mapa que some da API é
+    // "ainda não confirmou", não motivo para abandonar a verificação dos outros.
+    const confirmou = await mapLimit(pending, VERIFY_CONCURRENCY, async (id) => {
       try {
         const map = await osu.getServerMap(id);
-        if (map && Number(map.status) === Number(expectedStatus)) confirmed.push(id);
-        else still.push(id);
+        return Boolean(map) && Number(map.status) === Number(expectedStatus);
       } catch {
-        still.push(id);
+        return false;
       }
-    }
+    });
+
+    const still = [];
+    pending.forEach((id, i) => (confirmou[i] ? confirmed.push(id) : still.push(id)));
     pending = still;
   } while (pending.length > 0 && Date.now() < deadline);
 

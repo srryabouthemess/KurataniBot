@@ -35,6 +35,7 @@ const { parseModsString } = require('./mods');
 const { idSegment } = require('./urlSafe');
 const { TtlCache } = require('./ttlCache');
 const { logErrorOnce } = require('./logger');
+const { mapLimit } = require('./concurrency');
 
 const DEFAULT_MODE = servers.defaultKey();
 
@@ -112,7 +113,7 @@ async function fetchBeatmap(id) {
 
 // Teto de requisições simultâneas por chamada — evita que uma página inteira de
 // /topplays vire uma rajada e estoure o rate limit.
-const BEATMAP_BATCH_SIZE = 5;
+const BEATMAP_CONCURRENCY = 5;
 
 /**
  * Preenche `max_combo` e `difficulty_rating` nos scores que vieram sem eles.
@@ -134,12 +135,13 @@ async function enrichBeatmapData(scores) {
       .filter(Boolean),
   )];
 
+  // Piscina de posições, e não lotes: um lote só termina quando o mapa MAIS
+  // LENTO dele termina, então quatro mapas rápidos ficavam parados esperando o
+  // quinto antes de o lote seguinte começar (ver concurrency.js).
+  const results = await mapLimit(idsNeeded, BEATMAP_CONCURRENCY, fetchBeatmap);
+
   const fetched = {};
-  for (let i = 0; i < idsNeeded.length; i += BEATMAP_BATCH_SIZE) {
-    const batch = idsNeeded.slice(i, i + BEATMAP_BATCH_SIZE);
-    const results = await Promise.all(batch.map(fetchBeatmap));
-    batch.forEach((id, index) => { fetched[id] = results[index]; });
-  }
+  idsNeeded.forEach((id, index) => { fetched[id] = results[index]; });
 
   return scores.map(score => {
     if (!precisaEnriquecer(score)) return score;
