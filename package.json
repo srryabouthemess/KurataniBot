@@ -9,7 +9,8 @@
     "lint": "eslint .",
     "smoke": "node test/smoke.js",
     "deploy": "node src/deploy-commands.js",
-    "smoke:commands": "node test/smokeCommands.js"
+    "smoke:commands": "node test/smokeCommands.js",
+    "post": "node test/postEmbeds.js"
   },
   "keywords": [],
   "author": "",
