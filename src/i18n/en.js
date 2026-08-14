@@ -86,26 +86,16 @@ module.exports = ({ ADMIN }) => ({
   topplays_error:          'Error fetching top plays.',
   pagination_not_yours:    "❌ Only the person who ran the command can navigate the pages.",
 
-  recent_author:           (name) => `${name}'s recent play`,
   recent_none:             (name) => `No recent plays found for **${name}**.`,
-  recent_status:           'Status',
-  recent_rank:             'Rank',
-  recent_mods:             'Mods',
-  recent_stats:            'Statistics',
-  recent_pp:               'PP',
-  recent_acc:              'Acc',
-  recent_combo:            'Combo',
-  recent_hits:             'Hits',
-  recent_pass:             '✅ **Pass**',
-  recent_fail:             '❌ **Quit**',
   recent_error:            'Error fetching recent play. Check if the player exists.',
-  recent_footer:           (mode, date, label, page, total, status) =>
-    `Play ${page}/${total} • ${mode}${status ? ` • ${status}` : ''} • ${label} • ${date}`,
+  recent_footer:           (page, total, label, status, mapper) =>
+    `${status ? `${status} • ` : ''}${mapper ? `mapset by ${mapper} • ` : ''}Play ${page}/${total} • ${label}`,
 
   score_no_map:            '❌ Provide a map (ID or link) — I found no recent map in this channel.',
   score_none:              (name, map, label) => `**${name}** has no scores on **${map}** in ${label}.`,
-  score_footer:            (page, total, count, label, status) =>
-    `Page ${page}/${total} • ${count} score(s)${status ? ` • ${status}` : ''} • ${label}`,
+  score_footer:            (page, total, count, label, status, mapper) =>
+    `${status ? `${status} • ` : ''}${mapper ? `mapset by ${mapper} • ` : ''}` +
+    `Page ${page}/${total} • ${count} score(s) • ${label}`,
   score_error:             'Error fetching the scores for this map.',
 
   compare_title:           'osu! Comparison',

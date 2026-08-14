@@ -90,6 +90,30 @@ test('o FC pp bate com o cálculo em processo', async () => {
   assert.equal(daThread.pp, esperado);
 });
 
+test('os atributos do mapa saem já ajustados pelos mods', async () => {
+  // A conta de AR/OD com mod de velocidade não é multiplicação: a janela de
+  // tempo é que muda. É o motivo de o cálculo ficar do lado do rosu-pp em vez
+  // de virar uma segunda implementação em JS — o mapa sintético tem AR 9 e
+  // OD 7, e nenhum dos dois vira 13.5 nem 10.5 no DT.
+  const semMods = await rosuWorker.calcular('attributes', 9001, { mods: 0 }, bytesDe);
+  const comDT   = await rosuWorker.calcular('attributes', 9001, { mods: 64 }, bytesDe);
+
+  const esperado = noProcesso(bm =>
+    new rosu.BeatmapAttributesBuilder({ map: bm, mods: 64 }).build()
+  );
+
+  assert.equal(semMods.ar, 9);
+  assert.equal(semMods.od, 7);
+  assert.equal(comDT.ar, esperado.ar);
+  assert.equal(comDT.od, esperado.od);
+  assert.equal(comDT.clockRate, 1.5);
+
+  // BPM e contagem de objetos vêm do mesmo mapa parseado: é o que evita uma
+  // requisição a mais só para a linha de informação do embed.
+  assert.equal(comDT.bpm, semMods.bpm * 1.5);
+  assert.equal(comDT.objects, 200);
+});
+
 test('play interrompida usa só o trecho jogado', async () => {
   // Sem passedObjects a conta assume o mapa inteiro, inventa um 300 para cada
   // objeto que a pessoa nunca viu, e devolve quase o valor de um FC.

@@ -18,7 +18,7 @@ const assert = require('node:assert');
 
 const officialApi = require('../src/osu/officialApi');
 const { normalizeScore } = officialApi;
-const { stripClassic, modsToBits } = require('../src/mods');
+const { stripClassic, difficultyMods, modsToBits } = require('../src/mods');
 const { shouldUseLazer } = require('../src/pp');
 
 /** Score como a API responde com x-api-version: um FC de stable, com CL. */
@@ -51,6 +51,19 @@ test('CL é exibido, mas não conta como mod de dificuldade', () => {
   // sem mod nenhum deixaria de usar a estrela que a API publica.
   assert.deepEqual(stripClassic(s.mods), ['DT']);
   assert.deepEqual(stripClassic(['CL']), []);
+});
+
+test('só o mod que mexe no mapa tira a estrela das mãos da API', () => {
+  // O CL não é o único que aparece sem mudar dificuldade nenhuma: o HD está em
+  // metade dos scores, e enquanto ele contava, um `+HD` de mapa ranqueado saía
+  // com a estrela calculada aqui — 8.09★ onde o site publica 8.31★.
+  assert.deepEqual(difficultyMods(['HD', 'CL']), []);
+  assert.deepEqual(difficultyMods(['NF', 'SO', 'SD', 'PF']), []);
+
+  // Os que mudam continuam mudando — inclusive o RX, que troca o motor inteiro.
+  assert.deepEqual(difficultyMods(['DT', 'HD', 'CL']), ['DT']);
+  assert.deepEqual(difficultyMods(['HR']), ['HR']);
+  assert.deepEqual(difficultyMods(['RX']), ['RX']);
 });
 
 test('statistics esparso vira contagem completa', () => {

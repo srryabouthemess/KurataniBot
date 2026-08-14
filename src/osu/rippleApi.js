@@ -133,6 +133,9 @@ function normalizeScore(raw) {
     rank: raw.rank ?? 'F',
     max_combo: raw.max_combo ?? null,
     mods: decodeMods(raw.mods ?? 0),
+    // Pontuação da play (a de milhões, não o pp), para a primeira linha do
+    // embed. Zero vira null: na tela pareceria uma play sem nota nenhuma.
+    score: Number(raw.score ?? 0) || null,
     // `completed`: 0 falhou, 1 não passou, 2 passou, 3 é o melhor do jogador.
     // Qualquer coisa a partir de 2 significa que a play foi até o fim.
     passed: Number(raw.completed ?? 0) >= 2,
@@ -203,6 +206,7 @@ function normalizeLegacyScore(raw, beatmapId) {
     rank: raw.rank ?? 'F',
     max_combo: n(raw.maxcombo),
     mods: decodeMods(n(raw.enabled_mods) ?? 0),
+    score: Number(raw.score ?? 0) || null,
     // O legado não diz se passou; um score registrado com grade que não seja F
     // é uma play concluída.
     passed: (raw.rank ?? 'F') !== 'F',

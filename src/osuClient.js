@@ -346,4 +346,5 @@ module.exports = {
   simulatePP:         pp.simulatePP,
   getBeatmapFile:     pp.getBeatmapFile,
   getDifficultyAttrs: pp.getDifficultyAttrs,
+  getMapAttrs:        pp.getMapAttrs,
 };

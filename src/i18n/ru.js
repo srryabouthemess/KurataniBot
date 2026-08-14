@@ -86,26 +86,16 @@ module.exports = ({ ADMIN }) => ({
   topplays_error:          'Ошибка при получении топ плеев.',
   pagination_not_yours:    '❌ Только автор команды может переключать страницы.',
 
-  recent_author:           (name) => `Последний плей ${name}`,
   recent_none:             (name) => `Недавних плеев для **${name}** не найдено.`,
-  recent_status:           'Статус',
-  recent_rank:             'Ранк',
-  recent_mods:             'Моды',
-  recent_stats:            'Статистика',
-  recent_pp:               'PP',
-  recent_acc:              'Acc',
-  recent_combo:            'Комбо',
-  recent_hits:             'Хиты',
-  recent_pass:             '✅ **Pass**',
-  recent_fail:             '❌ **Quit**',
   recent_error:            'Ошибка при получении последнего плея. Проверьте, существует ли игрок.',
-  recent_footer:           (mode, date, label, page, total, status) =>
-    `Плей ${page}/${total} • ${mode}${status ? ` • ${status}` : ''} • ${label} • ${date}`,
+  recent_footer:           (page, total, label, status, mapper) =>
+    `${status ? `${status} • ` : ''}${mapper ? `карта от ${mapper} • ` : ''}Плей ${page}/${total} • ${label}`,
 
   score_no_map:            '❌ Укажите карту (ID или ссылку) — недавних карт в этом канале не нашлось.',
   score_none:              (name, map, label) => `У **${name}** нет скоров на **${map}** в ${label}.`,
-  score_footer:            (page, total, count, label, status) =>
-    `Страница ${page}/${total} • скоров: ${count}${status ? ` • ${status}` : ''} • ${label}`,
+  score_footer:            (page, total, count, label, status, mapper) =>
+    `${status ? `${status} • ` : ''}${mapper ? `карта от ${mapper} • ` : ''}` +
+    `Страница ${page}/${total} • скоров: ${count} • ${label}`,
   score_error:             'Ошибка при получении скоров на этой карте.',
 
   compare_title:           'Сравнение osu!',

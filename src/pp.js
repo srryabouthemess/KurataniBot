@@ -14,9 +14,10 @@
 require('dotenv').config();
 const db = require('./db');
 const servers = require('./servers');
-const { modsToBits, stripClassic } = require('./mods');
+const { modsToBits, stripClassic, difficultyMods } = require('./mods');
 const { logErrorOnce } = require('./logger');
 const { getBeatmapFile } = require('./beatmapFile');
+const { TtlCache } = require('./ttlCache');
 const pythonWorker = require('./pythonWorker');
 const rosuWorker = require('./rosuWorker');
 
@@ -81,6 +82,45 @@ async function getDifficultyAttrs(mapId, modsBits, lazer) {
   if (!attrs.maxCombo) return null;
 
   db.setMapDifficulty(mapId, modsBits, lazer, attrs.stars, attrs.maxCombo);
+  return attrs;
+}
+
+/**
+ * CS/AR/OD/HP, BPM e contagem de objetos do mapa, já com os mods aplicados.
+ * É o que a linha de informação do mapa mostra nos embeds.
+ *
+ * Cache em memória, e não no cache.db como as estrelas: o cálculo é uma conta
+ * sobre o mapa que a thread já tem parseado — barato o bastante para não valer
+ * uma tabela nova (que ainda teria de ser migrada em toda instalação). O que se
+ * quer evitar aqui é repetir a viagem até a thread a cada virada de página do
+ * mesmo mapa.
+ *
+ * @param {number} beatmapId
+ * @param {string[]} mods acrônimos, como vêm do score
+ * @returns {Promise<{cs: number, ar: number, od: number, hp: number,
+ *                    clockRate: number, bpm: number, objects: number}|null>}
+ */
+const MAP_ATTRS_TTL_MS = 6 * 60 * 60 * 1000;
+const MAP_ATTRS_MAX    = 500;
+const _mapAttrs = new TtlCache({ ttlMs: MAP_ATTRS_TTL_MS, max: MAP_ATTRS_MAX });
+
+async function getMapAttrs(beatmapId, mods) {
+  if (!beatmapId) return null;
+
+  // O CL não muda mapa nenhum (ver stripClassic em mods.js): mantê-lo na chave
+  // só separaria em duas entradas o que é o mesmo cálculo.
+  const modsBits = modsToBits(stripClassic(mods));
+  const chave = `${beatmapId}:${modsBits}`;
+
+  const cached = _mapAttrs.get(chave);
+  if (cached) return cached;
+
+  const attrs = await noRosu('attributes', beatmapId, { mods: modsBits });
+  // Mapa que não deu para baixar volta null; o degenerado que o rosu-pp aceita
+  // sem reclamar (ver getDifficultyAttrs) vem sem objeto nenhum.
+  if (!Number.isFinite(attrs?.ar) || !attrs.objects) return null;
+
+  _mapAttrs.set(chave, attrs);
   return attrs;
 }
 
@@ -337,13 +377,14 @@ async function getAdjustedStars(beatmapId, mods, mode = DEFAULT_MODE) {
   // exato que o nosso — o rosu-pp está dois reworks atrás do osu! (medido: 6%
   // de diferença no DT, 0,7% sem mods).
   //
-  // O `stripClassic` aqui não é cosmético. Todo score de stable chega com o mod
-  // CL desde que passamos a pedir o formato novo à API, e um `mods.length === 0`
-  // deixou de ser verdade para score sem mods nenhum — de um dia para o outro o
-  // bot passou a calcular localmente o que antes vinha pronto, e a estrela
-  // exibida deixou de bater com o site (7.08★ contra 7.13★). O CL é exibido nos
-  // scores, mas não conta como mod de dificuldade.
-  if (stripClassic(mods).length === 0) return null;
+  // O filtro aqui não é cosmético, e já custou dois números errados na tela.
+  // Todo score de stable chega com o mod CL desde que passamos a pedir o
+  // formato novo à API, e um `mods.length === 0` deixou de ser verdade para
+  // score sem mod nenhum: de um dia para o outro o bot passou a calcular o que
+  // antes vinha pronto (7.08★ contra os 7.13★ do site). O mesmo valia para o
+  // HD, que não muda dificuldade nenhuma e aparece em metade dos scores — daí a
+  // lista ser de mods que MEXEM no mapa, e não só do CL (ver mods.js).
+  if (difficultyMods(mods).length === 0) return null;
 
   // Com mods a API não ajuda: ela só publica o valor sem mods. Aí é cálculo
   // local, na mesma mecânica que o PP exibido ao lado usa (shouldUseLazer),
@@ -366,6 +407,7 @@ module.exports = {
   closePythonWorker:   pythonWorker.close,
   closeRosuWorker:     rosuWorker.close,
   getDifficultyAttrs,
+  getMapAttrs,
   getAdjustedStars,
   getFCpp,
   simulatePP,

@@ -93,30 +93,20 @@ module.exports = ({ ADMIN }) => ({
   topplays_error:          'Erro ao buscar as top plays.',
   pagination_not_yours:    '❌ Apenas quem usou o comando pode navegar entre as páginas.',
 
-  recent_author:           (name) => `Play recente de ${name}`,
   recent_none:             (name) => `Nenhuma play recente encontrada para **${name}**.`,
-  recent_status:           'Status',
-  recent_rank:             'Rank',
-  recent_mods:             'Mods',
-  recent_stats:            'Estatísticas',
-  recent_pp:               'PP',
-  recent_acc:              'Acc',
-  recent_combo:            'Combo',
-  recent_hits:             'Hits',
-  recent_pass:             '✅ **Pass**',
-  recent_fail:             '❌ **Quit**',
   recent_error:            'Erro ao buscar a play recente. Verifique se o jogador existe.',
-  // `status` é o do MAPA (ranked, loved, graveyard...) e pode faltar: só a
-  // API oficial manda esse campo, o bancho.py não.
-  recent_footer:           (mode, date, label, page, total, status) =>
-    `Play ${page}/${total} • ${mode}${status ? ` • ${status}` : ''} • ${label} • ${date}`,
+  // `status` é o do MAPA (ranked, loved, graveyard...) e `mapper` é quem o fez.
+  // Os dois podem faltar: só a API oficial manda esses campos, o bancho.py não.
+  recent_footer:           (page, total, label, status, mapper) =>
+    `${status ? `${status} • ` : ''}${mapper ? `mapa de ${mapper} • ` : ''}Play ${page}/${total} • ${label}`,
 
   // O /score reaproveita simulate_invalid_map e simulate_map_not_found: a
   // orientação sobre ID/link do mapa é a mesma dos dois comandos.
   score_no_map:            '❌ Informe um mapa (ID ou link) — não achei nenhum mapa recente neste canal.',
   score_none:              (name, map, label) => `**${name}** não tem nenhum score em **${map}** no ${label}.`,
-  score_footer:            (page, total, count, label, status) =>
-    `Página ${page}/${total} • ${count} score(s)${status ? ` • ${status}` : ''} • ${label}`,
+  score_footer:            (page, total, count, label, status, mapper) =>
+    `${status ? `${status} • ` : ''}${mapper ? `mapa de ${mapper} • ` : ''}` +
+    `Página ${page}/${total} • ${count} score(s) • ${label}`,
   score_error:             'Erro ao buscar os scores desse mapa.',
 
   compare_title:           'Comparação osu!',

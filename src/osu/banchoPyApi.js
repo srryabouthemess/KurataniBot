@@ -165,6 +165,9 @@ function normalizeScorePrivate(v1, v2) {
     rank: grade,
     max_combo,
     mods,
+    // Pontuação da play (a de milhões, não o pp). O embed a exibe quando existe;
+    // aqui ela só não pode virar zero, que na tela pareceria uma play sem nota.
+    score: Number(v2?.score ?? v1.score ?? 0) || null,
     passed: grade !== 'F',
     created_at: playTime.toISOString(),
     mode: 'osu',

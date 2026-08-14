@@ -3,26 +3,13 @@ const osu = require('../osuClient');
 const servers = require('../servers');
 const { resolvePlayer } = require('../userLink');
 const mapContext = require('../mapContext');
-const emojis = require('../emojis');
+const playEmbed = require('../embeds/play');
 const { paginate } = require('../pagination');
-const { localScorePP } = require('../scorePP');
-const { formatMods } = require('../mods');
 const { t } = require('../i18n');
 const { logError } = require('../logger');
 const { safeEditReply } = require('../replies');
 
 const PAGE_SIZE = 5;
-
-// Título de embed estoura em 256 caracteres — e "artista - título [diff]" de
-// mapa de maratona chega perto. Cortar aqui evita que o comando falhe ao
-// responder depois de já ter buscado tudo.
-const EMBED_TITLE_MAX = 250;
-
-const truncate = (text, max) =>
-  text.length > max ? `${text.slice(0, max - 1).trimEnd()}…` : text;
-
-const discordTimestamp = (dateString) =>
-  `<t:${Math.floor(new Date(dateString).getTime() / 1000)}:R>`;
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -105,13 +92,17 @@ module.exports = {
 
       const scores = await osu.getUserBeatmapScores(user.id, beatmapId, mode);
 
-      const mapTitle = truncate(
-        beatmap
-          ? `${beatmap.beatmapset?.artist ? `${beatmap.beatmapset.artist} - ` : ''}` +
-            `${beatmap.beatmapset?.title ?? '???'} [${beatmap.version ?? '?'}]`
-          : `\`${beatmapId}\``,
-        EMBED_TITLE_MAX
-      );
+      // O mapa embrulhado como se fosse uma play: é a forma que o embeds/play
+      // sabe ler, e evita um segundo caminho de leitura de metadados só para o
+      // cabeçalho desta tela. Sem mods, porque aqui o mapa é o mapa — cada
+      // score da lista mostra os seus.
+      const mapaComoPlay = {
+        beatmap:    { ...(beatmap ?? {}), id: beatmapId },
+        beatmapset: beatmap?.beatmapset ?? scores[0]?.beatmapset ?? {},
+        mods:       [],
+      };
+
+      const mapTitle = beatmap ? playEmbed.mapTitle(mapaComoPlay) : `\`${beatmapId}\``;
 
       if (scores.length === 0) {
         // Lembra o mapa mesmo sem score: quem veio pelo link continua no
@@ -120,94 +111,42 @@ module.exports = {
         return interaction.editReply(s.score_none(user.username, mapTitle, osu.getModeLabel(mode)));
       }
 
-      const totalPages  = Math.ceil(scores.length / PAGE_SIZE);
-      const mapUrl      = osu.getMapUrl(beatmapId, scores[0].beatmapset?.id, mode);
-      const stats       = user.statistics;
-      const rankDisplay = stats.global_rank ? `#${stats.global_rank.toLocaleString(s.locale)}` : s.profile_unranked;
-      const countryPart = (!user._private && stats.country_rank)
-        ? ` ${user.country_code}#${stats.country_rank.toLocaleString(s.locale)}`
-        : ` ${user.country_code}`;
+      const totalPages = Math.ceil(scores.length / PAGE_SIZE);
+      const mapUrl     = osu.getMapUrl(beatmapId, scores[0].beatmapset?.id, mode);
+      const cover      = beatmap?.beatmapset?.covers?.list ?? scores[0].beatmapset?.covers?.list ?? null;
+
+      // Fora do buildEmbed: aqui todas as páginas são do MESMO mapa, então
+      // status, mapper e atributos são calculados uma vez e valem para todas.
+      const meta     = await playEmbed.mapMeta(mapaComoPlay);
+      const linhaMapa = await playEmbed.mapLine(mapaComoPlay, { length: meta.length });
 
       async function buildEmbed(page) {
         const pageScores = scores.slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE);
 
-        const [starsArray, fcPPArray, calcPPArray] = await Promise.all([
-          Promise.all(pageScores.map(sc => osu.getAdjustedStars(beatmapId, sc.mods, mode))),
-          Promise.all(pageScores.map(sc => osu.getFCpp(sc, mode))),
-          // A API devolve pp nulo em alguns scores (os de lazer com CL, por
-          // exemplo, que é o caso do print que originou este comando). Em vez
-          // de exibir 0pp, calculamos o valor localmente a partir dos hits
-          // reais — o mesmo caminho do /simulate.
-          Promise.all(pageScores.map(sc =>
-            sc.pp != null ? null : localScorePP(sc, mode)
-          )),
-        ]);
+        // Em paralelo entre os scores: cada bloco pede estrelas e PP (o do FC,
+        // e o da própria play quando a API não a pontuou).
+        const blocos = await Promise.all(pageScores.map((sc, index) =>
+          playEmbed.listItem(sc, { mode, index: page * PAGE_SIZE + index + 1 })
+        ));
 
-        let description = '';
-        pageScores.forEach((sc, index) => {
-          const globalIndex = page * PAGE_SIZE + index;
-
-          const hits   = sc.statistics ?? {};
-          const h300   = hits.count_300  ?? hits.great ?? '-';
-          const h100   = hits.count_100  ?? hits.ok    ?? '-';
-          const h50    = hits.count_50   ?? hits.meh   ?? '-';
-          const hMiss  = hits.count_miss ?? hits.miss  ?? 0;
-          const misses = typeof hMiss === 'number' ? hMiss : 0;
-
-          const mapCombo   = sc.beatmap?.max_combo ?? null;
-          const scoreCombo = sc.max_combo ?? 0;
-          const isChoke    = misses > 0 || (mapCombo !== null && scoreCombo < mapCombo);
-
-          const starsRaw = starsArray[index] ?? sc.beatmap?.difficulty_rating;
-          const stars    = starsRaw ? ` [${parseFloat(starsRaw).toFixed(2)}★]` : '';
-          const mods     = formatMods(sc.mods);
-
-          // pp calculado por nós vai com ~ na frente, para não passar por
-          // número oficial do servidor.
-          // Finito, e não só "não-nulo": o `pp` do servidor não passa por nós, e
-          // um valor não numérico imprimiria "NaN pp" — pior que "?pp", porque
-          // parece resultado.
-          const doServidor = Number.isFinite(sc.pp);
-          const ppValue = doServidor ? sc.pp : calcPPArray[index];
-          const ppText  = !Number.isFinite(ppValue)
-            ? '`?pp`'
-            : `\`${doServidor ? '' : '~'}${ppValue.toFixed(2)}pp\``;
-
-          const fcPP    = fcPPArray[index];
-          const fcText  = Number.isFinite(fcPP) && isChoke ? ` *(FC: ~${fcPP.toFixed(2)}pp)*` : '';
-
-          const comboText = `${scoreCombo}x/${mapCombo !== null ? mapCombo + 'x' : '?x'}`;
-
-          description += `**#${globalIndex + 1}** ${emojis.rankLabel(sc.rank)} **${mods}**${stars}\n`;
-          description += `${ppText}${fcText} • ${(sc.accuracy * 100).toFixed(2)}% • ` +
-                         `[${comboText}] • ${discordTimestamp(sc.created_at)}\n`;
-          description += `{ ${h300} / ${h100} / ${h50} / ${hMiss} }\n\n`;
-        });
-
-        const embed = new EmbedBuilder()
-          .setColor(0xff66aa)
-          .setAuthor({
-            name:    `${user.username}: ${stats.pp.toFixed(2)}pp (${rankDisplay}${countryPart})`,
-            iconURL: `https://flagcdn.com/w20/${user.country_code.toLowerCase()}.png`,
-            url:     osu.getUserUrl(user.id, mode),
-          })
+        return new EmbedBuilder()
+          .setColor(playEmbed.COLOR)
+          .setAuthor(playEmbed.author(user, mode, s))
           .setTitle(mapTitle)
           .setURL(mapUrl)
-          .setDescription(description)
+          .setThumbnail(cover)
+          // A linha do mapa abre a descrição, não cada bloco: ela é a mesma
+          // para os cinco scores, e repetida vira parede.
+          .setDescription([linhaMapa, ...blocos].filter(Boolean).join('\n\n'))
           .setFooter({
-            // O status do mapa vale para os cinco scores da página, então é do
-            // rodapé — não de uma ressalva repetida linha a linha. Só a API
-            // oficial manda o campo; no bancho.py o rodapé sai sem ele.
+            // O status do mapa e o mapper valem para os cinco scores da página,
+            // então são do rodapé — não de uma ressalva repetida linha a linha.
+            // Só a API oficial manda os dois; no bancho.py o rodapé sai sem.
             text: s.score_footer(
               page + 1, totalPages, scores.length, osu.getModeLabel(mode),
-              beatmap?.status ?? null,
+              meta.status, meta.creator,
             ),
           });
-
-        const cover = beatmap?.beatmapset?.covers?.list ?? scores[0].beatmapset?.covers?.list;
-        if (cover) embed.setThumbnail(cover);
-
-        return embed;
       }
 
       mapContext.remember(interaction, beatmapId, mode);
@@ -227,7 +166,9 @@ module.exports = {
   },
 };
 
-// O cálculo local saiu daqui para o scorePP.js: o /recent precisa do mesmo
-// número, e as duas cópias já tinham divergido — esta calculava, a de lá
-// imprimia zero. O pré-requisito de play completa vale igual, e neste comando
-// ele é dado: os dois servidores só devolvem play completa em scores de mapa.
+// O cálculo de PP local (para quando a API não pontua o score) e o desenho das
+// linhas saíram daqui: o primeiro para o scorePP.js, o segundo para o
+// embeds/play.js. Os dois pela mesma razão — o /recent mostra a mesma play, e
+// as cópias já tinham divergido: uma calculava o pp que a outra imprimia como
+// zero. O pré-requisito de play completa continua dado neste comando, porque os
+// dois servidores só devolvem play completa em scores de mapa.

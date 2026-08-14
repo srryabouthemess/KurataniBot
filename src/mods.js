@@ -82,6 +82,29 @@ function stripClassic(mods) {
 }
 
 /**
+ * Mods que mudam COMO se joga, mas não o que o mapa é.
+ *
+ * A distinção importa por causa de quem pergunta: o `getAdjustedStars` usa a
+ * estrela publicada pela API quando não há mod de dificuldade, porque ela é mais
+ * exata que a nossa (o rosu-pp está dois reworks atrás do osu!). Com o HD
+ * contando como mod, um `+HD` de mapa ranqueado saía calculado aqui — 8.09★
+ * onde o site mostra 8.31★, numa combinação que é das mais comuns que existem.
+ *
+ * O CL entra pelo mesmo motivo do `stripClassic`: ele diz a mecânica da play.
+ * Fora daqui ficam EZ, HR, DT, NC, HT e FL, que mexem no mapa de verdade — e o
+ * RX, que muda o motor de cálculo inteiro.
+ */
+const COSMETIC_MODS = new Set(['HD', 'NF', 'SO', 'SD', 'PF', 'CL']);
+
+/**
+ * Só os mods que alteram a dificuldade. Pode ser vazio, e aí quem chama decide
+ * o que fazer — normalmente confiar no número que a API já publicou.
+ */
+function difficultyMods(mods) {
+  return (mods ?? []).filter(mod => !COSMETIC_MODS.has(mod));
+}
+
+/**
  * Como os mods vão para a tela: `['DT','CL']` → `+DTCL`, lista vazia → `+NM`.
  *
  * `+NM` (NoMod) é como a comunidade escreve, e vale nos três idiomas — por isso
@@ -97,5 +120,5 @@ function formatMods(mods) {
 
 module.exports = {
   MOD_BITS, KNOWN_MOD_TOKENS,
-  decodeMods, parseModsString, modsToBits, stripClassic, formatMods,
+  decodeMods, parseModsString, modsToBits, stripClassic, difficultyMods, formatMods,
 };

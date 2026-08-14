@@ -92,6 +92,38 @@ function difficulty(beatmap, { mods, lazer }) {
 }
 
 /**
+ * Os números do mapa como quem jogou os sentiu: CS/AR/OD/HP já ajustados pelos
+ * mods, o BPM na velocidade do clock, e quantos objetos o mapa tem.
+ *
+ * A conta dos mods não é uma multiplicação. AR e OD viram janela de tempo em
+ * milissegundos, a janela é dividida pelo clock (1,5 no DT, 0,75 no HT) e o
+ * resultado volta a ser AR/OD — passo que o `BeatmapAttributesBuilder` já faz.
+ * Reescrevê-la em JS seria uma segunda implementação da mesma regra, livre para
+ * divergir do número que o cálculo de PP exibido ao lado usa.
+ *
+ * `objects` sai daqui pelo mesmo motivo que o resto: o mapa já está parseado.
+ * Ele é o denominador do "@47%" de uma play interrompida, e buscá-lo na API
+ * seria uma requisição a mais por um dado que está a uma propriedade de
+ * distância.
+ *
+ * Sem `lazer` de propósito: CS/AR/OD/HP não dependem da mecânica de slider, e o
+ * builder não aceita o campo — mandá-lo à toa arrisca uma recusa da lib.
+ */
+function attributes(beatmap, { mods }) {
+  const attrs = new rosu.BeatmapAttributesBuilder({ map: beatmap, mods }).build();
+
+  return {
+    cs: attrs.cs,
+    ar: attrs.ar,
+    od: attrs.od,
+    hp: attrs.hp,
+    clockRate: attrs.clockRate,
+    bpm: beatmap.bpm * attrs.clockRate,
+    objects: beatmap.nObjects,
+  };
+}
+
+/**
  * PP de um FC hipotético.
  *
  * Os misses viram 300 (é o que "se tivesse sido FC" quer dizer). Sem os hits
@@ -138,7 +170,7 @@ function simulate(beatmap, { mods, lazer, n300, n100, n50, misses, combo, passed
   return { pp: resultado.pp, stars: diffAttrs.stars, maxCombo: diffAttrs.maxCombo };
 }
 
-const OPERACOES = { difficulty, fc, simulate };
+const OPERACOES = { difficulty, attributes, fc, simulate };
 
 // ─── Protocolo ────────────────────────────────────────────────────────────────
 // Pedido:  { id, op, mapId, args, bytes? }

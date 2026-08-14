@@ -3,21 +3,14 @@ const osu = require('../osuClient');
 const servers = require('../servers');
 const { resolvePlayer } = require('../userLink');
 const mapContext = require('../mapContext');
-const emojis = require('../emojis');
+const playEmbed = require('../embeds/play');
 const { paginate } = require('../pagination');
-const { formatMods } = require('../mods');
 const { t } = require('../i18n');
 const { logError } = require('../logger');
 const { safeEditReply } = require('../replies');
 
 const PAGE_SIZE   = 5;
 const FETCH_LIMIT = 100;
-
-const truncateTitle = (title, maxLen = 22) =>
-  title.length > maxLen ? `${title.slice(0, maxLen).trimEnd()}...` : title;
-
-const discordTimestamp = (dateString) =>
-  `<t:${Math.floor(new Date(dateString).getTime() / 1000)}:R>`;
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -66,12 +59,6 @@ module.exports = {
       // página já vista não passa por lá de novo.
       const pageMapId = new Map();
 
-      const stats       = user.statistics;
-      const rankDisplay = stats.global_rank ? `#${stats.global_rank.toLocaleString()}` : s.profile_unranked;
-      const countryPart = (!user._private && stats.country_rank)
-        ? ` ${user.country_code}#${stats.country_rank.toLocaleString()}`
-        : ` ${user.country_code}`;
-
       async function buildEmbed(page) {
         // Enriquece só os mapas da página atual (5), não os 100 buscados de
         // uma vez — evita rajada de requisições/rate limit na API do osu!
@@ -81,56 +68,23 @@ module.exports = {
 
         pageMapId.set(page, pagePlays[0]?.beatmap?.id ?? null);
 
-        const [adjustedStarsArray, fcPPArray] = await Promise.all([
-          Promise.all(pagePlays.map(play => osu.getAdjustedStars(play.beatmap.id, play.mods, mode))),
-          Promise.all(pagePlays.map(play => osu.getFCpp(play, mode))),
-        ]);
-
-        const embed = new EmbedBuilder()
-          .setColor(0x2f3136)
-          .setAuthor({
-            name:    `${user.username}: ${stats.pp.toFixed(2)}pp (${rankDisplay}${countryPart})`,
-            iconURL: `https://flagcdn.com/w20/${user.country_code.toLowerCase()}.png`,
-            url:     osu.getUserUrl(user.id, mode),
+        // Em paralelo entre as plays, e não uma por vez: cada bloco ainda pede
+        // estrelas e PP de FC, e serializá-los multiplicaria por cinco a espera
+        // de uma página nova.
+        const blocos = await Promise.all(pagePlays.map((play, index) =>
+          playEmbed.listItem(play, {
+            mode,
+            index:  page * PAGE_SIZE + index + 1,
+            mapUrl: osu.getMapUrl(play.beatmap.id, play.beatmapset.id, mode),
           })
-          .setThumbnail(user.avatar_url);
+        ));
 
-        let description = '';
-        pagePlays.forEach((play, index) => {
-          const globalIndex = page * PAGE_SIZE + index;
-          const mapUrl     = osu.getMapUrl(play.beatmap.id, play.beatmapset.id, mode);
-          const mods       = formatMods(play.mods);
-          const acc        = (play.accuracy * 100).toFixed(2);
-          const starsRaw   = adjustedStarsArray[index] ?? play.beatmap.difficulty_rating;
-          const stars      = starsRaw ? parseFloat(starsRaw).toFixed(2) : '?';
-          const fcPP       = fcPPArray[index];
-          const hits       = play.statistics ?? {};
-          const h300       = hits.count_300  ?? hits.great ?? '-';
-          const h100       = hits.count_100  ?? hits.ok    ?? '-';
-          const h50        = hits.count_50   ?? hits.meh   ?? '-';
-          const hMiss      = hits.count_miss ?? hits.miss  ?? 0;
-          const hitsLine   = `{ ${h300} / ${h100} / ${h50} / ${hMiss} }`;
-          const misses     = typeof hMiss === 'number' ? hMiss : 0;
-          const mapCombo   = play.beatmap?.max_combo ?? null;
-          const scoreCombo = play.max_combo ?? 0;
-          const isChoke    = misses > 0 || (mapCombo !== null && scoreCombo < mapCombo);
-
-          const ppText = fcPP !== null && isChoke
-            ? `\`${play.pp.toFixed(2)}pp\` *(FC: ~${fcPP.toFixed(2)}pp)*`
-            : `\`${play.pp.toFixed(2)}pp\``;
-
-          const comboText = `${scoreCombo}x/${mapCombo !== null ? mapCombo + 'x' : '?x'}`;
-
-          const title = truncateTitle(play.beatmapset.title);
-          description += `**#${globalIndex + 1} [${title} [${play.beatmap.version}]](${mapUrl}) [${stars}★]**\n`;
-          description += `${emojis.rankLabel(play.rank)} ${ppText} (${acc}%) [${comboText}] **${mods}** ${discordTimestamp(play.created_at)}\n`;
-          description += `${hitsLine}\n\n`;
-        });
-
-        embed.setDescription(description);
-        embed.setFooter({ text: s.topplays_footer(page + 1, totalPages, osu.getModeLabel(mode)) });
-
-        return embed;
+        return new EmbedBuilder()
+          .setColor(playEmbed.COLOR)
+          .setAuthor(playEmbed.author(user, mode, s))
+          .setThumbnail(user.avatar_url ?? null)
+          .setDescription(blocos.join('\n\n'))
+          .setFooter({ text: s.topplays_footer(page + 1, totalPages, osu.getModeLabel(mode)) });
       }
 
       // O embed da página é memoizado pelo paginate(): sem isso, voltar para

@@ -2,6 +2,38 @@
 
 ---
 
+# Sessão de 2026-08-14 (embeds)
+
+Sessão de aparência: os comandos que mostram play passaram a desenhar todos do mesmo jeito, no formato denso que a comunidade de osu! já lê sem pensar (o do BathBot). Duas correções de número apareceram no caminho, encontradas justamente por olhar as telas lado a lado.
+
+## ✨ Novos recursos
+
+- **Um desenho só para toda play exibida.** [`embeds/play.js`](src/embeds/play.js), [`recent.js`](src/commands/recent.js), [`score.js`](src/commands/score.js), [`topplays.js`](src/commands/topplays.js)
+  - O `/recent`, o `/score` e o `/topplays` mostram o MESMO objeto e tinham três desenhos. O `/recent` usava campos de embed com rótulo traduzido ("Status", "Estatísticas"), que gastam três linhas de altura para dizer o que cabe em meia; os outros dois já usavam linhas de descrição, mas discordavam entre si — pp entre crases num e em negrito no outro, acurácia entre parênteses num e depois de um ponto no outro, combo entre colchetes só num deles.
+  - Agora a forma mora num módulo e os comandos só dizem em que moldura a play vai: **play única** (o embed inteiro) ou **item de lista**. A linha de autor (`pudim2: 3.137,00pp (#4 BR#1)`), que existia em duas cópias divergentes e faltava no `/recent`, saiu junto.
+  - **Sem rótulo escrito, de propósito.** "121.21pp", "81.48%" e "55x/284x" se explicam pela unidade que carregam; o que sobrava dos rótulos era ruído traduzido três vezes. O i18n ficou com o que é frase — rodapé, erro, aviso —, e perdeu onze chaves que só serviam para nomear campo.
+  - A data saiu do rodapé e virou timestamp relativo do Discord: cada pessoa lê "há 4 horas" no fuso e no idioma dela, em vez de uma data fixa em pt-BR.
+
+- **A linha de informação do mapa.** [`rosuWorkerThread.js`](src/rosuWorkerThread.js), [`pp.js`](src/pp.js)
+  - `02:00 • CS 4 AR 9.4 OD 9.6 HP 5 • 128 BPM`, tudo já ajustado pelos mods — com DT a duração encolhe, o BPM sobe e o AR/OD mudam por uma conta que **não** é multiplicação (a janela de tempo é que muda).
+  - Por isso ela é feita pelo `BeatmapAttributesBuilder` do rosu-pp, e não à mão em JS: seria uma segunda implementação da mesma regra, livre para divergir do número que o cálculo de PP ao lado usa. Vem da mesma thread e do mesmo mapa já parseado, então não custa requisição nenhuma.
+  - A contagem de objetos vem junto, e é ela que dá o `@47%` de uma play interrompida — até onde a pessoa foi antes de parar. Sem o `.osu` a marca some, em vez de virar um "@0%" que parece nota.
+  - Cache em memória por (mapa, mods), com TTL: o cálculo é barato, o que se quer evitar é a viagem até a thread a cada virada de página do mesmo mapa.
+
+- **O score total aparece nas plays de servidor privado.** [`banchoPyApi.js`](src/osu/banchoPyApi.js), [`rippleApi.js`](src/osu/rippleApi.js)
+  - A pontuação (a de milhões, não o pp) já vinha da API oficial e era descartada pelos dois adaptadores. Zero vira `null`: na tela, um zero pareceria play sem nota.
+
+## 🐛 Correções
+
+- **`+HD` deixou de tirar a estrela das mãos da API.** [`mods.js`](src/mods.js), [`pp.js`](src/pp.js)
+  - O `getAdjustedStars` usa o valor publicado pela API quando não há mod de dificuldade, porque ele é mais exato que o nosso — o rosu-pp está dois reworks atrás do osu!. A guarda só ignorava o CL, então **qualquer** mod cosmético mandava o cálculo para cá: um `+HD` de mapa ranqueado saía com 8.09★ onde o site publica 8.60★. É a combinação mais comum que existe, e a estrela agora aparece no título do embed.
+  - A lista virou "mods que MEXEM no mapa": HD, NF, SO, SD, PF e CL ficam de fora; EZ, HR, DT, NC, HT, FL e o RX (que troca o motor inteiro) continuam pedindo cálculo local.
+
+- **O pp de FC só entra quando é maior que o da play.** [`embeds/play.js`](src/embeds/play.js)
+  - Em choke de um combo só, o valor que calculamos para o FC sai **abaixo** do pp oficial do servidor — os dois motores discordam, e o nosso é o desatualizado. Exibir os dois dizia "se tivesse acertado tudo, teria ganhado menos", que não é o que a linha significa. Visto no top play #1 do mrekk: 1857.11pp reais contra 1846.98pp de "FC".
+
+---
+
 # Sessão de 2026-08-14
 
 Sessão de análise de desempenho, e depois dos dois itens de maior efeito que ela apontou. As medições saíram da própria máquina, com os `.osu` reais que já estavam no `cache.db`.
