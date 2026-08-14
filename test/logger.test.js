@@ -13,7 +13,7 @@
 const test = require('node:test');
 const assert = require('node:assert');
 
-const { logError, BODY_MAX } = require('../src/logger');
+const { logError, logErrorOnce, BODY_MAX, CAUSAS_MAX } = require('../src/logger');
 
 /** Roda o logError capturando o que ele mandaria para o console. */
 function capture(context, error) {
@@ -120,4 +120,64 @@ test('o stack não carrega header de autorização', () => {
   const saida = capture('rede', erro);
   assert.doesNotMatch(saida, /segredo-do-bot/);
   assert.doesNotMatch(saida, /Authorization/);
+});
+
+// ─── Uma causa, um log ────────────────────────────────────────────────────────
+// Os cálculos de PP rodam uma vez por play: um /topplays com cinco plays do
+// mesmo mapa problemático viraria cinco linhas idênticas por página, e a mesma
+// falha volta a cada renderização. Logar tudo enche o disco de quem já está com
+// problema — que é o pior momento para isso.
+
+/** Roda o logErrorOnce calado, devolvendo se ele chegou a logar. */
+function logouUmaVez(context, error) {
+  const original = console.error;
+  console.error = () => {};
+  try {
+    return logErrorOnce(context, error);
+  } finally {
+    console.error = original;
+  }
+}
+
+test('a mesma causa só sai uma vez', () => {
+  const erro = new Error(`falha repetida ${Math.random()}`);
+
+  assert.equal(logouUmaVez('pp:fc', erro), true, 'a primeira deveria sair');
+  assert.equal(logouUmaVez('pp:fc', erro), false, 'a repetição deveria ficar calada');
+});
+
+test('o mesmo texto em contextos diferentes são causas diferentes', () => {
+  // Um download que falha no caminho das estrelas e no do FC pp são dois
+  // problemas, mesmo com a mensagem idêntica — calar o segundo esconderia
+  // metade do estrago.
+  const texto = `timeout ${Math.random()}`;
+
+  assert.equal(logouUmaVez('pp:difficulty', new Error(texto)), true);
+  assert.equal(logouUmaVez('pp:fc',         new Error(texto)), true);
+});
+
+test('causa vazia não ocupa espaço nem loga', () => {
+  assert.equal(logouUmaVez('pp:fc', new Error('')), false);
+  assert.equal(logouUmaVez('pp:fc', null), false);
+  assert.equal(logouUmaVez('pp:fc', undefined), false);
+});
+
+test('o registro tem teto: causa antiga sai e pode voltar a ser logada', () => {
+  // Sem teto a estrutura só cresce: basta a mensagem variar por mapa
+  // ("mapa 123 não encontrado") para virar uma entrada por mapa, num processo
+  // que fica semanas no ar.
+  const marca = Math.random();
+  const primeira = new Error(`mapa 0 ${marca}`);
+
+  assert.equal(logouUmaVez('pp:difficulty', primeira), true);
+  assert.equal(logouUmaVez('pp:difficulty', primeira), false, 'ainda está no conjunto');
+
+  for (let i = 1; i <= CAUSAS_MAX * 2; i++) {
+    logouUmaVez('pp:difficulty', new Error(`mapa ${i} ${marca}`));
+  }
+
+  assert.equal(
+    logouUmaVez('pp:difficulty', primeira), true,
+    'a causa mais antiga deveria ter sido descartada',
+  );
 });

@@ -60,4 +60,43 @@ function logError(context, error) {
   console.error(...parts);
 }
 
-module.exports = { logError, BODY_MAX };
+// ─── Uma causa, um log ────────────────────────────────────────────────────────
+/**
+ * Loga só na PRIMEIRA vez que aquela causa aparece.
+ *
+ * Existe para os caminhos que rodam uma vez por play. Um `/topplays` com cinco
+ * plays do mesmo mapa problemático viraria cinco linhas idênticas por página, e
+ * a mesma falha volta a cada renderização — logar tudo enche o disco de quem já
+ * está com problema, que é o pior momento para isso.
+ *
+ * Por CAUSA, e não um booleano global: calar tudo depois da primeira esconderia
+ * um problema NOVO que aparecesse depois. E com teto, senão a estrutura só
+ * cresce — basta a mensagem variar por mapa para virar uma entrada por mapa num
+ * processo que fica semanas no ar.
+ *
+ * O teto descarta a causa mais antiga, então uma que parou de acontecer volta a
+ * ser logada se reaparecer — que é justamente o comportamento desejável.
+ *
+ * @returns {boolean} se esta chamada chegou a logar
+ */
+const CAUSAS_MAX = 50;
+const _causasVistas = new Set();
+
+function logErrorOnce(context, error) {
+  const mensagem = error?.message ?? String(error ?? '');
+  if (!mensagem) return false;
+
+  const causa = `${context}:${mensagem}`;
+  if (_causasVistas.has(causa)) return false;
+
+  // Set preserva ordem de inserção: o primeiro é o mais antigo.
+  if (_causasVistas.size >= CAUSAS_MAX) {
+    _causasVistas.delete(_causasVistas.values().next().value);
+  }
+  _causasVistas.add(causa);
+
+  logError(context, error);
+  return true;
+}
+
+module.exports = { logError, logErrorOnce, BODY_MAX, CAUSAS_MAX };

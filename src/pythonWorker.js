@@ -25,7 +25,7 @@
 
 const { spawn } = require('child_process');
 const path = require('path');
-const { logError } = require('./logger');
+const { logErrorOnce } = require('./logger');
 
 const SCRIPT = path.join(__dirname, 'pp_calc.py');
 
@@ -63,27 +63,18 @@ function pythonBin() {
 /**
  * Uma causa é logada uma vez só.
  *
- * Uma vez por MENSAGEM, não uma vez por processo: um booleano só deixaria passar
- * a primeira causa e calaria todas as seguintes para sempre. Se a primeira falha
- * for passageira e o problema real aparecer depois, ninguém ficaria sabendo até
- * reiniciar o bot.
+ * O dedup em si vive no logger, porque os caminhos de PP do rosu precisam do
+ * mesmo tratamento e pela mesma razão (ver logErrorOnce). O que sobra aqui é a
+ * linha extra que explica ao operador por que ele não vai ver a mensagem de
+ * novo — e ela só sai quando houve log, senão a explicação apareceria sozinha,
+ * sem o erro que ela explica.
  */
-const FALHAS_MAX = 50;
-const _falhasVistas = new Set();
-
 function reportPythonFailure(context, detail) {
-  if (!detail || _falhasVistas.has(detail)) return;
+  if (!detail) return;
 
-  // Set preserva ordem de inserção: o primeiro é o mais antigo. Descartá-lo faz
-  // uma causa antiga poder ser logada de novo se voltar a acontecer, o que é
-  // justamente o comportamento desejável.
-  if (_falhasVistas.size >= FALHAS_MAX) {
-    _falhasVistas.delete(_falhasVistas.values().next().value);
+  if (logErrorOnce(context, new Error(detail))) {
+    console.error('[pythonWorker] PP do Relax indisponível; esta causa é logada uma vez só.');
   }
-
-  _falhasVistas.add(detail);
-  logError(context, new Error(detail));
-  console.error('[pythonWorker] PP do Relax indisponível; esta causa é logada uma vez só.');
 }
 
 // ─── Ciclo de vida ────────────────────────────────────────────────────────────

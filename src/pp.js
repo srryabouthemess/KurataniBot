@@ -18,6 +18,7 @@ const { dedupe } = require('./inflight');
 const { modsToBits, stripClassic } = require('./mods');
 const { idSegment } = require('./urlSafe');
 const { withRetry } = require('./retry');
+const { logErrorOnce } = require('./logger');
 const pythonWorker = require('./pythonWorker');
 
 const DEFAULT_MODE = servers.defaultKey();
@@ -82,7 +83,14 @@ async function getBeatmapFile(mapId) {
 function loadRosu() {
   if (!_rosuTried) {
     _rosuTried = true;
-    try { _rosu = require('rosu-pp-js'); } catch { _rosu = null; }
+    try {
+      _rosu = require('rosu-pp-js');
+    } catch (error) {
+      // Sem esta lib, TODO o PP de servidor vanilla some — e sumia calado, que
+      // e a pior forma de um recurso inteiro desaparecer.
+      logErrorOnce('pp:rosu', error);
+      _rosu = null;
+    }
   }
   return _rosu;
 }
@@ -117,7 +125,10 @@ async function getDifficultyAttrs(mapId, modsBits, lazer) {
       // free() em finally: se o calculate lançar, o buffer Wasm vazava.
       beatmap.free();
     }
-  } catch {
+  } catch (error) {
+    // O `?★` que aparece no embed tem duas causas bem diferentes — download que
+    // falhou e mapa que o rosu recusou — e nenhuma delas deixava rastro.
+    logErrorOnce('pp:difficulty', error);
     return null;
   }
 }
@@ -144,7 +155,8 @@ async function calcPPPython(beatmapId, modsBits, n300, n100, n50, nmiss, combo =
   let beatmapBytes;
   try {
     beatmapBytes = await getBeatmapFile(beatmapId);
-  } catch {
+  } catch (error) {
+    logErrorOnce('pp:beatmapFile', error);
     return null;
   }
 
@@ -307,7 +319,10 @@ async function getFCpp(score, mode = DEFAULT_MODE) {
     } finally {
       beatmap.free();
     }
-  } catch {
+  } catch (error) {
+    // Sem isto, o "(FC: ~Xpp)" simplesmente não aparece na linha da play e não
+    // há como distinguir "não era choke" de "o cálculo quebrou".
+    logErrorOnce('pp:fc', error);
     return null;
   }
 }
@@ -396,7 +411,10 @@ async function simulatePP(beatmapId, mods, hits, mode = DEFAULT_MODE, { lazer } 
     } finally {
       beatmap.free();
     }
-  } catch {
+  } catch (error) {
+    // O /simulate e o /whatif respondem "não consegui calcular" a partir daqui,
+    // e o motivo ficava só na cabeça de quem escreveu o catch.
+    logErrorOnce('pp:simulate', error);
     return null;
   }
 }
