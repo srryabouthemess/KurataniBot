@@ -11,41 +11,19 @@
  * editável por quem entra na conta, então quem não controla a conta não
  * consegue plantar o código lá — e o vínculo não sai.
  *
- * Roda contra um bot.db descartável, no mesmo desenho do nominations.test.js: os
- * módulos vão para um diretório temporário que reproduz o layout do projeto,
- * porque o caminho do banco é resolvido a partir de `src/`.
+ * Roda contra um bot.db descartável, apontado por `KURATANI_DATA_DIR`.
+ *
+ * Antes isto copiava `src/db.js`, `servers.js` e `paths.js` para um diretório
+ * temporário que reproduzia o layout do projeto, porque o caminho do banco saía
+ * de `src/` e não havia como desviá-lo. A cópia amarrava o teste à LISTA de
+ * arquivos do módulo — e foi exatamente o que quebrou quando o `db.js` virou
+ * uma pasta. Com o diretório de dados configurável, o teste usa os módulos de
+ * verdade e só troca onde o arquivo é gravado.
  */
-const fs = require('fs');
-const os = require('os');
-const path = require('path');
 const test = require('node:test');
 const assert = require('node:assert');
 
-const PROJECT = path.join(__dirname, '..');
-const SRC     = path.join(PROJECT, 'src');
-
-function workspace(t) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'kb-chal-'));
-  const srcDir = path.join(dir, 'src');
-  fs.mkdirSync(srcDir);
-
-  for (const file of ['db.js', 'servers.js', 'paths.js']) {
-    fs.copyFileSync(path.join(SRC, file), path.join(srcDir, file));
-  }
-  fs.symlinkSync(path.join(PROJECT, 'node_modules'), path.join(dir, 'node_modules'), 'junction');
-
-  delete require.cache[require.resolve(path.join(srcDir, 'db.js'))];
-  const db = require(path.join(srcDir, 'db.js'));
-
-  // Handle fechado antes de apagar a pasta: no Windows um banco aberto trava o
-  // arquivo e o rmSync falha com EPERM.
-  t.after(() => {
-    try { db.close(); } catch { /* já fechado */ }
-    fs.rmSync(dir, { recursive: true, force: true });
-  });
-
-  return db;
-}
+const { freshDb: workspace } = require('./helpers');
 
 const DESAFIO = {
   discordId: '100000000000000001',

@@ -2,47 +2,23 @@
  * Nomeação: unicidade por conta de JOGO (não por conta do Discord) e a
  * migração que troca a chave da tabela antiga.
  *
- * Roda contra um bot.db descartável: os módulos são copiados para um diretório
- * temporário que **reproduz o layout do projeto** (`<temp>/src/db.js`), porque
- * o caminho do banco é resolvido a partir de `src/` (ver src/paths.js). Copiar
- * para uma pasta plana faria o teste escrever o banco um nível acima.
+ * Roda contra um bot.db descartável, apontado por `KURATANI_DATA_DIR` (ver
+ * dbWorkspace em helpers.js). O caminho do banco saía de `src/` e não havia como
+ * desviá-lo, então isto copiava os módulos para uma pasta que imitava o layout
+ * do projeto — o que amarrava o teste à lista de arquivos do `db`.
  */
-const fs = require('fs');
-const os = require('os');
-const path = require('path');
 const test = require('node:test');
 const assert = require('node:assert');
 const { DatabaseSync } = require('node:sqlite');
 
-const PROJECT = path.join(__dirname, '..');
-const SRC     = path.join(PROJECT, 'src');
+const { dbWorkspace } = require('./helpers');
 
 function workspace(t) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'kb-db-'));
-  const srcDir = path.join(dir, 'src');
-  fs.mkdirSync(srcDir);
-
-  for (const file of ['db.js', 'servers.js', 'paths.js']) {
-    fs.copyFileSync(path.join(SRC, file), path.join(srcDir, file));
-  }
-  // Na raiz do temp: o require sobe de `src/` até achar.
-  fs.symlinkSync(path.join(PROJECT, 'node_modules'), path.join(dir, 'node_modules'), 'junction');
-
-  const dbPath = path.join(dir, 'bot.db');
-
-  // Todo handle aberto é fechado ANTES de apagar a pasta: no Windows um banco
-  // ainda aberto trava o arquivo e o rmSync falha com EPERM.
-  const opened = [];
-  const load = () => {
-    delete require.cache[require.resolve(path.join(srcDir, 'db.js'))];
-    const db = require(path.join(srcDir, 'db.js'));
-    opened.push(db);
-    return db;
-  };
+  const ws = dbWorkspace(t);
 
   /** Lê a PK num handle próprio — e fecha, senão o Windows trava o arquivo. */
   const primaryKey = (table = 'map_nominations') => {
-    const handle = new DatabaseSync(dbPath);
+    const handle = new DatabaseSync(ws.dbPath);
     try {
       return handle.prepare(`PRAGMA table_info(${table})`).all()
         .filter(c => c.pk > 0).map(c => c.name).sort().join(',');
@@ -51,12 +27,7 @@ function workspace(t) {
     }
   };
 
-  t.after(() => {
-    for (const db of opened) { try { db.close(); } catch { /* já fechado */ } }
-    fs.rmSync(dir, { recursive: true, force: true });
-  });
-
-  return { dir, dbPath, load, primaryKey };
+  return { ...ws, primaryKey };
 }
 
 test('banco novo já nasce com a chave certa', async t => {
