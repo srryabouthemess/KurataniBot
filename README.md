@@ -279,6 +279,18 @@ O `venv` existe porque o `pip` costuma recusar instalação no Python do sistema
 
 Confira com `npm run smoke`: a última linha mostra o PP do Relax. Se vier "indisponível", a lib não está no Python que o `PYTHON_BIN` aponta.
 
+## Testes
+
+| Comando | O que faz | Precisa de rede? |
+|---|---|---|
+| `npm test` | unitários, contra dublês e bancos descartáveis | não |
+| `npm run smoke` | um jogador por servidor, pela camada de cliente | sim |
+| `npm run smoke:commands` | chama o `execute` de cada comando com uma interação simulada | sim |
+
+Os dois `smoke` ficam **fora** do `npm test` de propósito: dependem de rede, de credencial e de os servidores estarem no ar, então uma falha neles não quer dizer que o código regrediu.
+
+O `smoke:commands` é o que evita testar comando a comando na mão — é o mesmo caminho que o Discord dispararia (link, cooldown, i18n, enriquecimento, cálculo de PP, montagem do embed), sem o Discord. O que ele **não** cobre continua sendo do Discord: validação de opção, permissão por cargo e canal, renderização do embed, e o clique nos botões de paginação. Os comandos administrativos entram nele só para provar que **recusam** — disparar de verdade mudaria o servidor de jogo.
+
 ## Uma instância só
 
 O bot roda em **um processo**, sem sharding — o que é o certo hoje: o Discord só passa a exigir sharding acima de 2500 servidores, e antes disso ele só acrescentaria complexidade.

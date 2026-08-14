@@ -8,7 +8,8 @@
     "test": "node --test test/*.test.js",
     "lint": "eslint .",
     "smoke": "node test/smoke.js",
-    "deploy": "node src/deploy-commands.js"
+    "deploy": "node src/deploy-commands.js",
+    "smoke:commands": "node test/smokeCommands.js"
   },
   "keywords": [],
   "author": "",
