@@ -4,7 +4,9 @@
 
 # Sessão de 2026-08-14
 
-Sessão de análise de desempenho. As medições saíram da própria máquina, com os `.osu` reais que já estavam no `cache.db`.
+Sessão de análise de desempenho, e depois dos dois itens de maior efeito que ela apontou. As medições saíram da própria máquina, com os `.osu` reais que já estavam no `cache.db`.
+
+> Pendência conhecida, anterior a esta sessão: o `npm run smoke` reprova o Akatsuki e o Akatsuki RX, porque procura `pudim2` neles — o mapa `PLAYERS` do smoke não foi atualizado quando o Akatsuki entrou como servidor de fábrica. É o teste que está errado, não o adaptador.
 
 ## ⚡ Desempenho
 
@@ -18,6 +20,17 @@ Sessão de análise de desempenho. As medições saíram da própria máquina, c
   - Falha não é gravada. Uma queda de rede ou um Python ausente são passageiros, e guardá-los transformaria "falhou uma vez" em "falha para sempre" naquele mapa.
   - Teto próprio (`FC_PP_CACHE_MAX`, padrão 20000 ≈ 1–2MB): ao contrário das outras duas tabelas de cache, esta cresce por **score** e não por mapa, então sem teto ela só aumenta. A evicção é por idade de inserção — aqui a leitura não escreve nada, então não há marca de último uso, e a idade ainda limita por quanto tempo um número pode ficar desatualizado depois de um reupload. O desempate é por `rowid`: as 5 plays de uma página caem no mesmo milissegundo, e sem ele a evicção podia comer justamente a entrada recém-gravada.
 
+- **O Python do Relax virou processo de vida longa.** [`pythonWorker.js`](src/pythonWorker.js), [`pp_calc.py`](src/pp_calc.py), [`pp.js`](src/pp.js)
+  - O PP do Relax sai do `akatsuki-pp-py`, o mesmo motor dos servidores, e não tem equivalente em JavaScript. Cada número custava um `spawn`: **47,3ms por cálculo** só de subir o interpretador, medido com o transporte isolado. Uma página de `/topplays` de RX são cinco.
+  - Agora o processo fica de pé e atende pedidos em sequência: **0,16ms por cálculo** depois do primeiro, ou 236ms → 0,8ms por página. (O cálculo em si custa o que sempre custou; o que sumiu foi o transporte.)
+  - **O protocolo precisa carregar binário.** Uma linha de JSON com os parâmetros e o tamanho do corpo, seguida dos bytes crus do `.osu`. Do lado do Python, `read(n)` num pipe pode devolver menos do que foi pedido mesmo sem ter acabado — daí o `read_exact`, sem o qual o mapa chegaria truncado e a lib calcularia meio mapa sem reclamar de nada.
+  - **Cada pedido leva um id**, porque o bot manda os cinco de uma página em voo ao mesmo tempo. Sem casar resposta com pedido, bastava uma chegar fora de ordem para uma play exibir o pp de outra — e o número sairia plausível, sem nada denunciar.
+  - **Falha de um pedido não derruba o worker**: mapa problemático responde erro e a fila segue, senão um mapa puniria as outras quatro plays da página. O que derruba é falta da lib ou fluxo dessincronizado, aí o processo sai e o Node sobe outro.
+  - **Instalação sem a lib ficou barata.** Antes, cada play pagava um spawn inteiro para redescobrir a mesma falha permanente. Agora um worker que morre sem ter respondido nada bloqueia novas tentativas por um minuto — e a causa continua sendo logada uma vez só. Um worker que já serviu alguma coisa é reiniciado na hora: ali a morte foi acidente, não configuração.
+  - **Segurar o event loop só enquanto há pedido em voo.** Os dois extremos quebram: sempre referenciado deixaria pendurado um script que não chame `close()` (o `npm run smoke` é exatamente isso); nunca referenciado deixaria o Node sair no meio de um cálculo, sem resposta e sem erro — invisível no bot, onde o socket do gateway segura o loop, e não num script solto.
+  - **Defeito encontrado e corrigido no caminho:** uma morte chega por até três caminhos (`error`, `close` e o `close()` do shutdown), e o worker recebia mais de um para o mesmo processo. Sem trava, um shutdown normal caía no relato de "morreu sozinho" — numa sessão sem nenhum cálculo de RX, o bot logava "PP do Relax indisponível" ao encerrar e ainda ligava o backoff, por causa de um encerramento que deu certo. Tem teste.
+  - Os testes rodam contra o `pp_calc.py` de verdade, com um dublê da lib compilada entrando por `PYTHONPATH` — o enquadramento, a leitura exata do corpo e os ids são exercitados como em produção, sem exigir a lib instalada em quem testa. Sem Python na máquina, são pulados em vez de falhar.
+
 ## 🔧 Manutenção
 
 - **`KURATANI_DATA_DIR`: onde os dados ficam.** [`paths.js`](src/paths.js)
@@ -30,7 +43,6 @@ Sessão de análise de desempenho. As medições saíram da própria máquina, c
 Levantamento de desempenho/escalabilidade cujos itens **não** foram aplicados nesta sessão, registrados para não se perderem:
 
 - O mesmo `.osu` é parseado duas vezes por play com mods (caminho das estrelas e do FC pp constroem cada um o seu `rosu.Beatmap`). Um LRU pequeno de mapa já parseado resolve — com `free()` na evicção, porque a memória é Wasm.
-- Um `spawn` de Python por cálculo de RX. Medido só o spawn + startup do interpretador, **sem** importar o `akatsuki_pp_py`: **44ms por chamada** (Windows; na VPS Linux é menor). Um worker persistente com protocolo por linha elimina o custo — e o cache acima já reduz a frequência.
 - Todo cálculo de PP roda no event loop principal. `worker_threads` tiraria o rosu-pp do caminho do gateway.
 - `fetchBeatmap` não tem cache negativo: mapa que a API oficial não conhece é re-consultado a cada renderização, gastando balde do rate limiter.
 - `verifyMapStatus` relê as dificuldades em série; com concorrência limitada ao teto do balde, o tempo passa a ser limitado pelo rate limiter em vez de RTT + rate limiter.

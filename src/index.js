@@ -6,6 +6,7 @@ const { Client, Collection, GatewayIntentBits, REST, Routes, MessageFlags } = re
 const { logError } = require('./logger');
 const { t } = require('./i18n');
 const db = require('./db');
+const pp = require('./pp');
 const cooldowns = require('./cooldowns');
 const prefixCommands = require('./prefixCommands');
 const mapContext = require('./mapContext');
@@ -243,6 +244,9 @@ async function shutdown(signal) {
     await client.destroy();
     await daycoreEvents.close().catch(() => {});
     await daycoreAdmin.closeRedis().catch(() => {});
+    // O cálculo de PP do Relax roda num processo Python de vida longa; sem
+    // fechá-lo aqui ele ficaria órfão a cada restart do bot.
+    pp.closePythonWorker();
     db.close();
     console.log('[shutdown] Concluído.');
   } catch (error) {

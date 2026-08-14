@@ -253,6 +253,8 @@ O Relax usa um sistema de PP diferente, calculado por uma biblioteca Python. **S
 
 Precisa de **Python 3.11 ou anterior** (a lib não suporta 3.12+), instalado ao lado do seu e apontado por `PYTHON_BIN` no `.env`.
 
+O Python roda como um processo de vida longa, iniciado na primeira play de RX e encerrado junto do bot — antes era um interpretador novo por número, e só o custo de subi-lo era de 47ms por cálculo. Numa máquina sem a lib, a causa é logada uma vez e o bot para de tentar por um minuto, em vez de pagar o mesmo custo a cada play.
+
 <details>
 <summary><b>Como instalar</b></summary>
 

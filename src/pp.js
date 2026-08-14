@@ -18,7 +18,7 @@ const { dedupe } = require('./inflight');
 const { modsToBits, stripClassic } = require('./mods');
 const { idSegment } = require('./urlSafe');
 const { withRetry } = require('./retry');
-const { logError } = require('./logger');
+const pythonWorker = require('./pythonWorker');
 
 const DEFAULT_MODE = servers.defaultKey();
 
@@ -122,59 +122,25 @@ async function getDifficultyAttrs(mapId, modsBits, lazer) {
   }
 }
 
-// ─── Falha do Python: uma vez por processo ────────────────────────────────────
+// ─── Motor do Relax ───────────────────────────────────────────────────────────
 /**
- * O PP do Relax é opcional (ver README), e quem não instalou a lib tem SEMPRE
- * o mesmo erro. Como isto é chamado uma vez por play, um `/topplays` de RX
- * viraria cinco tracebacks idênticos por página — logar a cada chamada punia
- * justamente quem escolheu não instalar.
- *
- * Uma vez por MENSAGEM, não uma vez por processo: um booleano só deixaria
- * passar a primeira causa e calaria todas as seguintes para sempre. Se a
- * primeira falha for passageira ("stdin vazio para o mapa X") e o problema real
- * aparecer depois, ninguém ficaria sabendo até reiniciar o bot.
- */
-const STDERR_MAX = 2000;
-
-// Teto no conjunto de causas já vistas. Sem ele a estrutura só cresce: basta a
-// mensagem do script variar por mapa ("stdin vazio para o mapa X") para virar
-// uma entrada de até STDERR_MAX caracteres por mapa que falhou, num processo
-// que fica semanas no ar. O mesmo cuidado que o mapContext e o cooldowns já
-// tomam com os mapas deles.
-const FALHAS_MAX = 50;
-const _falhasPythonVistas = new Set();
-
-function reportPythonFailure(context, detail) {
-  if (!detail || _falhasPythonVistas.has(detail)) return;
-
-  // Set preserva ordem de inserção: o primeiro é o mais antigo. Descartá-lo faz
-  // uma causa antiga poder ser logada de novo se voltar a acontecer, o que é
-  // justamente o comportamento desejável.
-  if (_falhasPythonVistas.size >= FALHAS_MAX) {
-    _falhasPythonVistas.delete(_falhasPythonVistas.values().next().value);
-  }
-
-  _falhasPythonVistas.add(detail);
-  logError(context, new Error(detail));
-  console.error('[calcPPPython] PP do Relax indisponível; esta causa é logada uma vez só.');
-}
-
-/**
- * Chama pp_calc.py como processo filho e retorna os atributos calculados pelo
- * akatsuki-pp-py — o mesmo sistema que o Daycore usa internamente para RX.
+ * Manda o cálculo para o worker Python (akatsuki-pp-py, o mesmo motor que os
+ * servidores usam para RX).
  *
  * O `stars` retornado já considera os mods e vem do mesmo algoritmo que
  * calculou o PP, então é mais fiel ao RX do que o difficulty_rating da API
  * oficial (que é sempre sem mods).
+ *
+ * Os bytes do mapa saem daqui, do mesmo `getBeatmapFile` do caminho do rosu-pp:
+ * o script já baixou o .osu por conta própria um dia, o que escapava do rate
+ * limiter E do cache — cada cálculo de RX fazia uma requisição extra e não
+ * controlada a osu.ppy.sh.
  *
  * @param {number} combo -1 = usar max_combo do mapa (assume FC)
  * @returns {Promise<{pp: number, stars: number, maxCombo: number}|null>}
  * Requer: pip install akatsuki-pp-py
  */
 async function calcPPPython(beatmapId, modsBits, n300, n100, n50, nmiss, combo = -1) {
-  // Os bytes do mapa vão por stdin. O script baixava o .osu por conta própria,
-  // o que escapava do rate limiter e do cache — cada cálculo de RX fazia uma
-  // requisição extra e não controlada a osu.ppy.sh.
   let beatmapBytes;
   try {
     beatmapBytes = await getBeatmapFile(beatmapId);
@@ -182,77 +148,22 @@ async function calcPPPython(beatmapId, modsBits, n300, n100, n50, nmiss, combo =
     return null;
   }
 
-  return new Promise((resolve) => {
-    const { spawn } = require('child_process');
-    const path = require('path');
-
-    const scriptPath = path.join(__dirname, 'pp_calc.py');
-
-    // Valores seguros: se hits não disponíveis, passa -1 (script trata como null)
-    const args = [
-      scriptPath,
-      String(beatmapId),
-      String(modsBits),
-      String(n300  ?? -1),
-      String(n100  ?? -1),
-      String(n50   ?? -1),
-      String(nmiss ?? 0),
-      String(combo ?? -1),
-    ];
-
-    // No Windows o instalador do python.org cria o binário "python"; na
-    // maioria das distros Linux (PEP 394) só "python3" existe por padrão —
-    // sem isso o spawn falha silenciosamente e o RX nunca calcula PP.
-    // PYTHON_BIN no .env permite sobrescrever em qualquer plataforma.
-    const pythonBin = process.env.PYTHON_BIN || (process.platform === 'win32' ? 'python' : 'python3');
-    const proc = spawn(pythonBin, args, { timeout: 12000 });
-
-    // Se o processo morrer antes de ler tudo (ex: akatsuki-pp-py ausente), a
-    // escrita no stdin lança EPIPE — que sem handler viraria uncaughtException.
-    proc.stdin.on('error', () => {});
-    proc.stdin.end(Buffer.from(beatmapBytes));
-
-    let output = '';
-    let stderr = '';
-    proc.stdout.on('data', (d) => { output += d.toString(); });
-
-    // Consumir o stderr não é só diagnóstico: o pipe tem buffer, e um filho que
-    // escreva mais do que cabe nele fica BLOQUEADO até o timeout matar o
-    // processo. O teto aqui é para um traceback repetido não virar memória.
-    proc.stderr.on('data', (d) => {
-      if (stderr.length < STDERR_MAX) stderr += d.toString();
-    });
-
-    proc.on('close', () => {
-      let data = null;
-      try {
-        data = JSON.parse(output.trim());
-      } catch {
-        // Saída ilegível: o motivo, se houver, está no stderr.
-      }
-
-      // isFinite e não `typeof === 'number'`: NaN e Infinity passam no typeof, e
-      // um deles escapando daqui vira "NaN pp" no embed lá na frente.
-      if (data && Number.isFinite(data.pp)) {
-        return resolve({ pp: data.pp, stars: data.stars, maxCombo: data.max_combo });
-      }
-
-      // ATENÇÃO ao mexer aqui: o pp_calc.py trata os próprios erros — escreve a
-      // causa no stderr E imprime `null` no stdout. Ou seja, no caso mais comum
-      // o JSON.parse ACIMA FUNCIONA, e reportar só quando ele estoura deixaria
-      // no chão a mensagem que interessa: "akatsuki-pp-py nao instalado.
-      // Execute: pip install akatsuki-pp-py", que é a causa em toda instalação
-      // nova. Por isso o relato fica no caminho de "não veio número", não no
-      // catch do parse.
-      reportPythonFailure('calcPPPython', stderr.trim());
-      resolve(null);
-    });
-
-    proc.on('error', (err) => {
-      reportPythonFailure('calcPPPython:spawn', `falha ao iniciar "${pythonBin}": ${err.message}`);
-      resolve(null);
-    });
+  const resposta = await pythonWorker.calcular(beatmapBytes, {
+    mapId: beatmapId,
+    mods:  modsBits,
+    // -1 é o "não sei" que o pp_calc.py entende.
+    n300:  n300  ?? -1,
+    n100:  n100  ?? -1,
+    n50:   n50   ?? -1,
+    nmiss: nmiss ?? 0,
+    combo: combo ?? -1,
   });
+
+  // isFinite e não `typeof === 'number'`: NaN e Infinity passam no typeof, e um
+  // deles escapando daqui vira "NaN pp" no embed lá na frente.
+  if (!resposta || !Number.isFinite(resposta.pp)) return null;
+
+  return { pp: resposta.pp, stars: resposta.stars, maxCombo: resposta.max_combo };
 }
 
 // ─── FC PP ────────────────────────────────────────────────────────────────────
@@ -518,10 +429,12 @@ async function getAdjustedStars(beatmapId, mods, mode = DEFAULT_MODE) {
 module.exports = {
   shouldUseLazer,
   getBeatmapFile,
-  // Exportado para teste: guarda estado entre chamadas, e o defeito que ele
-  // pode ter (crescer sem fim, ou calar uma causa nova) não aparece em nenhuma
-  // saída do bot — só no consumo de memória semanas depois.
-  reportPythonFailure,
+  // Mora no pythonWorker desde que o cálculo do Relax virou processo de vida
+  // longa, mas continua saindo daqui: é a porta de PP do bot, e o teste que
+  // cobre o registro de falhas já pedia por este caminho.
+  reportPythonFailure: pythonWorker.reportPythonFailure,
+  closePythonWorker:   pythonWorker.close,
+  pythonWorkerStats:   pythonWorker.stats,
   getDifficultyAttrs,
   getAdjustedStars,
   getFCpp,
