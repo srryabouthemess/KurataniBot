@@ -283,6 +283,8 @@ Confira com `npm run smoke`: a última linha mostra o PP do Relax. Se vier "indi
 |---|---|
 | `OSU_MODE` | Servidor padrão dos comandos (`official` ou a chave de um configurado) |
 | `BEATMAP_CACHE_MAX` | Quantos `.osu` manter em cache; padrão `1500` (~75–150 MB) |
+| `FC_PP_CACHE_MAX` | Quantos valores de "PP se tivesse sido FC" manter em cache; padrão `20000` (~1–2 MB) |
+| `KURATANI_DATA_DIR` | Onde ficam `bot.db` e `cache.db`; vazio = raiz do projeto |
 | `EXIT_ON_UNCAUGHT` | `true` faz o bot sair com código 1 numa exceção não capturada, em vez de seguir rodando. Ligue **se** você usa supervisor (systemd, pm2, Docker com `restart`) — sem um, o bot ficaria fora do ar até alguém perceber |
 
 ---

@@ -18,8 +18,8 @@ const fs   = require('fs');
 const path = require('path');
 const db   = require('./db');
 
-// Na raiz, não em src/: é dado de uma versão antiga do bot (ver paths.js).
-const OLD_CACHE_PATH = path.join(require('./paths').ROOT, 'beatmap_cache.json');
+// Fora de src/: é dado de uma versão antiga do bot (ver paths.js).
+const OLD_CACHE_PATH = path.join(require('./paths').DATA_DIR, 'beatmap_cache.json');
 
 // ─── Migração única do JSON antigo ────────────────────────────────────────────
 function migrateFromJsonIfNeeded() {

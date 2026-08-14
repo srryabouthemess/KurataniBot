@@ -30,14 +30,14 @@ try {
 const fs   = require('fs');
 const path = require('path');
 const servers = require('./servers');
-const { ROOT, BOT_DB, CACHE_DB } = require('./paths');
+const { DATA_DIR, BOT_DB, CACHE_DB } = require('./paths');
 
-// Os bancos ficam na raiz do projeto, não em src/: dado não acompanha
-// reorganização de pasta de código (ver paths.js).
+// Os bancos ficam fora de src/: dado não acompanha reorganização de pasta de
+// código (ver paths.js).
 const DB_PATH        = BOT_DB;
 const CACHE_PATH     = CACHE_DB;
-const OLD_LINKS_PATH = path.join(ROOT, 'links.json');
-const OLD_LANGS_PATH = path.join(ROOT, 'languages.json');
+const OLD_LINKS_PATH = path.join(DATA_DIR, 'links.json');
+const OLD_LANGS_PATH = path.join(DATA_DIR, 'languages.json');
 
 const db = new DatabaseSync(DB_PATH);
 
@@ -236,6 +236,41 @@ db.exec(`
     max_combo INTEGER,
     PRIMARY KEY (map_id, mods_bits, lazer)
   );
+
+  -- PP que o score teria rendido em FC.
+  --
+  -- A map_difficulty acima já poupava o cálculo das ESTRELAS, e o do FC pp
+  -- continuava sendo refeito do zero a cada exibição: parse do .osu, atributos
+  -- de dificuldade e performance, tudo de novo, para um número que só depende
+  -- de coisas que não mudam. Medido nos 12 maiores .osu do cache: 1,54ms de
+  -- parse + 4,28ms de dificuldade + 0,34ms de performance por play, ou ~30ms de
+  -- event loop parado por página de /topplays — em TODA renderização, inclusive
+  -- num mapa já calculado mil vezes antes.
+  --
+  -- A coluna "engine" está na chave porque os dois motores dão números
+  -- diferentes de propósito (rosu-pp para o algoritmo oficial, akatsuki-pp para
+  -- o Relax), e a mecânica lazer/stable separa o rosu em dois — é a mesma
+  -- dimensão que a map_difficulty guarda na coluna "lazer".
+  --
+  -- SEM TTL, como a map_difficulty: o resultado é função pura do arquivo .osu,
+  -- que para mapa ranqueado não muda. O caso não coberto é o mesmo das duas
+  -- tabelas — reupload de mapa loved/graveyard mantém o número antigo até a
+  -- entrada ser descartada pelo teto abaixo.
+  CREATE TABLE IF NOT EXISTS cache.fc_pp (
+    map_id    INTEGER NOT NULL,
+    mods_bits INTEGER NOT NULL,
+    engine    TEXT    NOT NULL,  -- 'rosu-lazer' | 'rosu-stable' | 'akatsuki'
+    n300      INTEGER NOT NULL,  -- já com os misses somados (ver pp.js)
+    n100      INTEGER NOT NULL,
+    n50       INTEGER NOT NULL,
+    pp        REAL    NOT NULL,
+    cached_at INTEGER NOT NULL,
+    PRIMARY KEY (map_id, mods_bits, engine, n300, n100, n50)
+  );
+
+  -- Mesma razão do índice de LRU dos arquivos: sem ele a evicção ordena
+  -- varrendo a tabela inteira a cada inserção.
+  CREATE INDEX IF NOT EXISTS cache.idx_fc_pp_age ON fc_pp (cached_at);
 `);
 
 // ─── Migração: cache sai do bot.db para o cache.db ────────────────────────────
@@ -719,6 +754,71 @@ function setMapDifficulty(mapId, modsBits, lazer, stars, maxCombo) {
   `).run(mapId, modsBits, lazer ? 1 : 0, stars, maxCombo ?? null);
 }
 
+// ─── Cache: PP de FC ──────────────────────────────────────────────────────────
+
+/**
+ * Teto de entradas.
+ *
+ * Ao contrário das outras duas tabelas de cache, esta cresce por SCORE e não
+ * por mapa: a chave inclui a distribuição de hits, então o mesmo mapa rende uma
+ * linha por combinação distinta. Sem teto ela só aumenta — o mesmo cuidado que
+ * o beatmap_files já toma, e pela mesma razão (quem usa o bot escolhe quantos
+ * scores distintos passam por ele).
+ *
+ * Cada linha são algumas dezenas de bytes, então 20 mil ≈ 1–2MB: generoso o
+ * bastante para o teto nunca ser sentido em uso normal.
+ */
+const FC_PP_MAX_ROWS = Number(process.env.FC_PP_CACHE_MAX || 20000);
+
+/**
+ * @param {{mapId: number, modsBits: number, engine: string,
+ *          n300: number, n100: number, n50: number}} key
+ * @returns {number|null}
+ */
+function getCachedFCpp({ mapId, modsBits, engine, n300, n100, n50 }) {
+  const row = db.prepare(`
+    SELECT pp FROM cache.fc_pp
+    WHERE map_id = ? AND mods_bits = ? AND engine = ? AND n300 = ? AND n100 = ? AND n50 = ?
+  `).get(mapId, modsBits, engine, n300, n100, n50);
+
+  return row ? row.pp : null;
+}
+
+function setCachedFCpp({ mapId, modsBits, engine, n300, n100, n50 }, pp) {
+  db.prepare(`
+    INSERT INTO cache.fc_pp (map_id, mods_bits, engine, n300, n100, n50, pp, cached_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(map_id, mods_bits, engine, n300, n100, n50) DO UPDATE SET
+      pp = excluded.pp, cached_at = excluded.cached_at
+  `).run(mapId, modsBits, engine, n300, n100, n50, pp, Date.now());
+
+  evictFCppIfNeeded();
+}
+
+/**
+ * Descarta as entradas mais antigas até voltar ao teto.
+ *
+ * Por idade de inserção, e não por último uso como no beatmap_files: aqui a
+ * leitura não escreve nada (é uma consulta por score exibido, e marcar uso
+ * transformaria toda página em escrita), então a idade é o único sinal
+ * disponível — e ela ainda limita por quanto tempo um número pode ficar
+ * desatualizado depois de um reupload.
+ */
+function evictFCppIfNeeded() {
+  const count = db.prepare('SELECT COUNT(*) AS c FROM cache.fc_pp').get().c;
+  if (count <= FC_PP_MAX_ROWS) return 0;
+
+  // O desempate por rowid não é detalhe: `cached_at` tem resolução de
+  // milissegundo, e uma página de /topplays grava as 5 plays dentro do mesmo
+  // milissegundo. Sem ele, o SQLite escolhe qualquer uma das empatadas — e a
+  // evicção poderia comer a entrada recém-gravada em vez da antiga.
+  return db.prepare(`
+    DELETE FROM cache.fc_pp WHERE rowid IN (
+      SELECT rowid FROM cache.fc_pp ORDER BY cached_at ASC, rowid ASC LIMIT ?
+    )
+  `).run(count - FC_PP_MAX_ROWS).changes;
+}
+
 // ─── Estado interno ───────────────────────────────────────────────────────────
 
 function getMeta(key) {
@@ -919,6 +1019,7 @@ module.exports = {
   getBeatmapFile, setBeatmapFile, evictBeatmapFilesIfNeeded,
   getBeatmapMeta, setBeatmapMeta,
   getMapDifficulty, setMapDifficulty,
+  getCachedFCpp, setCachedFCpp, evictFCppIfNeeded,
   getMeta, setMeta,
   setStaffLink, getStaffLink, getStaffLinkByOsuId, removeStaffLink, listStaffLinks,
   setStaffChallenge, getStaffChallenge, clearStaffChallenge,

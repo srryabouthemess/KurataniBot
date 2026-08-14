@@ -16,9 +16,32 @@ const path = require('path');
 /** Raiz do projeto — um nível acima de `src/`. */
 const ROOT = path.join(__dirname, '..');
 
+/**
+ * Onde os DADOS ficam. Por padrão a raiz do projeto, que é onde eles sempre
+ * estiveram — quem não define nada não vê diferença nenhuma.
+ *
+ * `KURATANI_DATA_DIR` aponta para outro lugar, e serve a dois casos:
+ *
+ *   - teste: sem isto, exercitar a evicção de um cache significa apagar o
+ *     cache real da máquina de quem roda `npm test`;
+ *   - hospedagem: banco em volume separado do código, que é o normal quando o
+ *     deploy é `git pull` numa VPS.
+ *
+ * Vale para tudo que é dado, inclusive os arquivos JSON das versões antigas que
+ * as migrações procuram: uma regra só ("dado mora aqui") em vez de metade num
+ * lugar e metade no outro.
+ *
+ * ASSETS fica de fora de propósito — emoji é conteúdo que viaja junto do
+ * código, não dado que o bot produz.
+ */
+const DATA_DIR = process.env.KURATANI_DATA_DIR
+  ? path.resolve(process.env.KURATANI_DATA_DIR)
+  : ROOT;
+
 module.exports = {
   ROOT,
-  BOT_DB:   path.join(ROOT, 'bot.db'),
-  CACHE_DB: path.join(ROOT, 'cache.db'),
+  DATA_DIR,
+  BOT_DB:   path.join(DATA_DIR, 'bot.db'),
+  CACHE_DB: path.join(DATA_DIR, 'cache.db'),
   ASSETS:   path.join(ROOT, 'assets'),
 };

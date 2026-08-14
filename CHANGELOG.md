@@ -2,6 +2,44 @@
 
 ---
 
+# Sessão de 2026-08-14
+
+Sessão de análise de desempenho. As medições saíram da própria máquina, com os `.osu` reais que já estavam no `cache.db`.
+
+## ⚡ Desempenho
+
+- **O PP de FC passou a ter cache.** [`db.js`](src/db.js), [`pp.js`](src/pp.js)
+  - A `map_difficulty` já poupava o cálculo das **estrelas** desde que ele saiu do POST em `/beatmaps/{id}/attributes`. O do **FC pp** continuava sendo refeito do zero a cada exibição: `getFCpp` não consultava cache nenhum, então parse do `.osu`, atributos de dificuldade e performance rodavam de novo para um número que não muda.
+  - Medido nos 12 maiores `.osu` do cache: **1,54ms de parse + 4,28ms de dificuldade + 0,34ms de performance por play** — ~30ms de event loop parado por página de `/topplays`, em toda renderização, inclusive num mapa já calculado mil vezes antes. O `paginate` memoiza o embed, então voltar uma página não pagava; a próxima pessoa a consultar o mesmo mapa pagava tudo.
+  - Ponta a ponta, contra uma cópia do `cache.db` real: **36,7ms → 0,07ms** na segunda chamada (o primeiro número inclui a inicialização do Wasm, paga uma vez por processo; em regime o custo evitado é os ~6ms acima).
+  - **A chave é o que precisava de cuidado.** O número é função pura de quatro coisas — arquivo do mapa, mods, motor e a distribuição de acertos que o FC teria —, e nenhuma delas depende de *qual* score é. Por isso a chave soma os misses ao `n300`: é exatamente o que os dois motores fazem antes de calcular (`perfParams.n300 = n300 + misses` no rosu, `calc_kwargs["n300"] = n300 + nmiss` no `pp_calc.py`). Um score com 3 misses e outro com nenhum, mesmo total de objetos acertados, têm o mesmo FC pela frente e dividem a entrada — verificado: os dois saem com o mesmo pp.
+  - O `engine` entra na chave porque os motores dão números diferentes de propósito (rosu-pp no algoritmo oficial, akatsuki-pp no Relax), e a mecânica lazer/stable separa o rosu em dois. Uma chave sem essa dimensão serviria número de Bancho num servidor RX, e nada na tela denunciaria: sai um pp plausível.
+  - Score sem os três acertos informados **não** é cacheado: é o ramo que cai na accuracy bruta, um float que não serve de chave — e é justamente o caso em que o resultado é o menos confiável.
+  - Falha não é gravada. Uma queda de rede ou um Python ausente são passageiros, e guardá-los transformaria "falhou uma vez" em "falha para sempre" naquele mapa.
+  - Teto próprio (`FC_PP_CACHE_MAX`, padrão 20000 ≈ 1–2MB): ao contrário das outras duas tabelas de cache, esta cresce por **score** e não por mapa, então sem teto ela só aumenta. A evicção é por idade de inserção — aqui a leitura não escreve nada, então não há marca de último uso, e a idade ainda limita por quanto tempo um número pode ficar desatualizado depois de um reupload. O desempate é por `rowid`: as 5 plays de uma página caem no mesmo milissegundo, e sem ele a evicção podia comer justamente a entrada recém-gravada.
+
+## 🔧 Manutenção
+
+- **`KURATANI_DATA_DIR`: onde os dados ficam.** [`paths.js`](src/paths.js)
+  - Vazio (o padrão) é a raiz do projeto, que é onde `bot.db` e `cache.db` sempre estiveram — quem não define nada não vê diferença.
+  - Nasceu do teste: exercitar a evicção de um cache significava **apagar o cache real** de quem roda `npm test`. Serve também para hospedagem, já que o deploy na VPS é `git pull` por cima do diretório do projeto.
+  - Vale para todo dado, inclusive os JSON das versões antigas que as migrações procuram — uma regra só em vez de metade num lugar e metade no outro. `ASSETS` fica de fora: emoji é conteúdo que viaja junto do código.
+
+## 📋 Análise sem mudança de código
+
+Levantamento de desempenho/escalabilidade cujos itens **não** foram aplicados nesta sessão, registrados para não se perderem:
+
+- O mesmo `.osu` é parseado duas vezes por play com mods (caminho das estrelas e do FC pp constroem cada um o seu `rosu.Beatmap`). Um LRU pequeno de mapa já parseado resolve — com `free()` na evicção, porque a memória é Wasm.
+- Um `spawn` de Python por cálculo de RX. Medido só o spawn + startup do interpretador, **sem** importar o `akatsuki_pp_py`: **44ms por chamada** (Windows; na VPS Linux é menor). Um worker persistente com protocolo por linha elimina o custo — e o cache acima já reduz a frequência.
+- Todo cálculo de PP roda no event loop principal. `worker_threads` tiraria o rosu-pp do caminho do gateway.
+- `fetchBeatmap` não tem cache negativo: mapa que a API oficial não conhece é re-consultado a cada renderização, gastando balde do rate limiter.
+- `verifyMapStatus` relê as dificuldades em série; com concorrência limitada ao teto do balde, o tempo passa a ser limitado pelo rate limiter em vez de RTT + rate limiter.
+- `getFCpp` e `simulatePP` engolem tudo em `catch { return null }` — uma regressão do motor sumiria sem rastro, ao contrário do cuidado que o `reportPythonFailure` tem logo acima.
+
+**Medido e descartado:** todo método do `db.js` chama `db.prepare(...)` a cada invocação, o que costuma ser apontado como desperdício. São **4,8µs contra 1,0µs** de um statement reusado — fator 4,9x, valor absoluto irrelevante com algumas dezenas de consultas por comando. Não vale trocar legibilidade por isso; fica registrado para o argumento não voltar sem o número.
+
+---
+
 # Sessão de 2026-08-13
 
 Primeira sessão com acesso ao servidor de verdade. Os comandos administrativos, escritos em 08/08 e nunca testados contra um bancho.py real, foram exercitados em produção — e foi isso que expôs quase tudo que está aqui.

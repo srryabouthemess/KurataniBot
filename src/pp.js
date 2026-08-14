@@ -256,6 +256,54 @@ async function calcPPPython(beatmapId, modsBits, n300, n100, n50, nmiss, combo =
 }
 
 // ─── FC PP ────────────────────────────────────────────────────────────────────
+
+/**
+ * Chave do FC pp em cache, ou null quando o resultado não é cacheável.
+ *
+ * O número é função pura de quatro coisas: o arquivo do mapa, os mods, o motor
+ * que calcula e a distribuição de hits que o FC teria. Nada disso muda entre
+ * duas exibições do mesmo score, e nada disso depende de QUAL score é — dois
+ * scores diferentes com o mesmo FC pela frente compartilham a entrada.
+ *
+ * É por isso que a chave soma os misses ao n300: é exatamente o que os dois
+ * motores fazem antes de calcular (`perfParams.n300 = n300 + misses` aqui, e
+ * `calc_kwargs["n300"] = n300 + nmiss` no pp_calc.py). Um score com 2 misses e
+ * outro com 5 no mesmo mapa caem na mesma linha quando o total bate — o que é
+ * correto, porque o FC dos dois é o mesmo FC.
+ *
+ * Sem os três hits não há chave: é o ramo em que o cálculo cai na accuracy
+ * bruta, e ela é um float que não serve de chave. Ele acontece quando o
+ * servidor não informou os acertos, que é justamente o caso em que o resultado
+ * também é o menos confiável — melhor recalcular do que guardar.
+ */
+function fcCacheKey({ beatmapId, modsBits, useLazer, relax, n300, n100, n50, misses }) {
+  if (n300 === null || n100 === null || n50 === null) return null;
+
+  return {
+    mapId:  beatmapId,
+    modsBits,
+    engine: relax ? 'akatsuki' : (useLazer ? 'rosu-lazer' : 'rosu-stable'),
+    n300:   n300 + misses,
+    n100,
+    n50,
+  };
+}
+
+/**
+ * Devolve o pp e o guarda no cache, quando ele é um número de verdade.
+ *
+ * Falha não é gravada de propósito: uma queda de rede ou um Python ausente são
+ * passageiros, e guardá-los transformaria "falhou uma vez" em "falha para
+ * sempre" naquele mapa.
+ *
+ * @returns {number|null}
+ */
+function rememberFCpp(cacheKey, pp) {
+  if (!Number.isFinite(pp)) return null;
+  if (cacheKey) db.setCachedFCpp(cacheKey, pp);
+  return pp;
+}
+
 /**
  * Calcula o PP que o score teria rendido em Full Combo (sem misses).
  *
@@ -293,6 +341,16 @@ async function getFCpp(score, mode = DEFAULT_MODE) {
 
   // Bitmask de mods — ambas as libs usam o mesmo formato
   const modsBits = modsToBits(score.mods);
+  const useLazer = shouldUseLazer(mode, score.mods);
+  const relax    = servers.get(mode).relax;
+
+  const cacheKey = fcCacheKey({ beatmapId, modsBits, useLazer, relax, n300, n100, n50, misses });
+  if (cacheKey) {
+    const cached = db.getCachedFCpp(cacheKey);
+    // Só número entra na tabela, então um acerto é sempre um valor válido —
+    // e um `null` guardado seria "falhou uma vez, falha para sempre".
+    if (cached !== null) return cached;
+  }
 
   try {
     // ── Relax: akatsuki-pp-py via Python (oppai-2019, o mesmo dos servidores) ──
@@ -300,9 +358,9 @@ async function getFCpp(score, mode = DEFAULT_MODE) {
     // getBeatmapFile do caminho do rosu-pp: cache em disco e rate limiter
     // valem para os dois, e os bytes vão para o script por stdin. (O script
     // já baixou por conta própria, o que escapava de ambos.)
-    if (servers.get(mode).relax) {
+    if (relax) {
       const result = await calcPPPython(beatmapId, modsBits, n300, n100, n50, misses);
-      return result?.pp ?? null;
+      return rememberFCpp(cacheKey, result?.pp);
     }
 
     // ── Oficial / bancho.py vanilla: rosu-pp-js (algoritmo oficial) ───────────
@@ -312,7 +370,6 @@ async function getFCpp(score, mode = DEFAULT_MODE) {
     if (!rosu) return null;
 
     const beatmapBytes = await getBeatmapFile(beatmapId);
-    const useLazer     = shouldUseLazer(mode, score.mods);
 
     const beatmap = new rosu.Beatmap(beatmapBytes);
     try {
@@ -333,8 +390,9 @@ async function getFCpp(score, mode = DEFAULT_MODE) {
 
       // `?? null` deixava NaN passar. Ele chega aqui pelo ramo da accuracy
       // acima: sem os hits reais o cálculo usa `score.accuracy * 100`, e uma
-      // accuracy ausente vira NaN — que o rosu aceita sem reclamar.
-      return Number.isFinite(result.pp) ? result.pp : null;
+      // accuracy ausente vira NaN — que o rosu aceita sem reclamar. O
+      // rememberFCpp faz a mesma guarda antes de gravar.
+      return rememberFCpp(cacheKey, result.pp);
     } finally {
       beatmap.free();
     }
@@ -468,4 +526,9 @@ module.exports = {
   getAdjustedStars,
   getFCpp,
   simulatePP,
+
+  // Exportado para teste: é a chave que decide quando dois scores DIFERENTES
+  // compartilham o mesmo FC pp. Errar para o lado frouxo é mostrar o número de
+  // um mapa no outro, e nada na tela denunciaria — sai um pp plausível.
+  fcCacheKey,
 };
