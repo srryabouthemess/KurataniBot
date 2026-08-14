@@ -101,5 +101,17 @@ module.exports = {
         flags: MessageFlags.Ephemeral,
       });
     }
+
+    // Subcomando que não é nenhum dos três acima.
+    //
+    // Pelo Discord isto não acontece: ele só envia subcomando declarado no
+    // builder. O caso real é o código divergir da declaração — alguém
+    // acrescenta um `addSubcommand` e esquece o ramo aqui —, e até agora isso
+    // saía como SILÊNCIO: o execute chegava ao fim sem responder, a interação
+    // expirava, e quem usou via "O aplicativo não respondeu" sem nada no log.
+    //
+    // Lançar põe a divergência no log com o nome do subcomando, e o catch do
+    // index.js responde o erro genérico traduzido.
+    throw new Error(`/language: subcomando sem tratamento: "${sub}"`);
   },
 };

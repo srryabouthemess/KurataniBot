@@ -139,7 +139,17 @@ module.exports = {
       return interaction.reply({ content: s.link_default_set(osu.getModeLabel(server)), flags: MessageFlags.Ephemeral });
     }
 
-    // set
+    // Explícito, e não como "tudo que sobrou".
+    //
+    // Este ramo ESCREVE, e era o destino de qualquer subcomando desconhecido:
+    // um `addSubcommand` novo sem o ramo correspondente aqui viraria um /link
+    // set silencioso. Pelo Discord não acontece (ele só envia subcomando
+    // declarado), mas a proteção custa uma linha e o estrago seria um vínculo
+    // criado sem ninguém ter pedido.
+    if (sub !== 'set') {
+      throw new Error(`/link: subcomando sem tratamento: "${sub}"`);
+    }
+
     const username = interaction.options.getString('player');
     const server   = interaction.options.getString('server') || osu.DEFAULT_MODE;
 
