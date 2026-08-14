@@ -279,6 +279,23 @@ O `venv` existe porque o `pip` costuma recusar instalação no Python do sistema
 
 Confira com `npm run smoke`: a última linha mostra o PP do Relax. Se vier "indisponível", a lib não está no Python que o `PYTHON_BIN` aponta.
 
+## Uma instância só
+
+O bot roda em **um processo**, sem sharding — o que é o certo hoje: o Discord só passa a exigir sharding acima de 2500 servidores, e antes disso ele só acrescentaria complexidade.
+
+Fica registrado porque a decisão tem consequências que não são óbvias no dia em que ela precisar mudar. Estes quatro guardam estado **no processo**, e viveriam separados em cada shard:
+
+| Onde | O que guarda | O que quebra com mais de um processo |
+|---|---|---|
+| `osuClient.js` | perfis consultados (60s) | o mesmo jogador é buscado uma vez por shard |
+| `mapContext.js` | último mapa de cada canal | `/score` sem argumento não acha o mapa se o embed saiu por outro shard |
+| `cooldowns.js` | tickets por usuário | o limite por pessoa passa a ser por shard — quem alterna canais dribla |
+| `rateLimiter.js` | tokens por recurso | **o mais sério**: o teto da API do osu! vira N vezes o configurado |
+
+O `bot.db`/`cache.db` não entram na lista: SQLite em WAL aceita vários processos no mesmo arquivo.
+
+O `rateLimiter` é o que decide. Os outros três degradam (mais requisições, um comando ocasionalmente sem contexto); ele não — um limite global aplicado localmente deixa de ser um limite, e o preço é 429 na API oficial. Um Redis para os tokens resolveria, e o Redis já é dependência do projeto para os comandos administrativos.
+
 ## Outras variáveis
 
 | Variável | O que faz |

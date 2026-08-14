@@ -2,23 +2,21 @@
  * pp.js
  * Cálculo de performance points e tudo que ele precisa.
  *
- * Saiu do osuClient porque não é cliente de API nenhuma: são dois motores de
- * cálculo local (rosu-pp para o algoritmo oficial, akatsuki-pp via Python para
- * o Relax), o download do arquivo .osu que os alimenta e os caches dos dois.
+ * Saiu do osuClient porque não é cliente de API nenhuma. O que sobrou aqui,
+ * depois de os dois motores irem para processos próprios (rosuWorker.js,
+ * pythonWorker.js) e o download do .osu para o beatmapFile.js, é a decisão:
+ * QUAL motor usa cada servidor, o que vale a pena calcular, e onde o resultado
+ * fica guardado.
  *
  * A dependência é de mão única — o osuClient importa daqui, e não o contrário.
  */
 
 require('dotenv').config();
-const axios = require('axios');
 const db = require('./db');
 const servers = require('./servers');
-const rateLimiter = require('./rateLimiter');
-const { dedupe } = require('./inflight');
 const { modsToBits, stripClassic } = require('./mods');
-const { idSegment } = require('./urlSafe');
-const { withRetry } = require('./retry');
 const { logErrorOnce } = require('./logger');
+const { getBeatmapFile } = require('./beatmapFile');
 const pythonWorker = require('./pythonWorker');
 const rosuWorker = require('./rosuWorker');
 
@@ -45,44 +43,6 @@ const DEFAULT_MODE = servers.defaultKey();
 function shouldUseLazer(mode, mods) {
   if (!servers.isOfficial(mode)) return false;
   return !(mods ?? []).includes('CL');
-}
-
-// ─── Arquivo .osu ─────────────────────────────────────────────────────────────
-/**
- * Retorna os bytes do arquivo .osu, servindo do cache em disco quando possível.
- *
- * Antes, todo cálculo de PP (getFCpp, simulatePP) baixava o arquivo de novo —
- * ~50KB por chamada. No /topplays isso acontecia para as 5 plays da página, e
- * de novo a cada clique de botão, já que o embed é reconstruído do zero.
- * Equivale à tabela osu_map_file_content do BathBot.
- *
- * @returns {Promise<Uint8Array>}
- * @throws se o download falhar em todas as tentativas
- */
-async function getBeatmapFile(mapId) {
-  const cached = db.getBeatmapFile(mapId);
-  if (cached) return new Uint8Array(cached);
-
-  return dedupe(`file:${mapId}`, async () => {
-    const bytes = await withRetry(async () => {
-      await rateLimiter.acquire('osuMapFile');
-      const res = await axios.get(`https://osu.ppy.sh/osu/${idSegment(mapId)}`, {
-        responseType: 'arraybuffer',
-        timeout: 15000,
-      });
-      const arr = new Uint8Array(res.data);
-      if (arr.length === 0) {
-        // Acontece logo após reupload de mapa; costuma resolver na retentativa.
-        const err = new Error(`arquivo .osu vazio para o mapa ${mapId}`);
-        err.retryable = true;
-        throw err;
-      }
-      return arr;
-    }, { attempts: 5, baseMs: 500, maxMs: 10000 });
-
-    db.setBeatmapFile(mapId, bytes);
-    return bytes;
-  });
 }
 
 /**
@@ -405,7 +365,6 @@ module.exports = {
   reportPythonFailure: pythonWorker.reportPythonFailure,
   closePythonWorker:   pythonWorker.close,
   closeRosuWorker:     rosuWorker.close,
-  workerStats:         () => ({ python: pythonWorker.stats(), rosu: rosuWorker.stats() }),
   getDifficultyAttrs,
   getAdjustedStars,
   getFCpp,

@@ -298,4 +298,16 @@ Current ${ADMIN} role: **${role}**
     `The link alone grants nothing: permission comes from the ${ADMIN} role, checked on every command.`,
   staff_removed:           (discordId) => `✅ Link for <@${discordId}> removed.`,
   staff_nothing_to_remove: (discordId) => `❌ <@${discordId}> had no staff link.`,
+  // ── /diag: diagnostics ───────────────────────────────────────────────────
+  // Cache and bucket names are code identifiers and stay as they are in all
+  // three languages: translating them would make the output impossible to
+  // match against what the modules actually say.
+  diag_title:             '📊 Bot diagnostics',
+  diag_uptime:            (texto) => `Up for **${texto}**`,
+  diag_caches:            'Caches (hits / total)',
+  diag_limiter:           'Rate limiter (calls, accumulated wait)',
+  diag_workers:           'PP engines',
+  diag_worker_line:       (nome, vivo, servidos, falhas) =>
+    `**${nome}**: ${vivo ? 'up' : 'down'} — ${servidos} calculation(s), ${falhas} failure(s)`,
+  diag_empty:             '_Nothing recorded yet — the bot just started._',
 });

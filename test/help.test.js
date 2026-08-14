@@ -57,7 +57,13 @@ test('nenhum comando aparece em dois grupos', () => {
 test('comando registrado ou está no catálogo, ou é atalho/o próprio help', () => {
   // Impede que um comando novo nasça invisível: quem acrescentar um precisa
   // decidir em que grupo ele entra — ou dizer aqui por que fica de fora.
-  const fora = new Set([...Object.values(ALIASES).flat(), 'help']);
+  //
+  // `diag` fica de fora de propósito: é ferramenta de operador (taxa de acerto
+  // dos caches, espera do rate limiter, motores de PP de pé ou não), exigindo
+  // Administrator no servidor. O /help responde "o que dá para fazer com este
+  // bot" para quem joga — uma linha sobre contadores de processo ali seria
+  // ruído para todo mundo e ajuda para ninguém.
+  const fora = new Set([...Object.values(ALIASES).flat(), 'help', 'diag']);
 
   for (const name of registered) {
     if (fora.has(name)) continue;

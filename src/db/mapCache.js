@@ -17,6 +17,7 @@
  *   fc_pp           teto por idade      — cresce por SCORE, não por mapa
  */
 
+const metrics = require('../metrics');
 const { db } = require('./connection');
 
 // ─── Arquivos .osu ────────────────────────────────────────────────────────────
@@ -44,13 +45,19 @@ function getBeatmapFile(mapId) {
   const row = db
     .prepare('SELECT content, fetched_at, last_used FROM cache.beatmap_files WHERE map_id = ?')
     .get(mapId);
-  if (!row) return null;
+  if (!row) {
+    metrics.cache('beatmapFile', false);
+    return null;
+  }
 
   const now = Date.now();
   if (now - row.fetched_at > MAP_FILE_TTL_MS) {
     db.prepare('DELETE FROM cache.beatmap_files WHERE map_id = ?').run(mapId);
+    metrics.cache('beatmapFile', false);
     return null;
   }
+
+  metrics.cache('beatmapFile', true);
 
   if (now - (row.last_used ?? 0) > LAST_USED_REFRESH_MS) {
     db.prepare('UPDATE cache.beatmap_files SET last_used = ? WHERE map_id = ?').run(now, mapId);
@@ -90,14 +97,18 @@ const MAP_META_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 dias
 
 function getBeatmapMeta(mapId) {
   const row = db.prepare('SELECT data, cached_at FROM cache.beatmap_meta WHERE map_id = ?').get(mapId);
-  if (!row) return null;
-  if (Date.now() - row.cached_at > MAP_META_TTL_MS) {
-    db.prepare('DELETE FROM cache.beatmap_meta WHERE map_id = ?').run(mapId);
+  if (!row || Date.now() - row.cached_at > MAP_META_TTL_MS) {
+    if (row) db.prepare('DELETE FROM cache.beatmap_meta WHERE map_id = ?').run(mapId);
+    metrics.cache('beatmapMeta', false);
     return null;
   }
+
   try {
-    return JSON.parse(row.data);
+    const data = JSON.parse(row.data);
+    metrics.cache('beatmapMeta', true);
+    return data;
   } catch {
+    metrics.cache('beatmapMeta', false);
     return null;
   }
 }
@@ -116,6 +127,8 @@ function getMapDifficulty(mapId, modsBits, lazer) {
   const row = db
     .prepare('SELECT stars, max_combo FROM cache.map_difficulty WHERE map_id = ? AND mods_bits = ? AND lazer = ?')
     .get(mapId, modsBits, lazer ? 1 : 0);
+
+  metrics.cache('mapDifficulty', Boolean(row));
   return row ? { stars: row.stars, maxCombo: row.max_combo ?? null } : null;
 }
 
@@ -153,6 +166,7 @@ function getCachedFCpp({ mapId, modsBits, engine, n300, n100, n50 }) {
     WHERE map_id = ? AND mods_bits = ? AND engine = ? AND n300 = ? AND n100 = ? AND n50 = ?
   `).get(mapId, modsBits, engine, n300, n100, n50);
 
+  metrics.cache('fcPP', Boolean(row));
   return row ? row.pp : null;
 }
 

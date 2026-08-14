@@ -29,6 +29,21 @@ Sessão de análise de desempenho, e depois dos dois itens de maior efeito que e
   - **Defeito encontrado e corrigido no caminho:** uma morte chega por até três caminhos (`error`, `close` e o `close()` do shutdown), e o worker recebia mais de um para o mesmo processo. Sem trava, um shutdown normal caía no relato de "morreu sozinho" — numa sessão sem nenhum cálculo de RX, o bot logava "PP do Relax indisponível" ao encerrar e ainda ligava o backoff, por causa de um encerramento que deu certo. Tem teste.
   - Os testes rodam contra o `pp_calc.py` de verdade, com um dublê da lib compilada entrando por `PYTHONPATH` — o enquadramento, a leitura exata do corpo e os ids são exercitados como em produção, sem exigir a lib instalada em quem testa. Sem Python na máquina, são pulados em vez de falhar.
 
+- **Falha de cálculo deixa rastro, uma vez por causa.** [`logger.js`](src/logger.js), [`pp.js`](src/pp.js)
+  - Cinco `catch` mudos devolviam `null` sem logar nada. Na tela isso era `?` no lugar da estrela, o `(FC: ~Xpp)` que não aparece, e o `/simulate` respondendo que não conseguiu — sem nenhuma forma de saber por quê. Ficou pior com uma camada de cache entre o cálculo e a tela.
+  - O quinto era o `require` do rosu-pp: falhar ali apaga **todo** o PP de servidor vanilla, e apagava calado.
+  - Logar tudo não serve: os cálculos rodam uma vez por play, então um `/topplays` de um mapa problemático viraria cinco linhas idênticas por página, repetidas a cada renderização — enchendo o disco de quem já está com problema. O `logErrorOnce` é por causa, com teto, descartando a mais antiga (que pode voltar a ser logada se reaparecer). O contexto entra na chave: o mesmo timeout no caminho das estrelas e no do FC pp são dois problemas.
+
+- **Cache negativo de beatmap, e a lógica de TTL numa peça só.** [`ttlCache.js`](src/ttlCache.js), [`osuClient.js`](src/osuClient.js)
+  - Mapa que a API oficial não conhece era pedido de novo a cada renderização — o `precisaEnriquecer` continua verdadeiro para aquele score para sempre. É o caso do mapa exclusivo de servidor privado.
+  - **Só o 404 vira cache negativo.** Um 5xx ou uma queda de rede são passageiros, e guardá-los faria um blip de dez segundos esconder o mapa por dez minutos — trocando uma falha visível por dados faltando no embed.
+  - Três lugares tinham a mesma lógica de TTL + teto escrita à mão, e as duas armadilhas dela custaram a mesma correção em cada cópia: que reatribuir chave no `Map` não muda a posição dela, e que o TTL sozinho não é teto. Agora é uma peça com teste próprio.
+
+- **Piscina de posições no lugar dos lotes.** [`concurrency.js`](src/concurrency.js)
+  - O `verifyMapStatus` relia as dificuldades **em série**: num set de 100, cada uma pagava o tempo de ida e volta sozinha. E o `enrichBeatmapData` usava lotes com `Promise.all`, que só terminam quando o mapa mais lento do lote termina — quatro rápidos parados esperando o quinto.
+  - O `mapLimit` reaproveita a posição assim que ela vaga. Medido no teste: com um item de 200ms e cinco de 10ms em duas vagas, o total fica perto dos 200ms do próprio lento.
+  - O teto não protege o rate limiter (ele já segura a vazão); protege contra empilhar centenas de requisições em voo, cada uma com o seu socket e o seu timeout.
+
 ## 🐛 Correções
 
 - **O `npm run smoke` reprovava o Akatsuki e o Akatsuki RX.** [`test/smoke.js`](test/smoke.js)
@@ -38,22 +53,38 @@ Sessão de análise de desempenho, e depois dos dois itens de maior efeito que e
   - O ID escolhido tem números **diferentes** em vanilla e em RX (medido: #4 com 23897pp contra #1 com 62115pp). No Ripple o Relax é um eixo separado do modo, lido em `stats[rx].std`; um jogador com os mesmos números nos dois deixaria uma inversão desse índice passar sem ninguém notar. Agora ela apareceria na saída do smoke.
   - Conferido de passagem que o `global_leaderboard_rank` do adaptador está certo: ele vem `null` para conta fora do leaderboard e preenchido para quem está nele — o que parecia campo errado era conta inativa.
 
+## 🧹 Organização
+
+- **O `db.js` virou um pacote, com as migrações carimbadas.** [`db/`](src/db)
+  - Eram 1030 linhas em que o schema, seis migrações e sete assuntos de consulta se intercalavam. Agora são nove arquivos por assunto, e **a superfície não mudou**: tudo continua saindo de `require('./db')` com os mesmos 42 nomes, e os cerca de vinte pontos que chamam o banco não sabem que ele foi dividido.
+  - A separação que mais importa é `schema` × `migrations`: um é o destino, o outro é o caminho de quem partiu de uma versão anterior.
+  - As migrações ganharam **`user_version`**. Elas se detectam sozinhas (olham `table_info`, `sqlite_master`, flags no `meta`), o que é robusto e custa uma dezena de consultas de sondagem em todo boot, para sempre, num banco que passou por elas há muito tempo. Com o carimbo, rodam uma vez e o boot seguinte sai na primeira linha.
+  - Conferido contra o `bot.db` real antes de commitar: as nove tabelas com a mesma contagem de linhas, `user_version` 0 → 1.
+  - Os testes de nomeação e de desafio copiavam `src/db.js` para uma pasta temporária que imitava o layout do projeto — o que os amarrava à **lista de arquivos** do módulo, e foi o que quebrou quando o `db` virou pasta. Agora usam o `KURATANI_DATA_DIR` e os módulos de verdade.
+
 ## 🔧 Manutenção
+
+- **`/diag`: os contadores que faltavam.** [`metrics.js`](src/metrics.js), [`commands/diag.js`](src/commands/diag.js)
+  - Todo ajuste desta sessão foi medido com script de bancada — copiar o `cache.db`, cronometrar um caminho, comparar. Isso serve para **decidir** uma mudança e não serve para nada depois dela: em produção não havia como saber se o cache está acertando, se algum balde do rate limiter virou fila, ou se os motores de PP estão de pé.
+  - Contadores, não histogramas: o que se quer é ordem de grandeza e proporção ("o cache de FC acerta 90%?"). O conjunto de chaves é fechado — vem do código, não de dado de usuário —, então não cresce sozinho.
+  - Instrumentados os quatro caches de mapa, o de usuário, o negativo, cada balde do rate limiter (chamadas e espera acumulada) e os dois workers.
+  - Exige Administrator e responde em efêmero. **Fora do `/help` de propósito**, com a razão escrita no teste que cobra o catálogo: o help responde "o que dá para fazer com este bot" para quem joga, e uma linha sobre contadores de processo ali seria ruído para todo mundo.
+
+- **O download do `.osu` saiu do `pp.js`.** [`beatmapFile.js`](src/beatmapFile.js)
+  - Não é cálculo de nada: é download com rate limiter, retry, deduplicação de pedidos em voo e cache. O que sobra no `pp.js` agora é a decisão — qual motor cada servidor usa, o que vale calcular, e onde o resultado fica guardado. De 471 para 344 linhas, com os dois motores e o download fora.
+
+- **Registrado o que acontece se um dia houver sharding.** [`README.md`](README.md)
+  - O bot roda em um processo, o que é o certo hoje: o Discord só exige sharding acima de 2500 servidores. A decisão fica registrada porque as consequências não são óbvias no dia em que ela mudar.
+  - Quatro estruturas guardam estado no processo. Três degradam (mais requisições, um comando ocasionalmente sem contexto de mapa); o **rate limiter** não — um limite global aplicado localmente deixa de ser limite, e o preço é 429 na API oficial. O Redis já é dependência do projeto e resolveria.
 
 - **`KURATANI_DATA_DIR`: onde os dados ficam.** [`paths.js`](src/paths.js)
   - Vazio (o padrão) é a raiz do projeto, que é onde `bot.db` e `cache.db` sempre estiveram — quem não define nada não vê diferença.
   - Nasceu do teste: exercitar a evicção de um cache significava **apagar o cache real** de quem roda `npm test`. Serve também para hospedagem, já que o deploy na VPS é `git pull` por cima do diretório do projeto.
   - Vale para todo dado, inclusive os JSON das versões antigas que as migrações procuram — uma regra só em vez de metade num lugar e metade no outro. `ASSETS` fica de fora: emoji é conteúdo que viaja junto do código.
 
-## 📋 Análise sem mudança de código
+## 📋 Levantamento
 
-Levantamento de desempenho/escalabilidade cujos itens **não** foram aplicados nesta sessão, registrados para não se perderem:
-
-- O mesmo `.osu` é parseado duas vezes por play com mods (caminho das estrelas e do FC pp constroem cada um o seu `rosu.Beatmap`). Um LRU pequeno de mapa já parseado resolve — com `free()` na evicção, porque a memória é Wasm.
-- Todo cálculo de PP roda no event loop principal. `worker_threads` tiraria o rosu-pp do caminho do gateway.
-- `fetchBeatmap` não tem cache negativo: mapa que a API oficial não conhece é re-consultado a cada renderização, gastando balde do rate limiter.
-- `verifyMapStatus` relê as dificuldades em série; com concorrência limitada ao teto do balde, o tempo passa a ser limitado pelo rate limiter em vez de RTT + rate limiter.
-- `getFCpp` e `simulatePP` engolem tudo em `catch { return null }` — uma regressão do motor sumiria sem rastro, ao contrário do cuidado que o `reportPythonFailure` tem logo acima.
+O levantamento de desempenho e escalabilidade que abriu a sessão tinha onze itens. Todos foram aplicados, exceto um que a medição derrubou:
 
 **Medido e descartado:** todo método do `db.js` chama `db.prepare(...)` a cada invocação, o que costuma ser apontado como desperdício. São **4,8µs contra 1,0µs** de um statement reusado — fator 4,9x, valor absoluto irrelevante com algumas dezenas de consultas por comando. Não vale trocar legibilidade por isso; fica registrado para o argumento não voltar sem o número.
 

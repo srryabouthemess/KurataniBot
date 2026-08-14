@@ -17,11 +17,14 @@
  * waiters acordariam do mesmo setTimeout e consumiriam o mesmo token.
  */
 
+const metrics = require('./metrics');
+
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
 class LeakyBucket {
   /** @param {number} perSecond requisições permitidas por segundo */
-  constructor(perSecond) {
+  constructor(name, perSecond) {
+    this.name       = name;
     this.capacity   = perSecond;
     this.tokens     = perSecond;
     this.intervalMs = 1000 / perSecond;
@@ -41,10 +44,16 @@ class LeakyBucket {
   async _acquireOne() {
     this._refill();
     if (this.tokens < 1) {
-      await sleep(Math.ceil((1 - this.tokens) * this.intervalMs));
+      const espera = Math.ceil((1 - this.tokens) * this.intervalMs);
+      // O tempo parado na fila é o número que diz se um balde está apertado
+      // demais — sem ele, "o bot está lento" não distingue API lenta de limite
+      // nosso mal calibrado.
+      metrics.count(`limiter.${this.name}.waitMs`, espera);
+      await sleep(espera);
       this._refill();
     }
     this.tokens -= 1;
+    metrics.count(`limiter.${this.name}.calls`);
   }
 
   /** Resolve quando for permitido fazer a requisição. */
@@ -80,7 +89,7 @@ const BUCKETS = {
 const PER_SERVER = 5;
 
 const buckets = Object.fromEntries(
-  Object.entries(BUCKETS).map(([name, perSecond]) => [name, new LeakyBucket(perSecond)])
+  Object.entries(BUCKETS).map(([name, perSecond]) => [name, new LeakyBucket(name, perSecond)])
 );
 
 /**
@@ -91,7 +100,7 @@ function acquire(site) {
   let bucket = buckets[site];
 
   if (!bucket && String(site).startsWith('server:')) {
-    bucket = buckets[site] = new LeakyBucket(PER_SERVER);
+    bucket = buckets[site] = new LeakyBucket(site, PER_SERVER);
   }
   if (!bucket) throw new Error(`rateLimiter: bucket desconhecido "${site}"`);
 

@@ -309,4 +309,16 @@ Cargo atual no ${ADMIN}: **${role}**
     `O vínculo em si não concede poder: a permissão vem do cargo no ${ADMIN}, conferido a cada comando.`,
   staff_removed:           (discordId) => `✅ Vínculo de <@${discordId}> removido.`,
   staff_nothing_to_remove: (discordId) => `❌ <@${discordId}> não tinha vínculo de staff.`,
+  // ── /diag: diagnóstico ───────────────────────────────────────────────────
+  // Os nomes de cache e de balde são identificadores do código, e ficam como
+  // estão nos três idiomas — traduzi-los tornaria a saída impossível de casar
+  // com o que está escrito nos módulos.
+  diag_title:             '📊 Diagnóstico do bot',
+  diag_uptime:            (texto) => `No ar há **${texto}**`,
+  diag_caches:            'Caches (acertos / total)',
+  diag_limiter:           'Rate limiter (chamadas, espera acumulada)',
+  diag_workers:           'Motores de PP',
+  diag_worker_line:       (nome, vivo, servidos, falhas) =>
+    `**${nome}**: ${vivo ? 'no ar' : 'parado'} — ${servidos} cálculo(s), ${falhas} falha(s)`,
+  diag_empty:             '_Nada registrado ainda — o bot subiu agora._',
 });

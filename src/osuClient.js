@@ -36,6 +36,7 @@ const { idSegment } = require('./urlSafe');
 const { TtlCache } = require('./ttlCache');
 const { logErrorOnce } = require('./logger');
 const { mapLimit } = require('./concurrency');
+const metrics = require('./metrics');
 
 const DEFAULT_MODE = servers.defaultKey();
 
@@ -91,7 +92,11 @@ const _missingBeatmaps = new TtlCache({ ttlMs: MISSING_TTL_MS, max: MISSING_MAX 
 async function fetchBeatmap(id) {
   const cached = beatmapCache.get(id);
   if (cached) return cached;
-  if (_missingBeatmaps.has(id)) return null;
+
+  if (_missingBeatmaps.has(id)) {
+    metrics.count('cacheNegativo.beatmap.evitou');
+    return null;
+  }
 
   return dedupe(`meta:${id}`, async () => {
     try {
@@ -233,6 +238,7 @@ function _userCacheKey(mode, value) {
 async function getUser(username, mode = DEFAULT_MODE) {
   const cacheKey = _userCacheKey(mode, username);
   const cached = _userCache.get(cacheKey);
+  metrics.cache('usuario', Boolean(cached));
   if (cached) return cached;
 
   const user = await apiFor(mode).fetchUser(username, mode);
