@@ -2,7 +2,7 @@
 
 Bot de Discord para estatísticas do **osu!** — perfil, plays recentes, top plays, comparações e simulações de PP.
 
-Funciona no **Bancho** e em **servidores bancho.py**, quantos você configurar.
+Funciona no **Bancho**, no **Akatsuki** (já vem configurado) e em **servidores bancho.py**, quantos você configurar.
 
 > **Como ler:** o essencial vem primeiro — comandos e instalação. Tudo que é opcional (servidores privados, comandos por texto, emojis, DM, administração e PP no Relax) está reunido no fim, em **[Opcionais](#opcionais)**. Nada de lá é preciso para o bot funcionar.
 
@@ -111,7 +111,7 @@ Confira com `node --version` — precisa ser 22.13 ou superior.
 ### Testes
 
 ```bash
-npm test     # 250 casos, poucos segundos, sem tocar rede nem o bot.db real
+npm test     # 270 casos, poucos segundos, sem tocar rede nem o bot.db real
 npm run lint
 npm run smoke  # confere contra as APIs de verdade
 ```
@@ -123,6 +123,13 @@ npm run smoke  # confere contra as APIs de verdade
 Nada daqui é necessário: sem configurar, o bot funciona no Bancho com os comandos de barra.
 
 ## Servidores privados
+
+O **Akatsuki** já vem de fábrica (`akatsuki` e `akatsuki_rx`), sem configurar nada — é um dos maiores servidores privados e a API é pública. Para desligar, ou escolher quais embutidos carregar:
+
+```bash
+BUILTIN_SERVERS=            # nenhum
+BUILTIN_SERVERS=akatsuki    # só esse (é o padrão hoje)
+```
 
 Qualquer instância bancho.py, configurada no `.env`:
 
@@ -138,6 +145,7 @@ A chave vira o valor da opção `server` (`daycore`, `daycore_rx`). Para mais se
 
 - **Servidor novo exige reiniciar o bot** — as escolhas ficam gravadas no registro do comando no Discord, que é refeito no boot seguinte. O Discord limita 25 escolhas por opção.
 - **"bancho.py" aqui é a stack completa.** Rank global e top plays vêm da **Shiina-Web** (o front-end), não do bancho.py. Outro front-end responde o resto e falha nesses dois — perfil sai *Unranked* e `/topplays` vazio.
+- **Servidor Ripple/Hanayo não se configura pelo `.env`.** A API é outra (tudo em `<site>/api/v1`, sem subdomínio), então precisa de um adaptador próprio — o `kind: 'ripple'` existe e atende o Akatsuki. Para outro servidor Ripple, o caminho hoje é acrescentá-lo aos embutidos em `src/servers.js`.
 
 ## Comandos por texto (`k!`)
 

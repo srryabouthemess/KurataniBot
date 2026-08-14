@@ -96,14 +96,30 @@ function buildBanchoPy(key) {
   };
 }
 
-/** Variante Relax: mesma conta, `mode_arg` diferente. */
+/**
+ * Variante Relax: mesma conta, mesmo namespace, outro leaderboard.
+ *
+ * COMO o Relax é pedido depende da stack, e as duas não se traduzem uma na
+ * outra:
+ *
+ *   bancho.py — Relax é o "modo 4", no mesmo campo de osu!/taiko/catch/mania.
+ *   Ripple    — são dois eixos: `mode` (0-3) e `rx` (0 vanilla, 1 relax,
+ *               2 autopilot). O modo continua 0.
+ *
+ * Antes isto era `gameMode: 4` fixo, o que só valia para bancho.py. Agora cada
+ * tipo diz como pede o seu, e o adaptador lê o campo que lhe interessa.
+ */
 function relaxVariant(server) {
+  const comoPedeRelax = server.kind === 'ripple'
+    ? { gameMode: 0, rx: 1 }
+    : { gameMode: 4, rx: 0 };
+
   return {
     ...server,
-    key:      `${server.key}_rx`,
-    label:    `${server.label} RX`,
-    gameMode: 4,
-    relax:    true,
+    ...comoPedeRelax,
+    key:   `${server.key}_rx`,
+    label: `${server.label} RX`,
+    relax: true,
     // namespace continua o do servidor pai — é o mesmo cadastro.
   };
 }
@@ -117,6 +133,40 @@ function register(server) {
   _byKey.set(server.key, server);
 }
 
+/**
+ * Servidores que vêm de fábrica, sem precisar de `.env`.
+ *
+ * O osu! oficial é fixo porque é um só. O Akatsuki entra pelo mesmo motivo
+ * prático: é um dos maiores servidores privados, a API é pública e estável, e
+ * exigir configuração para algo que vale para todo mundo só empurraria a mesma
+ * receita para cada instalação.
+ *
+ * A diferença é que este dá para desligar — `BUILTIN_SERVERS=` vazio, ou uma
+ * lista sem ele. Quem hospeda o bot para outro servidor não fica carregando um
+ * concorrente na lista de escolhas.
+ */
+const BUILTINS = {
+  akatsuki: {
+    key:       'akatsuki',
+    label:     'Akatsuki',
+    kind:      'ripple',
+    namespace: 'akatsuki',
+    gameMode:  0,
+    rx:        0,
+    relax:     false,
+    webUrl:    'https://akatsuki.gg',
+    avatars:   'https://a.akatsuki.gg',
+    builtinRelax: true,
+  },
+};
+
+/** Quais embutidos ligar. Ausente = todos; vazio = nenhum. */
+function builtinsPedidos() {
+  const bruto = process.env.BUILTIN_SERVERS;
+  if (bruto === undefined) return Object.keys(BUILTINS);
+  return bruto.split(',').map(k => k.trim().toLowerCase()).filter(Boolean);
+}
+
 function load() {
   register({
     key:       OFFICIAL_KEY,
@@ -124,9 +174,22 @@ function load() {
     kind:      'official',
     namespace: OFFICIAL_KEY,
     gameMode:  0,
+    rx:        0,
     relax:     false,
     webUrl:    'https://osu.ppy.sh',
   });
+
+  for (const chave of builtinsPedidos()) {
+    const embutido = BUILTINS[chave];
+    if (!embutido) {
+      console.warn(`[servers] "${chave}" não é um servidor embutido; ignorando.`);
+      continue;
+    }
+    // O `.env` ganha do embutido: quem quiser apontar a mesma chave para outro
+    // host declara em SERVERS e o register recusa a duplicata depois.
+    register({ ...embutido });
+    if (embutido.builtinRelax) register(relaxVariant(embutido));
+  }
 
   // `SERVERS` é a lista nova; `PRIVATE_SERVER_URL` era a configuração antiga,
   // de quando só cabia um servidor — continua funcionando, com a chave tirada

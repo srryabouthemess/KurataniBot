@@ -29,6 +29,7 @@ const servers = require('./servers');
 const pp = require('./pp');
 const officialApi = require('./osu/officialApi');
 const banchoPyApi = require('./osu/banchoPyApi');
+const rippleApi = require('./osu/rippleApi');
 const { dedupe } = require('./inflight');
 const { parseModsString } = require('./mods');
 const { idSegment } = require('./urlSafe');
@@ -44,6 +45,7 @@ const PRIVATE_MODE = servers.resolveKey('private') ?? DEFAULT_MODE;
 const ADAPTERS = {
   official: officialApi,
   banchopy: banchoPyApi,
+  ripple:   rippleApi,
 };
 
 /**
@@ -89,11 +91,22 @@ async function fetchBeatmap(id) {
 // /topplays vire uma rajada e estoure o rate limit.
 const BEATMAP_BATCH_SIZE = 5;
 
-/** Preenche `max_combo` e `difficulty_rating` nos scores que vieram sem eles. */
+/**
+ * Preenche `max_combo` e `difficulty_rating` nos scores que vieram sem eles.
+ *
+ * A condição olha os DOIS campos, e não só o combo. Servidor que manda um e
+ * não o outro existe: o Ripple devolve `max_combo` no score e nenhuma estrela,
+ * então testar só o combo pulava o enriquecimento e deixava a dificuldade em
+ * zero — o embed saía com "?★" onde deveria estar o número.
+ */
+function precisaEnriquecer(score) {
+  return !score.beatmap?.max_combo || !score.beatmap?.difficulty_rating;
+}
+
 async function enrichBeatmapData(scores) {
   const idsNeeded = [...new Set(
     scores
-      .filter(score => !score.beatmap?.max_combo)
+      .filter(precisaEnriquecer)
       .map(score => score.beatmap?.id)
       .filter(Boolean),
   )];
@@ -106,7 +119,7 @@ async function enrichBeatmapData(scores) {
   }
 
   return scores.map(score => {
-    if (score.beatmap?.max_combo) return score;
+    if (!precisaEnriquecer(score)) return score;
 
     const bm = fetched[score.beatmap?.id];
     if (!bm) return score;

@@ -10,14 +10,21 @@ process.chdir(os.tmpdir());
 
 const SERVERS_PATH = require.resolve('../src/servers');
 
-/** Recarrega o registro com um ambiente controlado. */
+/**
+ * Recarrega o registro com um ambiente controlado.
+ *
+ * `BUILTIN_SERVERS` vazio por padrão: estes casos verificam a LEITURA do .env, e
+ * quais servidores vêm de fábrica é outra decisão. Sem desligar, acrescentar um
+ * embutido quebraria testes que não têm nada a ver com ele — foi o que
+ * aconteceu quando o Akatsuki entrou.
+ */
 function load(env) {
   for (const key of Object.keys(process.env)) {
-    if (key.startsWith('SERVER_') || ['SERVERS', 'OSU_MODE', 'PRIVATE_SERVER_URL'].includes(key)) {
+    if (key.startsWith('SERVER_') || ['SERVERS', 'OSU_MODE', 'PRIVATE_SERVER_URL', 'BUILTIN_SERVERS'].includes(key)) {
       delete process.env[key];
     }
   }
-  Object.assign(process.env, env);
+  Object.assign(process.env, { BUILTIN_SERVERS: '', ...env });
   delete require.cache[SERVERS_PATH];
   return require('../src/servers');
 }
@@ -154,5 +161,53 @@ test('entradas inválidas não derrubam as válidas', async t => {
 
   await t.test('o válido entra mesmo com vizinhos ruins', () => {
     assert.ok(servers.has('ok'));
+  });
+});
+
+// ─── Servidores embutidos ────────────────────────────────────────────────────
+// O osu! oficial é fixo porque é um só. O Akatsuki vem de fábrica por ser
+// grande e ter API pública estável — mas dá para desligar, senão quem hospeda o
+// bot para outro servidor carregaria um concorrente na lista de escolhas.
+
+test('embutidos', async t => {
+  // O `load` desliga os embutidos por padrão; aqui o assunto é justamente eles.
+  const comEmbutidos = () => {
+    const s = load({});
+    delete process.env.BUILTIN_SERVERS;
+    delete require.cache[SERVERS_PATH];
+    void s;
+    return require('../src/servers');
+  };
+
+  await t.test('o Akatsuki vem por padrão, com a variante RX', () => {
+    const s = comEmbutidos();
+    assert.equal(s.get('akatsuki').kind, 'ripple');
+    assert.equal(s.get('akatsuki_rx').relax, true);
+  });
+
+  await t.test('Relax do Ripple é outro eixo, não o modo 4', () => {
+    // No bancho.py, Relax é o "modo 4". No Ripple são dois campos: mode segue 0
+    // e rx vira 1. Deduzir um do outro daria o leaderboard errado.
+    const s = comEmbutidos();
+    assert.equal(s.get('akatsuki_rx').gameMode, 0);
+    assert.equal(s.get('akatsuki_rx').rx, 1);
+  });
+
+  await t.test('bancho.py continua pedindo Relax pelo modo 4', () => {
+    const s = load({ SERVERS: 'daycore', SERVER_DAYCORE_URL: 'https://daycore.org', SERVER_DAYCORE_RELAX: 'true' });
+    assert.equal(s.get('daycore_rx').gameMode, 4);
+    assert.equal(s.get('daycore_rx').rx, 0);
+  });
+
+  await t.test('dá para desligar', () => {
+    const s = load({ BUILTIN_SERVERS: '' });
+    assert.equal(s.has('akatsuki'), false);
+    assert.equal(s.get('official').kind, 'official', 'o oficial não é um embutido opcional');
+  });
+
+  await t.test('embutido desconhecido é ignorado com aviso, não derruba', () => {
+    const s = load({ BUILTIN_SERVERS: 'naoexiste' });
+    assert.equal(s.has('naoexiste'), false);
+    assert.equal(s.get('official').kind, 'official');
   });
 });
