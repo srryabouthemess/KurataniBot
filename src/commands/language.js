@@ -1,5 +1,6 @@
 const { SlashCommandBuilder, PermissionFlagsBits, ApplicationIntegrationType, InteractionContextType, MessageFlags } = require('discord.js');
 const { SUPPORTED_LANGS, t } = require('../i18n');
+const { exigirSubcomando } = require('../subcommands');
 const { setUserLang, setServerLang, getUserLang, getServerLang } = require('../db');
 
 module.exports = {
@@ -51,7 +52,9 @@ module.exports = {
     ),
 
   async execute(interaction) {
-    const sub = interaction.options.getSubcommand();
+    // Lança se o subcomando não estiver declarado no builder — ver
+    // subcommands.js para o que cada um destes fazia em silêncio antes.
+    const sub = exigirSubcomando(module.exports, interaction);
     const s   = t(interaction);
 
     // ── /language status ───────────────────────────────────────────────────────

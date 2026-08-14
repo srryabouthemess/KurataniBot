@@ -9,6 +9,7 @@ const osu = require('../osuClient');
 const daycore = require('../daycoreAdmin');
 const db = require('../db');
 const { t } = require('../i18n');
+const { exigirSubcomando } = require('../subcommands');
 const { logError } = require('../logger');
 
 // Vale para o tempo de ir ao site, editar o perfil e voltar, sem deixar código
@@ -211,7 +212,9 @@ module.exports = {
 
   async execute(interaction) {
     const s   = t(interaction);
-    const sub = interaction.options.getSubcommand();
+    // Lança se o subcomando não estiver declarado no builder — ver
+    // subcommands.js para o que cada um destes fazia em silêncio antes.
+    const sub = exigirSubcomando(module.exports, interaction);
 
     const guildId = process.env.DAYCORE_GUILD_ID;
     if (!guildId) {
@@ -318,7 +321,15 @@ module.exports = {
       });
     }
 
-    // register
+    // register — explícito, e não "tudo que sobrou".
+    //
+    // Este ramo emite o código que vincula uma conta do Discord a uma conta de
+    // staff do jogo, e é dele que sai o privilégio administrativo. Um
+    // `addSubcommand` novo sem ramo próprio cairia aqui.
+    if (sub !== 'register') {
+      throw new Error(`/staff: subcomando declarado mas sem tratamento: "${sub}"`);
+    }
+
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
     try {

@@ -9,6 +9,7 @@ const { resolveStaff, checkRedisOrError } = require('../staffGuard');
 const announce = require('../announce');
 const db = require('../db');
 const { t } = require('../i18n');
+const { exigirSubcomando } = require('../subcommands');
 const { logError } = require('../logger');
 
 // Quantas nomeações distintas um set precisa antes de ser aplicado de fato.
@@ -306,7 +307,9 @@ module.exports = {
 
   async execute(interaction) {
     const s   = t(interaction);
-    const sub = interaction.options.getSubcommand();
+    // Lança se o subcomando não estiver declarado no builder — ver
+    // subcommands.js para o que cada um destes fazia em silêncio antes.
+    const sub = exigirSubcomando(module.exports, interaction);
 
     // ── /nominate queue — só leitura, exige apenas ser nominator ─────────────
     if (sub === 'queue') {
@@ -436,6 +439,13 @@ module.exports = {
       }
 
       // ── add ──────────────────────────────────────────────────────────────
+      // Explícito, e não "tudo que sobrou": este ramo registra nomeação e, ao
+      // atingir o limiar, APLICA o status no servidor. Um `addSubcommand` novo
+      // sem ramo correspondente cairia aqui e mudaria mapa sem ninguém pedir.
+      if (sub !== 'add') {
+        throw new Error(`/nominate: subcomando declarado mas sem tratamento: "${sub}"`);
+      }
+
       db.addNomination(setId, targetStatus, interaction.user.id, staff.osuId, staff.osuName);
       const nominations = db.getNominations(setId, targetStatus);
       const need = threshold();

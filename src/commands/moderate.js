@@ -8,6 +8,7 @@ const daycore = require('../daycoreAdmin');
 const { resolveStaff, checkRedisOrError } = require('../staffGuard');
 const db = require('../db');
 const { t } = require('../i18n');
+const { exigirSubcomando } = require('../subcommands');
 const { logError } = require('../logger');
 
 // Texto livre que acaba num embed (limite de 4096 no description) e no log de
@@ -80,7 +81,9 @@ module.exports = {
 
   async execute(interaction) {
     const s   = t(interaction);
-    const sub = interaction.options.getSubcommand();
+    // Lança se o subcomando não estiver declarado no builder — ver
+    // subcommands.js para o que cada um destes fazia em silêncio antes.
+    const sub = exigirSubcomando(module.exports, interaction);
 
     // `check` e `log` só leem — MODERATOR basta. Restringir exige
     // ADMINISTRATOR, o mesmo que o !restrict in-game do bancho pede.
@@ -172,6 +175,13 @@ module.exports = {
         discordId:   interaction.user.id,
         discordName: interaction.user.username,
       };
+
+      // O `else` abaixo PUBLICA um unrestrict no Redis, e era o destino de
+      // qualquer subcomando que chegasse até aqui sem ramo próprio — um
+      // `addSubcommand` novo mal ligado tiraria a restrição de alguém sozinho.
+      if (sub !== 'restrict' && sub !== 'unrestrict') {
+        throw new Error(`/moderate: subcomando declarado mas sem tratamento: "${sub}"`);
+      }
 
       if (sub === 'restrict') {
         await daycore.restrictPlayer(target.id, actor, reason);

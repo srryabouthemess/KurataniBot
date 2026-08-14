@@ -1,6 +1,7 @@
 const { SlashCommandBuilder, EmbedBuilder, ApplicationIntegrationType, InteractionContextType, MessageFlags } = require('discord.js');
 const { setLink, getLink, getAllLinks, removeLink, setPreferredServer, getPreferredServer, linkNamespace } = require('../db');
 const { t } = require('../i18n');
+const { exigirSubcomando } = require('../subcommands');
 const osu = require('../osuClient');
 const servers = require('../servers');
 const { logError } = require('../logger');
@@ -82,7 +83,9 @@ module.exports = {
 
   async execute(interaction) {
     const s   = t(interaction);
-    const sub = interaction.options.getSubcommand();
+    // Lança se o subcomando não estiver declarado no builder — ver
+    // subcommands.js para o que cada um destes fazia em silêncio antes.
+    const sub = exigirSubcomando(module.exports, interaction);
 
     if (sub === 'status') {
       const links = getAllLinks(interaction.user.id);
