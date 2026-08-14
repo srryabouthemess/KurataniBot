@@ -6,8 +6,6 @@
 
 Sessão de análise de desempenho, e depois dos dois itens de maior efeito que ela apontou. As medições saíram da própria máquina, com os `.osu` reais que já estavam no `cache.db`.
 
-> Pendência conhecida, anterior a esta sessão: o `npm run smoke` reprova o Akatsuki e o Akatsuki RX, porque procura `pudim2` neles — o mapa `PLAYERS` do smoke não foi atualizado quando o Akatsuki entrou como servidor de fábrica. É o teste que está errado, não o adaptador.
-
 ## ⚡ Desempenho
 
 - **O PP de FC passou a ter cache.** [`db.js`](src/db.js), [`pp.js`](src/pp.js)
@@ -30,6 +28,15 @@ Sessão de análise de desempenho, e depois dos dois itens de maior efeito que e
   - **Segurar o event loop só enquanto há pedido em voo.** Os dois extremos quebram: sempre referenciado deixaria pendurado um script que não chame `close()` (o `npm run smoke` é exatamente isso); nunca referenciado deixaria o Node sair no meio de um cálculo, sem resposta e sem erro — invisível no bot, onde o socket do gateway segura o loop, e não num script solto.
   - **Defeito encontrado e corrigido no caminho:** uma morte chega por até três caminhos (`error`, `close` e o `close()` do shutdown), e o worker recebia mais de um para o mesmo processo. Sem trava, um shutdown normal caía no relato de "morreu sozinho" — numa sessão sem nenhum cálculo de RX, o bot logava "PP do Relax indisponível" ao encerrar e ainda ligava o backoff, por causa de um encerramento que deu certo. Tem teste.
   - Os testes rodam contra o `pp_calc.py` de verdade, com um dublê da lib compilada entrando por `PYTHONPATH` — o enquadramento, a leitura exata do corpo e os ids são exercitados como em produção, sem exigir a lib instalada em quem testa. Sem Python na máquina, são pulados em vez de falhar.
+
+## 🐛 Correções
+
+- **O `npm run smoke` reprovava o Akatsuki e o Akatsuki RX.** [`test/smoke.js`](test/smoke.js)
+  - Anterior a esta sessão: o Akatsuki entrou de fábrica sem ganhar entrada no mapa `PLAYERS`, então caía no `default` e procurava o `pudim2` do Daycore, que não existe lá. Os dois saíam como "jogador não encontrado" — o teste estava errado, não o adaptador.
+  - Ficou escondido porque o servidor entrou junto de um monte de coisa; foi encontrado agora ao conferir que as mudanças de desempenho não tinham quebrado nada.
+  - Entra por **ID**, e não por nick: nick muda, ID não — a mesma razão pela qual o link do usuário guarda o `osu_id`. Um teste ancorado em nome reprova sozinho no dia em que alguém se renomear.
+  - O ID escolhido tem números **diferentes** em vanilla e em RX (medido: #4 com 23897pp contra #1 com 62115pp). No Ripple o Relax é um eixo separado do modo, lido em `stats[rx].std`; um jogador com os mesmos números nos dois deixaria uma inversão desse índice passar sem ninguém notar. Agora ela apareceria na saída do smoke.
+  - Conferido de passagem que o `global_leaderboard_rank` do adaptador está certo: ele vem `null` para conta fora do leaderboard e preenchido para quem está nele — o que parecia campo errado era conta inativa.
 
 ## 🔧 Manutenção
 

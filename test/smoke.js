@@ -9,8 +9,30 @@
 const servers = require('../src/servers');
 const osu = require('../src/osuClient');
 
-// Um jogador conhecido por servidor; ajuste se algum sumir.
-const PLAYERS = { official: 'kuratani', default: 'pudim2' };
+/**
+ * Um jogador conhecido por servidor; ajuste se algum sumir.
+ *
+ * Sem entrada própria, um servidor cai no `default` — e foi assim que este
+ * teste passou a reprovar sozinho: o Akatsuki entrou de fábrica sem ganhar a
+ * sua, então procurava o `pudim2` do Daycore, que não existe lá.
+ *
+ * O Akatsuki entra por **ID**, e não por nick: nick muda, ID não. É a mesma
+ * razão pela qual o link do usuário guarda o `osu_id` (ver db.js) — um teste
+ * ancorado em nome reprova sozinho no dia em que alguém se renomear.
+ *
+ * E o ID escolhido tem números DIFERENTES em vanilla e em RX (medido em
+ * 14/08/2026: #4 com 23897pp contra #1 com 62115pp). Isso não é detalhe de
+ * escolha: no Ripple o Relax é um eixo separado do modo, lido em
+ * `stats[rx].std`, e um jogador com os mesmos números nos dois deixaria uma
+ * inversão desse índice passar sem ninguém notar — que é exatamente o tipo de
+ * erro que o adaptador precisou acertar quando foi escrito.
+ */
+const PLAYERS = {
+  official:    'kuratani',
+  akatsuki:    '47379',
+  akatsuki_rx: '47379',
+  default:     'pudim2',
+};
 
 (async () => {
   let failures = 0;
