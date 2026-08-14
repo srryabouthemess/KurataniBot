@@ -216,4 +216,4 @@ function stats() {
   return { ..._stats, vivo: Boolean(_worker), bloqueadoAte: _blockedUntil };
 }
 
-module.exports = { calcular, close, stats, REQUEST_TIMEOUT_MS, RESTART_BACKOFF_MS };
+module.exports = { calcular, close, stats };

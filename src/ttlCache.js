@@ -60,14 +60,6 @@ class TtlCache {
     this._prune();
   }
 
-  delete(key) {
-    return this._map.delete(key);
-  }
-
-  clear() {
-    this._map.clear();
-  }
-
   _prune() {
     if (this._map.size <= this.max) return;
 

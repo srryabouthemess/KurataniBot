@@ -305,6 +305,4 @@ module.exports = {
   close,
   stats,
   reportPythonFailure,
-  REQUEST_TIMEOUT_MS,
-  RESTART_BACKOFF_MS,
 };

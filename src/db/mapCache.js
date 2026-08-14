@@ -206,8 +206,8 @@ function evictFCppIfNeeded() {
 }
 
 module.exports = {
-  getBeatmapFile, setBeatmapFile, evictBeatmapFilesIfNeeded,
+  getBeatmapFile, setBeatmapFile,
   getBeatmapMeta, setBeatmapMeta,
   getMapDifficulty, setMapDifficulty,
-  getCachedFCpp, setCachedFCpp, evictFCppIfNeeded,
+  getCachedFCpp, setCachedFCpp,
 };
