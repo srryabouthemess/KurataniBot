@@ -8,6 +8,13 @@ Primeira sessão com acesso ao servidor de verdade. Os comandos administrativos,
 
 ## ✨ Novos recursos
 
+- **Terceiro tipo de servidor: Ripple/Hanayo, com o Akatsuki de fábrica.** [`osu/rippleApi.js`](src/osu/rippleApi.js), [`servers.js`](src/servers.js)
+  - O bot falava `official` e `banchopy`. O Akatsuki roda **Ripple**, e não tem nada em comum além de servir osu!: a API é toda em `<site>/api/v1`, no mesmo host — a convenção `api.<domínio>` do bancho.py **nem resolve DNS** lá. Nenhuma linha de `.env` faria o adaptador existente falar aquele protocolo.
+  - A arquitetura já previa: o `osuClient` despacha por `kind` e o contrato são seis funções. O trabalho foi escrever o adaptador e as duas traduções — usuário e score.
+  - **Relax deixou de ser um "modo de jogo".** No bancho.py, Relax é o modo 4, no mesmo campo de osu!/taiko/catch/mania. No Ripple são dois eixos independentes: `mode` (0-3) e `rx` (0 vanilla, 1 relax, 2 autopilot). O registro passou a carregar `rx` separado do `gameMode`, e cada tipo diz como pede o seu — antes o `relaxVariant` fixava `gameMode: 4`, que só valia para uma das duas stacks.
+  - **O `/score` precisou de um segundo formato.** O `/api/v1/scores?b=` devolve o leaderboard do MAPA e não aceita filtro por jogador: testados `userid`, `user_id`, `id` e `name`, todos devolvem os mesmos 50 primeiros colocados. Usá-lo faria o comando mostrar o score de outra pessoa como se fosse o de quem perguntou. O `/api/get_scores`, no formato legado da API v1 do osu!, filtra de verdade — o preço é traduzir campos como string, `enabled_mods` no lugar de `mods`, e calcular a acurácia, que aquele formato não manda.
+  - O Akatsuki vem **de fábrica**, como o osu! oficial, por ser grande e ter API pública estável. Diferente do oficial, dá para desligar: `BUILTIN_SERVERS=` vazio, ou uma lista sem ele — quem hospeda o bot para outro servidor não fica carregando um concorrente na lista de escolhas.
+
 - **`/wipe`: apaga os scores de uma conta num modo.** [`commands/wipe.js`](src/commands/wipe.js), [`daycoreAdmin.js`](src/daycoreAdmin.js)
   - Publica no canal `wipe`, que o bancho já escutava. É o **único comando irreversível do bot**: o `wipe_user` faz `DELETE FROM scores`, zera a linha de `stats` e tira o jogador dos sorted sets de leaderboard no Redis. Não há soft-delete nem cópia.
   - **E o bancho não confere privilégio nesse canal.** O `restrict` recusa sozinho quem não é `DEVELOPER` mexendo em staff; o `wipe_user` só checa se o alvo existe. Nos outros comandos o servidor é uma segunda tranca — aqui não existe segunda tranca, e o que o bot decidir é o que acontece. Daí três travas que os outros não têm: exige `DEVELOPER` (o privilégio mais alto, e o único proporcional a uma ação sem volta que o servidor não filtra); confirmação por botão com os números que serão destruídos na tela, com janela de 60s; e o log de auditoria guardando esses números, porque depois do wipe eles não existem em lugar nenhum.
@@ -80,6 +87,9 @@ Primeira sessão com acesso ao servidor de verdade. Os comandos administrativos,
 - **Um arquivo solto em `commands/` derrubava o boot.** [`index.js`](src/index.js)
   - O laço ia direto em `command.data.name`. Um helper `.js` naquela pasta, ou um comando com erro de sintaxe, matava o processo **antes** do login — sob supervisor isso não aparece como falha, aparece como loop de restart, e o bot fica fora do ar até alguém ler o log. Agora o arquivo ruim é ignorado com aviso.
 
+- **Score de servidor que manda o combo ficava sem estrelas.** [`osuClient.js`](src/osuClient.js)
+  - O `enrichBeatmapData` buscava os metadados oficiais só quando faltava `max_combo`. O Ripple manda o combo no próprio score e nenhuma dificuldade, então o enriquecimento era pulado e o `difficulty_rating` ficava em zero — o embed saía com `?★` no lugar do número. A condição passou a olhar os dois campos.
+
 - **Guarda de `pp` não pegava NaN.** [`pp.js`](src/pp.js), [`scorePP.js`](src/scorePP.js), [`commands/recent.js`](src/commands/recent.js), [`commands/score.js`](src/commands/score.js), [`commands/simulate.js`](src/commands/simulate.js)
   - Todos os sites usavam `pp == null`, e `NaN == null` é falso — então um NaN passava direto e `NaN.toFixed(2)` imprimia **"NaN pp"** no embed, pior que `?pp` porque parece resultado. O `typeof data.pp === 'number'` do caminho do Python deixava passar igual, já que `typeof NaN` é `'number'`.
 
@@ -97,7 +107,7 @@ Primeira sessão com acesso ao servidor de verdade. Os comandos administrativos,
 
 ## 🧪 Testes
 
-- De 167 para **250 casos**. Cobrem, entre outros: o fallback do `/nominate` para mapa fora do servidor, a janela de verificação proporcional, a publicação parcial, o desafio de posse e o aval, o alfabeto e a entropia do código, a máscara `STAFF`, o `slashOnly`, e o teto do registro de falhas do Python.
+- De 167 para **270 casos**. Cobrem, entre outros: o fallback do `/nominate` para mapa fora do servidor, a janela de verificação proporcional, a publicação parcial, o desafio de posse e o aval, o alfabeto e a entropia do código, a máscara `STAFF`, o `slashOnly`, e o teto do registro de falhas do Python.
 - Nos casos da paginação e do teto de falhas, o teste novo foi rodado **contra a versão anterior do módulo** para confirmar que reprova o código antigo e passa no atual — um teste que passa nos dois não estaria testando a correção.
 - O fixture das travas genéricas do prefixo (opção de usuário, escopo de servidor, permissão exigida) deixou de ser o `/staff`: aquilo testa o dispatcher, e não devia depender de qual comando real por acaso tem as três propriedades.
 
