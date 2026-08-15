@@ -57,6 +57,23 @@ const COLOR = 0xff66aa;
 const PAIS = /^[A-Za-z]{2}$/;
 
 /**
+ * Quais grupos do servidor aparecem na linha.
+ *
+ * O Daycore tem oito, e mostrar todos virava fileira de emoji: o kyou sozinho
+ * carregava seis (🐾✍🛡️✅🛠️🌟), o que empurrava o nick e competia com a
+ * bandeira sem dizer nada sobre o ranking.
+ *
+ * Estes dois ficam porque são os únicos que falam do **número ao lado**: se o pp
+ * daquela linha é confiável ou não. Os outros são cargo (Nominator, Moderator,
+ * Developer, Supporter) ou apelido interno (puppy, Fuquila) — coisas do perfil
+ * da pessoa, não da posição dela.
+ *
+ * ATENÇÃO: isto é só o que se EXIBE. O que o /topscores esconde continua sendo
+ * Cheating **e** Fuquila, porque lá a regra é a do site, e não a da tela.
+ */
+const SELOS_VISIVEIS = ['legit', 'cheating'];
+
+/**
  * 'BR' → 🇧🇷, montado a partir dos indicadores regionais.
  *
  * Não é `:flag_br:` porque o atalho depende da tabela de emojis do Discord: um
@@ -141,16 +158,19 @@ module.exports = {
       function linha(entrada, posicao, grupos) {
         const flag = bandeira(entrada.country);
 
-        // O clã antes do nick e os selos depois — a mesma ordem do site
-        // (`[flau] nunca 🛠️Developer ✅Legit`). O clã já vem no ranking, sem
-        // custo; os selos custam uma página de perfil por pessoa (ver os grupos
-        // no adaptador de bancho.py).
+        // O clã antes do nick e o selo depois — a mesma ordem do site
+        // (`[flau] nunca ✅`). O clã já vem no ranking, sem custo; os grupos
+        // custam uma página de perfil por pessoa (ver o adaptador de bancho.py).
         //
-        // Só os EMOJIS, e não os nomes: dez linhas com "✍Nominator ❌Cheating"
-        // escrito por extenso viram parede, e o emoji é a própria iconografia
-        // que o site usa — quem conhece o servidor lê de relance.
+        // Só o EMOJI, e não o nome: dez linhas com "✅Legit" escrito por extenso
+        // viram parede, e o emoji é a própria iconografia que o site usa — quem
+        // conhece o servidor lê de relance.
         const cla   = entrada.clanTag ? `${md(`[${entrada.clanTag}]`)} ` : '';
-        const selos = grupos.map(g => md(g.emoji)).filter(Boolean).join('');
+        const selos = grupos
+          .filter(g => SELOS_VISIVEIS.includes(g.name.toLowerCase()))
+          .map(g => md(g.emoji))
+          .filter(Boolean)
+          .join('');
         // Nome de jogador é texto de terceiro em posição de link (markdown.js).
         // Sem id não há perfil para onde apontar, e o nome sai sem link em vez
         // de virar um `/users/null` clicável.
