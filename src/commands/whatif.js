@@ -2,6 +2,7 @@ const { SlashCommandBuilder, EmbedBuilder, ApplicationIntegrationType, Interacti
 const osu = require('../osuClient');
 const servers = require('../servers');
 const { resolvePlayer, fetchPlayer } = require('../userLink');
+const { md } = require('../markdown');
 const { t } = require('../i18n');
 const { logError } = require('../logger');
 const { safeEditReply } = require('../replies');
@@ -160,7 +161,8 @@ module.exports = {
         if (play._hypothetical) {
           playsPreview += `**#${i + 1}** → \`${hypotheticalPP}pp\` *(${s.whatif_hypothetical})* ✨\n`;
         } else {
-          const title = play.beatmapset?.title ?? '???';
+          // Título de mapa é texto de terceiro numa descrição (ver markdown.js).
+          const title = md(play.beatmapset?.title ?? '???');
           playsPreview += `**#${i + 1}** \`${play.pp.toFixed(2)}pp\` — ${title}\n`;
         }
       });

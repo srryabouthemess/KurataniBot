@@ -4,6 +4,7 @@ const servers = require('../servers');
 const { resolvePlayer, fetchPlayer } = require('../userLink');
 const mapContext = require('../mapContext');
 const playEmbed = require('../embeds/play');
+const { md } = require('../markdown');
 const { paginate } = require('../pagination');
 const { t } = require('../i18n');
 const { logError } = require('../logger');
@@ -108,7 +109,11 @@ module.exports = {
         // Lembra o mapa mesmo sem score: quem veio pelo link continua no
         // contexto do canal, e o próximo /score não precisa repetir o link.
         mapContext.remember(interaction, beatmapId, mode);
-        return interaction.editReply(s.score_none(user.username, mapTitle, osu.getModeLabel(mode)));
+        // Nick e título de mapa entram numa mensagem que renderiza markdown
+        // (ver markdown.js) — o embed acima usa setTitle, que é texto puro.
+        return interaction.editReply(
+          s.score_none(md(user.username), md(mapTitle), osu.getModeLabel(mode)),
+        );
       }
 
       const totalPages = Math.ceil(scores.length / PAGE_SIZE);

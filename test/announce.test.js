@@ -57,7 +57,10 @@ test('com canal configurado, manda o embed', async () => {
 
   const embed = sent[0].embeds[0].data;
   assert.match(embed.title, /ranked/);
-  assert.match(embed.description, /BWG \(Cut Ver\.\)/);
+  // O rótulo do mapa sai escapado (ver markdown.js): este embed vai para um
+  // canal público, e o nome do mapa é texto de terceiro em posição de link. O
+  // Discord renderiza `\(` como `(`, então na tela o título continua igual.
+  assert.match(embed.description, /BWG \\\(Cut Ver\.\\\)/);
   assert.match(embed.description, /pudim2/);
   // Link e capa apontam para o set certo.
   assert.match(embed.image.url, /2158809/);

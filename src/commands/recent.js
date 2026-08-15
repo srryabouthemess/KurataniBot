@@ -4,6 +4,7 @@ const servers = require('../servers');
 const { resolvePlayer, fetchPlayer } = require('../userLink');
 const mapContext = require('../mapContext');
 const playEmbed = require('../embeds/play');
+const { md } = require('../markdown');
 const { paginate } = require('../pagination');
 const { t } = require('../i18n');
 const { logError } = require('../logger');
@@ -51,7 +52,8 @@ module.exports = {
         id => osu.getRecentScores(id, FETCH_LIMIT, mode),
       );
       if (!user) return interaction.editReply(s.player_not_found);
-      if (recents.length === 0) return interaction.editReply(s.recent_none(user.username));
+      // O nick vai numa mensagem que renderiza markdown (ver markdown.js).
+      if (recents.length === 0) return interaction.editReply(s.recent_none(md(user.username)));
 
       const totalPages = recents.length;
 

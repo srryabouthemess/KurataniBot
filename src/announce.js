@@ -26,6 +26,7 @@ const { EmbedBuilder, PermissionFlagsBits } = require('discord.js');
 
 const osu = require('./osuClient');
 const daycore = require('./daycoreAdmin');
+const { md } = require('./markdown');
 const { logError } = require('./logger');
 
 // Cores por status: verde para ranked, rosa para loved, cinza para unranked.
@@ -95,7 +96,10 @@ async function announceStatus(client, info, s) {
       .setTitle(s.ann_title(info.statusLabel))
       .setURL(mapUrl)
       .setDescription(
-        `**[${info.label}](${mapUrl})**\n` +
+        // O rótulo é artista/título/criador do mapa — texto de terceiro, e este
+        // embed vai para um canal PÚBLICO. Sem escape, um mapa com `](url)` no
+        // nome faz o bot publicar um link forjado (ver markdown.js).
+        `**[${md(info.label)}](${mapUrl})**\n` +
         s.ann_diffs(info.confirmed) +
         // De onde veio muda a linha: aplicado pelo bot é rastreável até uma
         // conta do Discord, aplicado no jogo não — e quem lê o canal precisa

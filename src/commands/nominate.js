@@ -8,6 +8,7 @@ const daycore = require('../daycoreAdmin');
 const { resolveStaff, checkRedisOrError } = require('../staffGuard');
 const announce = require('../announce');
 const db = require('../db');
+const { md } = require('../markdown');
 const { t } = require('../i18n');
 const { exigirSubcomando } = require('../subcommands');
 const { logError } = require('../logger');
@@ -431,7 +432,7 @@ module.exports = {
           .setColor(pending.length === 0 ? 0x99ff99 : 0xffcc66)
           .setTitle(s.nom_applied_title(daycore.STATUS_LABELS[status]))
           .setDescription(
-            `**${label}**\n${s.nom_set_line(setId, diffs.length)}${origin}\n\n` +
+            `**${md(label)}**\n${s.nom_set_line(setId, diffs.length)}${origin}\n\n` +
             resultBlock(s, result),
           )
           .setFooter({ text: s.nom_actor(staff.osuName) });
@@ -456,7 +457,7 @@ module.exports = {
           .setColor(0x99ccff)
           .setTitle(s.nom_added_title(daycore.STATUS_LABELS[targetStatus]))
           .setDescription(
-            `**${label}**\n${s.nom_set_line(setId, diffs.length)}${origin}\n\n` +
+            `**${md(label)}**\n${s.nom_set_line(setId, diffs.length)}${origin}\n\n` +
             s.nom_progress(nominations.length, need) + `\n${s.nom_by(who)}`,
           );
         return interaction.editReply({ embeds: [embed] });
@@ -493,7 +494,7 @@ module.exports = {
         .setColor(pending.length === 0 ? 0x99ff99 : 0xffcc66)
         .setTitle(s.nom_applied_title(daycore.STATUS_LABELS[targetStatus]))
         .setDescription(
-          `**${label}**\n${s.nom_set_line(setId, diffs.length)}${origin}\n\n` +
+          `**${md(label)}**\n${s.nom_set_line(setId, diffs.length)}${origin}\n\n` +
           // Com limiar 1 não houve espera nenhuma — anunciar "limiar atingido"
           // seria ruído.
           (need > 1 ? `${s.nom_threshold_reached(need)}\n` : '') +

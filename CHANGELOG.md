@@ -2,6 +2,24 @@
 
 ---
 
+# Sessão de 2026-08-15 (segurança)
+
+Revisão de segurança do projeto inteiro, e a correção do único achado explorável por qualquer pessoa. A cadeia de privilégio dos comandos administrativos — a parte que mexe no servidor de jogo de verdade — resistiu à revisão.
+
+## 🔒 Segurança
+
+- **Texto de fora deixou de entrar cru nos embeds.** [`markdown.js`](src/markdown.js), e os sete pontos que exibem nome de mapa ou de jogador
+  - Nome de mapa, de mapper e nick são escolhidos por quem os criou, e o bot os interpolava direto em posição de markdown. Um título com `](url)` fecha o link do bot e abre outro — o embed passa a exibir um **link clicável para onde o atacante quiser**, com a credibilidade do bot em volta.
+  - Não era teórico. Prova executada contra o código real, com o título `Musica](https://sitefalso.example/roubo) [clique aqui`: o embed saía com `[MC - Musica](https://sitefalso.example/roubo)`. Custa nada explorar — mapa graveyard não passa por moderação, e `/score <id>` exibe o título de qualquer mapa sem nem precisar jogá-lo.
+  - **Escapa exatamente o conjunto que o Discord sabe escapar**, e não "todo símbolo por precaução": diante de um caractere sem significado, a contrabarra aparece na tela. Over-escapar não é conservador, é defeito visível.
+  - **Só descrição e content renderizam markdown.** `setTitle`, `setAuthor` e `setFooter` são texto puro — escapar ali imprimiria as contrabarras sem proteger de nada. É por isso que o escape mora nos pontos de interpolação e não dentro do `mapTitle()`: o mesmo texto vai para os dois lugares.
+  - Quebra de linha vira espaço antes do escape, senão um título com `\n` ainda abriria cabeçalho ou citação na linha que ele cria — mesma decisão do `signReason`.
+  - **O `/compare` precisou de outro tratamento**: os nicks vão dentro de um bloco de código, onde contrabarra não escapa nada. Ali uma crase fecharia a cerca e o resto da tabela viraria markdown; o `short()` passou a removê-la.
+  - **Fica de fora, e está documentado:** URL solta continua virando link clicável, e não há contrabarra que impeça. É outro risco — uma URL visível mostra para onde vai; o que se fechou foi **forjar o rótulo**.
+  - O caso de regressão é a própria prova de conceito.
+
+---
+
 # Sessão de 2026-08-14 (embeds e latência)
 
 Sessão de aparência, que virou de latência no fim: os comandos que mostram play passaram a desenhar todos do mesmo jeito, no formato denso que a comunidade de osu! já lê sem pensar (o do BathBot); duas correções de número apareceram no caminho, encontradas justamente por olhar as telas lado a lado; e a medição seguinte mostrou que o trabalho local deixou de ser gargalo — o que sobrou é rede, e parte dela era espera que não comprava nada.

@@ -2,6 +2,7 @@ const { SlashCommandBuilder, EmbedBuilder, ApplicationIntegrationType, Interacti
 const osu = require('../osuClient');
 const servers = require('../servers');
 const { getLink, getPreferredServer } = require('../db');
+const { md } = require('../markdown');
 const { t } = require('../i18n');
 const { logError } = require('../logger');
 const { safeEditReply } = require('../replies');
@@ -21,8 +22,16 @@ const MOBILE_WIDTH_BUDGET = 26;
 // completo aparece na linha acima, fora do bloco.
 const NAME_COL_MAX = 8;
 
+/**
+ * Encurta para caber na coluna, e tira a crase.
+ *
+ * Estes nomes vão DENTRO do bloco de código, e ali a contrabarra não escapa
+ * nada (ver markdown.js): uma crase no nick fecharia a cerca ``` e o resto da
+ * tabela passaria a ser interpretado como markdown. Fora do bloco, os nomes
+ * completos passam pelo `md()` como o resto do texto externo.
+ */
 const short = (str, max) => {
-  const value = String(str);
+  const value = String(str).replace(/`/g, '');
   return value.length <= max ? value : value.slice(0, max - 1) + '…';
 };
 
@@ -147,7 +156,7 @@ module.exports = {
         // Nomes completos fora do bloco: como texto normal eles quebram linha
         // sem estragar o alinhamento, e assim um nick de 15 caracteres não
         // alarga a tabela inteira.
-        .setDescription(`**${u1.username}**  ·  **${u2.username}**\n\`\`\`arm\n${table.text}\n\`\`\``)
+        .setDescription(`**${md(u1.username)}**  ·  **${md(u2.username)}**\n\`\`\`arm\n${table.text}\n\`\`\``)
         .setFooter({ text: s.compare_footer(interaction.user.username, osu.getModeLabel(mode)) });
 
       if (u1.avatar_url) embed.setThumbnail(u1.avatar_url);

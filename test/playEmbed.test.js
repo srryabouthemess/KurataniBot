@@ -181,7 +181,9 @@ test('item de lista com link põe o mapa na primeira linha e a grade na segunda'
   });
 
   const [cabecalho, numeros, hits] = item.split('\n');
-  assert.match(cabecalho, /^\*\*#3\*\* \[MC - MONTAGEM BATCHI \[JOGA ACELERA\]\]\(https:\/\/exemplo\/1\)/);
+  // Os colchetes da dificuldade saem escapados (ver markdown.js): o Discord
+  // renderiza `\[` como `[`, então na tela o título continua igual.
+  assert.match(cabecalho, /^\*\*#3\*\* \[MC - MONTAGEM BATCHI \\\[JOGA ACELERA\\\]\]\(https:\/\/exemplo\/1\)/);
   assert.match(cabecalho, /\[8\.31★\]$/);
   assert.match(numeros, /^\*\*C\*\*/);
   assert.equal(hits, '{ 148 / 18 / 0 / 23 }');
@@ -194,6 +196,19 @@ test('item de lista sem link (mesmo mapa nas cinco linhas) começa pela grade', 
   const [cabecalho, numeros] = item.split('\n');
   assert.match(cabecalho, /^\*\*#1\*\* \*\*C\*\* \*\*\+HD\*\* \[8\.31★\]$/);
   assert.doesNotMatch(numeros, /^\*\*C\*\*/);
+});
+
+test('título de mapa hostil não forja um link no item de lista', async () => {
+  // Mapa graveyard não passa por moderação: o nome é escolhido por quem subiu,
+  // e cai em posição de link. Ver markdown.js e test/markdown.test.js.
+  setup({ stars: '5.00' });
+  const item = await playEmbed.listItem(
+    jogada({ beatmapset: { id: 2, title: 'Musica](https://sitefalso.example) [clique', artist: 'MC', covers: {} } }),
+    { mode: 'official', index: 1, mapUrl: 'https://osu.ppy.sh/b/1' },
+  );
+
+  assert.ok(!item.includes('](https://sitefalso.example'), 'o link forjado sobreviveu ao escape');
+  assert.equal((item.match(/(?<!\\)\]\(/g) ?? []).length, 1, 'sobrou um `](` sem escape na primeira linha');
 });
 
 test('sem estrelas conhecidas o item não escreve "?★"', async () => {
