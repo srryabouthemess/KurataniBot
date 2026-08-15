@@ -158,14 +158,13 @@ module.exports = {
       function linha(entrada, posicao, grupos) {
         const flag = bandeira(entrada.country);
 
-        // O clã antes do nick e o selo depois — a mesma ordem do site
-        // (`[flau] nunca ✅`). O clã já vem no ranking, sem custo; os grupos
-        // custam uma página de perfil por pessoa (ver o adaptador de bancho.py).
+        // Só o EMOJI do grupo, e não o nome: dez linhas com "✅Legit" escrito
+        // por extenso viram parede, e o emoji é a própria iconografia que o site
+        // usa — quem conhece o servidor lê de relance.
         //
-        // Só o EMOJI, e não o nome: dez linhas com "✅Legit" escrito por extenso
-        // viram parede, e o emoji é a própria iconografia que o site usa — quem
-        // conhece o servidor lê de relance.
-        const cla   = entrada.clanTag ? `${md(`[${entrada.clanTag}]`)} ` : '';
+        // O clã do site (`[flau] nunca`) não vem junto: numa linha que já tem
+        // posição, bandeira, nick e selo, ele era o quarto enfeite antes do
+        // número, que é o que a pessoa veio ler.
         const selos = grupos
           .filter(g => SELOS_VISIVEIS.includes(g.name.toLowerCase()))
           .map(g => md(g.emoji))
@@ -187,7 +186,7 @@ module.exports = {
           minimumFractionDigits: 2, maximumFractionDigits: 2,
         });
 
-        return `**#${posicao}** ${flag ? `${flag} ` : ''}${cla}${nome}${selos ? ` ${selos}` : ''}\n` +
+        return `**#${posicao}** ${flag ? `${flag} ` : ''}${nome}${selos ? ` ${selos}` : ''}\n` +
                `${ppLegivel(entrada.pp, s.locale)}pp • ${acc}% • ` +
                `${entrada.playCount.toLocaleString(s.locale)} plays`;
       }

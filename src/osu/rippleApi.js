@@ -329,9 +329,6 @@ function normalizeRankingEntry(user) {
     // De 0 a 100, como o normalizeUser acima já lê deste mesmo campo.
     accuracy:  Number(st.accuracy ?? 0),
     playCount: Number(st.playcount ?? 0),
-    // O Ripple tem clãs, mas não os manda no ranking; nulo mantém o contrato
-    // igual ao dos outros dois (ver officialApi).
-    clanTag:   null,
   };
 }
 

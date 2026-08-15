@@ -707,9 +707,9 @@ function normalizeRankingEntry(item) {
     // `acc` já vem de 0 a 100, como o resto do bot lê a acurácia de um perfil.
     accuracy:  Number(item.acc ?? 0),
     playCount: Number(item.plays ?? 0),
-    // O clã vem junto no ranking, sem custo nenhum — o site o exibe antes do
-    // nick (`[flau] nunca`), e é a única fonte dele que não pede requisição.
-    clanTag:   item.clan_tag || null,
+    // (Houve um `clanTag` aqui, tirado junto com o clã da linha do /leaderboard:
+    // campo que ninguém lê é peso morto, e o `clan_tag` da resposta continua
+    // esperando no mesmo lugar no dia em que alguém for exibi-lo.)
   };
 }
 

@@ -256,10 +256,6 @@ function normalizeRankingEntry(item) {
     // acurácia de um score, que circula de 0 a 1.
     accuracy:  Number(item.hit_accuracy ?? 0),
     playCount: Number(item.play_count ?? 0),
-    // Existe no contrato porque o bancho.py o preenche; aqui é sempre nulo (o
-    // ranking oficial não traz clã), e o campo estar presente e vazio é o que
-    // deixa quem exibe escrever uma linha só para os três servidores.
-    clanTag:   null,
   };
 }
 
