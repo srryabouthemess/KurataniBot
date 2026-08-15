@@ -63,15 +63,16 @@ const PAIS = /^[A-Za-z]{2}$/;
  * carregava seis (🐾✍🛡️✅🛠️🌟), o que empurrava o nick e competia com a
  * bandeira sem dizer nada sobre o ranking.
  *
- * Estes dois ficam porque são os únicos que falam do **número ao lado**: se o pp
- * daquela linha é confiável ou não. Os outros são cargo (Nominator, Moderator,
- * Developer, Supporter) ou apelido interno (puppy, Fuquila) — coisas do perfil
- * da pessoa, não da posição dela.
+ * Os três que ficam são os que falam do **número ao lado** — se aquele pp
+ * conta. E não é opinião nossa: Cheating e Fuquila são exatamente os dois que o
+ * site tira do Top Plays por padrão, e Legit é o contrário deles. O resto é
+ * cargo (Nominator, Moderator, Developer, Supporter) ou apelido interno
+ * (puppy), que diz respeito à pessoa e não à posição dela.
  *
- * ATENÇÃO: isto é só o que se EXIBE. O que o /topscores esconde continua sendo
- * Cheating **e** Fuquila, porque lá a regra é a do site, e não a da tela.
+ * Aqui os três só são EXIBIDOS: ninguém some do ranking por causa de selo. É o
+ * /topscores que esconde plays, e lá a regra continua sendo a do site.
  */
-const SELOS_VISIVEIS = ['legit', 'cheating'];
+const SELOS_VISIVEIS = ['legit', 'cheating', 'fuquila'];
 
 /**
  * 'BR' → 🇧🇷, montado a partir dos indicadores regionais.
