@@ -4,7 +4,7 @@
 
 # Sessão de 2026-08-15 (ranking do servidor)
 
-Um comando novo, e o quarto método do contrato dos adaptadores: `/leaderboard` mostra o ranking de pp de qualquer servidor que o bot atenda — Bancho (global ou por país), Akatsuki, Akatsuki RX, Daycore e Daycore RX.
+Dois comandos novos, e duas perguntas que o bot só sabia responder sobre uma pessoa passaram a valer para o servidor: `/leaderboard` mostra o ranking de pp de qualquer servidor que o bot atenda — Bancho (global ou por país), Akatsuki, Akatsuki RX, Daycore e Daycore RX —, e `/topscores` mostra as melhores plays do servidor inteiro, onde a API permite.
 
 ## ✨ Novos recursos
 
@@ -16,6 +16,15 @@ Um comando novo, e o quarto método do contrato dos adaptadores: `/leaderboard` 
   - **Cache de cinco minutos, e não o de um minuto do perfil.** Aquele é curto porque o pp do jogador e a lista de top plays aparecem no mesmo embed e teriam de envelhecer juntos; um ranking não tem esse par. O que os cinco minutos compram é o comando repetido no canal — que é como um ranking costuma ser consultado — não pagar rede nenhuma.
   - A acurácia da linha passa pelo idioma, e não pelo `toFixed(2)` do embed de play: ela divide a linha com um pp de cinco dígitos e com o número de plays, os dois já formatados assim. Em pt-BR o `toFixed` daria `32.138,70pp • 98.26%`, dois separadores decimais na mesma linha.
   - A bandeira é montada dos indicadores regionais em vez de `:flag_br:`, que depende da tabela de emojis do Discord e sairia como texto cru para um código que não esteja lá. `XX` — o que o bancho.py grava para conta sem país — não vira bandeira nenhuma.
+
+- **`/topscores`: as melhores plays do servidor inteiro.** [`topscores.js`](src/commands/topscores.js), [`banchoPyApi.js`](src/osu/banchoPyApi.js)
+  - Cinco por página, cada linha com o mapa, os mods, as estrelas, quem jogou e o pp que a play daria com FC — o mesmo desenho do `/topplays`, que ganhou um campo `autor` opcional no [`embeds/play.js`](src/embeds/play.js) porque aqui cada linha é de uma pessoa diferente.
+  - **Comando próprio, e não uma opção dos dois vizinhos.** No `/topplays`, "sem `player`" já quer dizer *eu* (via `/link`) e `server` já quer dizer *em qual servidor procurar esse jogador* — os dois sinais que serviriam estão ocupados. No `/leaderboard`, cada linha é um **jogador**; aqui é um **score**, o que mudaria título, formato, rodapé e tornaria o `country` de lá sem sentido.
+  - **Só em servidor bancho.py, e a recusa explica o motivo.** A API do osu! não tem esse dado: os tipos de ranking são `performance`, `score`, `country` e `charts` — `top-plays`, `top_plays`, `topplays`, `top-scores`, `scores` e `plays` respondem `invalid type specified`. A página `/rankings/top-plays/osu` existe e traz 100 plays, mas é HTML renderizado no servidor, sem JSON embutido e sem responder JSON nem com `Accept` nem com `X-Requested-With` — só sairia por raspagem, que quebraria calada a cada deploy do front do osu-web. O Ripple recusa sem um mapa (`422 Missing parameters: md5|b`). O despacho é o mesmo do `enrichScores`: o adaptador que sabe expõe o método, e um teste trava que os outros dois **não** o exponham.
+  - **A busca é uma varredura, porque o endpoint não ordena.** `sort=pp` e `sort=pp_desc` são silenciosamente ignorados — a mesma armadilha do FastAPI que já mordeu o `resolvePlayerId` com `name`. O `status=2` (melhor score de cada jogador em cada mapa) encolhe a tabela de 20+ páginas para 4 no Daycore.
+  - **E por isso o teto recusa em vez de truncar:** sem ordenação do lado do servidor, meia varredura não dá resposta incompleta, dá resposta **errada** — as primeiras 3000 linhas por ordem de inserção não têm relação com as 50 maiores por pp. Acima do teto o comando diz que não sabe.
+  - **`/v2/maps?md5=` também ignora o filtro** — pedido um hash, devolveu 50 mapas com outro no topo. A resolução vai pela v1 (`get_map_info`), que de quebra entrega artista, título, dificuldade, estrelas e combo em campos separados: o embed sai com o artista no lugar certo, em vez de desmontado do nome do arquivo por regex como no resto do adaptador.
+  - Medido, com os caches quentes: 12 requisições e 1,2s numa página fria do Daycore (4 da varredura + mapa e nick dos cinco scores), e **zero** no comando repetido dentro dos 5 minutos de cache. Para comparar, uma página do `/topplays` no mesmo servidor gasta 11.
 
 ## 🐛 Correções
 

@@ -132,6 +132,9 @@ for (const server of servers.all()) {
   // chama `leaderboard` no adaptador, e cada tipo o serve de um endpoint
   // diferente (ver osu/).
   caso(`/leaderboard ${server.label}`, 'leaderboard.js', { server: server.key });
+  // Nos servidores que não são bancho.py o esperado é a recusa explicando por
+  // quê — e ela também precisa continuar saindo.
+  caso(`/topscores ${server.label}`, 'topscores.js', { server: server.key });
 }
 
 // ── Cálculo: não dependem de jogador ──────────────────────────────────────────

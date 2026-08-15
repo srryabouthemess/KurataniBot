@@ -56,6 +56,9 @@ const COMMAND_BUCKET = {
   compare:  'heavy',
   // Uma página do /score enriquece o mapa e calcula PP de FC por score.
   score:    'heavy',
+  // Cada página resolve mapa e nick de cinco scores, e ainda calcula PP de FC —
+  // é o mesmo peso do /topplays, mais a varredura da primeira chamada.
+  topscores: 'heavy',
   simulate: 'compute',
   whatif:   'compute',
   pp:       'compute',

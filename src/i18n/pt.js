@@ -56,6 +56,7 @@ module.exports = ({ ADMIN }) => ({
   help_cmd_score:          'Scores num mapa, com o PP que cada um valeria com FC.',
   help_cmd_compare:        'Compara dois jogadores lado a lado.',
   help_cmd_leaderboard:    'Ranking de pp do servidor, 10 por página.',
+  help_cmd_topscores:      'Melhores plays do servidor inteiro (só bancho.py).',
   help_cmd_whatif:         'Quanto PP você ganharia com uma play nova.',
   help_cmd_pp:             'O que falta para chegar a um total de PP.',
   help_cmd_simulate:       'Quanto PP daria uma play específica num mapa.',
@@ -106,6 +107,21 @@ module.exports = ({ ADMIN }) => ({
   leaderboard_invalid_country: '❌ Use o código do país com duas letras (ex: `BR`, `US`, `RU`).',
   leaderboard_error:           'Erro ao buscar o ranking do servidor.',
   leaderboard_footer:          (page, total, label) => `Página ${page}/${total} • ${label}`,
+
+  // ── /topscores ────────────────────────────────────────────────────────────
+  topscores_title:             (label) => `Melhores plays do ${label}`,
+  topscores_footer:            (page, total, label) => `Página ${page}/${total} • ${label}`,
+  topscores_none:              (label) => `Nenhuma play registrada no **${label}** ainda.`,
+  topscores_error:             'Erro ao buscar as melhores plays do servidor.',
+  // O motivo vai junto: sem ele a resposta parece defeito do bot, e a pessoa
+  // tenta de novo. Ver o cabeçalho do commands/topscores.js.
+  topscores_unsupported:       (label) =>
+    `❌ O **${label}** não publica as melhores plays do servidor — a API dele não tem esse endpoint. ` +
+    `Isso funciona nos servidores bancho.py. Para as melhores plays de um jogador, use \`/topplays\`.`,
+  topscores_too_big:           (label) =>
+    `❌ O **${label}** tem scores demais para eu montar essa lista com segurança. ` +
+    `A API não ordena por pp, então eu teria que varrer a tabela inteira — e uma varredura pela metade ` +
+    `daria um pódio que não é o pódio. Prefiro não responder a responder errado.`,
 
   recent_none:             (name) => `Nenhuma play recente encontrada para **${name}**.`,
   recent_error:            'Erro ao buscar a play recente. Verifique se o jogador existe.',

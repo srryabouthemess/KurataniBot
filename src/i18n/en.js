@@ -52,6 +52,7 @@ module.exports = ({ ADMIN }) => ({
   help_cmd_score:          'Scores on a map, with the PP each would be worth on FC.',
   help_cmd_compare:        'Compare two players side by side.',
   help_cmd_leaderboard:    "The server's pp ranking, 10 per page.",
+  help_cmd_topscores:      "The whole server's best plays (bancho.py only).",
   help_cmd_whatif:         'How much PP a new play would earn you.',
   help_cmd_pp:             'What you still need to reach a PP total.',
   help_cmd_simulate:       'How much PP a specific play on a map would be worth.',
@@ -98,6 +99,21 @@ module.exports = ({ ADMIN }) => ({
   leaderboard_invalid_country: '❌ Use the two-letter country code (e.g. `BR`, `US`, `RU`).',
   leaderboard_error:           'Error fetching the server ranking.',
   leaderboard_footer:          (page, total, label) => `Page ${page}/${total} • ${label}`,
+
+  // ── /topscores ────────────────────────────────────────────────────────────
+  topscores_title:             (label) => `${label}'s best plays`,
+  topscores_footer:            (page, total, label) => `Page ${page}/${total} • ${label}`,
+  topscores_none:              (label) => `No plays recorded on **${label}** yet.`,
+  topscores_error:             "Error fetching the server's best plays.",
+  // The reason ships with the refusal: without it the answer looks like a bug
+  // and people just retry. See the header of commands/topscores.js.
+  topscores_unsupported:       (label) =>
+    `❌ **${label}** does not publish the server's best plays — its API has no endpoint for it. ` +
+    `This works on bancho.py servers. For a player's best plays, use \`/topplays\`.`,
+  topscores_too_big:           (label) =>
+    `❌ **${label}** has too many scores for me to build this list safely. ` +
+    `The API cannot sort by pp, so I would have to scan the whole table — and half a scan ` +
+    `would give a podium that is not the podium. I would rather not answer than answer wrong.`,
 
   recent_none:             (name) => `No recent plays found for **${name}**.`,
   recent_error:            'Error fetching recent play. Check if the player exists.',

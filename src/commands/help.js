@@ -21,7 +21,7 @@ const { t } = require('../i18n');
 
 /** Os grupos, na ordem em que aparecem. A descrição sai de `help_cmd_<nome>`. */
 const GROUPS = [
-  { key: 'stats',  commands: ['profile', 'recent', 'topplays', 'score', 'compare', 'leaderboard'] },
+  { key: 'stats',  commands: ['profile', 'recent', 'topplays', 'score', 'compare', 'leaderboard', 'topscores'] },
   { key: 'pp',     commands: ['whatif', 'pp', 'simulate'] },
   { key: 'config', commands: ['link', 'language'] },
 ];

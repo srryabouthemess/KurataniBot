@@ -377,6 +377,51 @@ async function getLeaderboard(mode = DEFAULT_MODE, { limit = 50, country = null 
   return entradas;
 }
 
+// ─── Melhores scores do servidor ──────────────────────────────────────────────
+/**
+ * Se aquele servidor sabe responder "quais são as melhores plays daqui".
+ *
+ * Só o bancho.py sabe, e a diferença não é de implementação: o osu! oficial não
+ * tem endpoint disso (testados `top-plays`, `top_plays`, `topplays`,
+ * `top-scores`, `scores` e `plays` como tipo de ranking — todos respondem
+ * `invalid type specified`; a página do site é HTML renderizado no servidor), e
+ * o Ripple exige um mapa (`422 Missing parameters: md5|b`).
+ *
+ * O despacho é o mesmo do `enrichScores`: o adaptador que sabe expõe o método,
+ * e quem chama pergunta antes em vez de tentar e tratar exceção.
+ */
+const supportsTopScores = (mode = DEFAULT_MODE) => typeof apiFor(mode).topScores === 'function';
+
+/**
+ * As melhores plays do servidor, do cache quando possível.
+ *
+ * Mesmo prazo do ranking de jogadores, pela mesma razão: é a foto do servidor
+ * inteiro, não os números de alguém. E aqui o cache pesa mais, porque a busca é
+ * uma varredura de páginas (ver topScores no adaptador) em vez de uma consulta.
+ *
+ * @returns {Promise<{scores: Array, completo: boolean}>} `completo: false`
+ *   quando a varredura estourou o teto — aí a lista não é confiável e vem vazia.
+ */
+const _topScoresCache = new TtlCache({ ttlMs: RANKING_TTL_MS, max: RANKING_MAX });
+
+async function getTopScores(mode = DEFAULT_MODE, { limit = 50 } = {}) {
+  const api = apiFor(mode);
+  if (typeof api.topScores !== 'function') {
+    throw new Error(`servidores do tipo "${servers.get(mode).kind}" não expõem os melhores scores`);
+  }
+
+  const chave = `${mode}:${limit}`;
+  const guardado = _topScoresCache.get(chave);
+  metrics.cache('topScoresServidor', Boolean(guardado));
+  if (guardado) return guardado;
+
+  const resultado = await api.topScores(mode, { limit });
+  // A varredura incompleta também é guardada: repetir o comando não vai fazer o
+  // servidor encolher, e sem isso cada tentativa refaria as 30 requisições.
+  _topScoresCache.set(chave, resultado);
+  return resultado;
+}
+
 /**
  * Completa scores crus com os detalhes que só uma segunda chamada traz.
  *
@@ -410,6 +455,8 @@ module.exports = {
   getRecentScores,
   getUserBeatmapScores,
   getLeaderboard,
+  getTopScores,
+  supportsTopScores,
   getBeatmap: fetchBeatmap,
   enrichBeatmapData,
   enrichScores,
@@ -422,7 +469,12 @@ module.exports = {
   DEFAULT_MODE,
   PRIVATE_MODE,
 
-  // Só bancho.py: leitura crua para os comandos de staff.
+  // Só bancho.py: leitura crua para os comandos de staff, mais as três peças
+  // que o /topscores precisa para transformar uma linha da tabela de scores em
+  // play exibível (o mapa vem por hash, o jogador por id).
+  getServerMapByMd5:    banchoPyApi.getServerMapByMd5,
+  getServerPlayerName:  banchoPyApi.getServerPlayerName,
+  normalizeServerScore: banchoPyApi.normalizeServerScore,
   resolvePlayerId:    banchoPyApi.resolvePlayerId,
   getServerPlayerRaw: banchoPyApi.getServerPlayerRaw,
   getServerPlayerStats: banchoPyApi.getServerPlayerStats,

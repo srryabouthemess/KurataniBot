@@ -345,14 +345,21 @@ async function single(play, { mode, s }) {
  * da primeira linha e a grade toma o lugar dele, sem mudar nada nas outras
  * duas: o que muda entre os dois comandos é só o que identifica a play.
  *
+ * O `autor` abre a linha dos números quando cada item é de uma PESSOA diferente
+ * (o /topscores, que lista o servidor inteiro). No /topplays e no /score ele não
+ * existe: lá as plays são todas do mesmo jogador, e repetir o nick dez vezes
+ * seria ruído. Ele entra na linha dos números, e não no cabeçalho, para o mapa
+ * continuar sendo a primeira coisa que se lê.
+ *
  * @param {object} play
  * @param {object} opts
  * @param {string} opts.mode
  * @param {number} opts.index   posição na lista, começando em 1
  * @param {string} [opts.mapUrl] link do mapa, quando o título dele vai no bloco
+ * @param {string} [opts.autor]  quem jogou, já em markdown pronto
  * @returns {Promise<string>}
  */
-async function listItem(play, { mode, index, mapUrl = null }) {
+async function listItem(play, { mode, index, mapUrl = null, autor = null }) {
   const [pp, estrelas] = await Promise.all([ppText(play, mode), stars(play, mode)]);
 
   const grade    = emojis.rankLabel(play.rank);
@@ -367,6 +374,7 @@ async function listItem(play, { mode, index, mapUrl = null }) {
     : `**#${index}** ${grade} ${modsTexto}${sufixo}`;
 
   const numeros = join([
+    autor,
     mapUrl ? grade : null,
     pp,
     accuracy(play),

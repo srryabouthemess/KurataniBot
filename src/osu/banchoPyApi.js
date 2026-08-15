@@ -322,6 +322,164 @@ async function privateBeatmapScores(userId, beatmapId, mode) {
     ));
 }
 
+// ─── Melhores scores do servidor ─────────────────────────────────────────────
+
+const TOP_PAGE_SIZE = 100;
+
+/**
+ * Teto da varredura, em páginas. Trinta são 3000 scores e 30 requisições no
+ * pior caso — o Daycore inteiro cabe em 4.
+ */
+const TOP_MAX_PAGES = 30;
+
+/**
+ * As melhores plays do servidor inteiro, do maior pp para o menor.
+ *
+ * ── Por que é uma varredura, e não uma consulta ordenada ─────────────────────
+ * O endpoint devolve a tabela na ordem de INSERÇÃO e não aceita ordenação:
+ * `sort=pp` e `sort=pp_desc` foram testados e são silenciosamente ignorados —
+ * o mesmo comportamento do FastAPI que já mordeu o `resolvePlayerId` com o
+ * parâmetro `name`. A ordenação é nossa, e para ordenar é preciso ter tudo.
+ *
+ * `status=2` é o que torna isso viável: no bancho.py o 2 é "melhor score
+ * daquele jogador naquele mapa" (0 falhou, 1 enviado sem ser o melhor). É
+ * exatamente o conjunto que "melhores plays" quer dizer, e ele encolhe a
+ * varredura de 20+ páginas para 4 no Daycore.
+ *
+ * ── Por que o teto RECUSA em vez de truncar ──────────────────────────────────
+ * Sem ordenação do lado do servidor, uma varredura parcial não devolve uma
+ * resposta incompleta: devolve uma resposta ERRADA. As primeiras 3000 linhas
+ * por ordem de inserção não têm relação nenhuma com as 50 maiores por pp.
+ *
+ * Daí o `completo` voltar junto: num servidor grande demais o comando diz que
+ * não sabe, em vez de exibir um pódio que não é o pódio. É a mesma escolha do
+ * cache negativo do osuClient — falha visível é melhor que número errado com
+ * cara de certo.
+ *
+ * Os scores voltam CRUS, como os do `bestScores`: quem exibe enriquece só a
+ * página que vai mostrar.
+ *
+ * @returns {Promise<{scores: Array, completo: boolean}>}
+ */
+async function topScores(mode, { limit = 50 } = {}) {
+  const modeNum = servers.get(mode).gameMode;
+  const todos = [];
+  let completo = false;
+
+  for (let pagina = 1; pagina <= TOP_MAX_PAGES; pagina++) {
+    const res = await banchoV2Get(mode, '/scores', {
+      mode:      modeNum,
+      status:    2,
+      page_size: TOP_PAGE_SIZE,
+      page:      pagina,
+    });
+
+    const lote = Array.isArray(res?.data) ? res.data : [];
+    todos.push(...lote);
+
+    // Página incompleta é o fim da tabela — inclusive a vazia.
+    if (lote.length < TOP_PAGE_SIZE) { completo = true; break; }
+  }
+
+  if (!completo) return { scores: [], completo: false };
+
+  const ordenados = todos
+    .sort((a, b) => Number(b.pp ?? 0) - Number(a.pp ?? 0))
+    .slice(0, limit);
+
+  return { scores: ordenados, completo: true };
+}
+
+/**
+ * Um beatmap pelo HASH, que é como a tabela de scores o referencia.
+ *
+ * Vai pela v1 (`get_map_info`) porque o `/v2/maps?md5=` **ignora o filtro**:
+ * pedido um md5, ele devolveu a primeira página de 50 mapas, com outro hash no
+ * primeiro item. É a armadilha do FastAPI outra vez — e aqui ela seria pior que
+ * no `resolvePlayerId`, porque cada score sairia exibindo o mapa de outro.
+ *
+ * O cache é longo porque o que interessa aqui (artista, título, dificuldade,
+ * estrelas, combo máximo) não muda depois de o mapa existir.
+ */
+const MAPA_TTL_MS = 6 * 60 * 60_000;
+const MAPA_MAX    = 1000;
+const _mapasPorMd5 = new TtlCache({ ttlMs: MAPA_TTL_MS, max: MAPA_MAX });
+
+async function getServerMapByMd5(md5, mode = PRIVATE_MODE) {
+  const chave = `${mode}:${md5}`;
+
+  const guardado = _mapasPorMd5.get(chave);
+  metrics.cache('mapaPorMd5', guardado !== undefined);
+  if (guardado !== undefined) return guardado;
+
+  return dedupe(`bpmap:${chave}`, async () => {
+    const res = await banchoV1Get(mode, 'get_map_info', { md5 });
+    const mapa = res?.map ?? null;
+    _mapasPorMd5.set(chave, mapa);
+    return mapa;
+  });
+}
+
+/**
+ * O nick de um jogador pelo id.
+ *
+ * Numa lista do servidor inteiro cada linha é de uma pessoa diferente, e o
+ * score só traz o `userid`. Vai pelo `/players/{id}` (uma requisição) em vez do
+ * `getUser` do osuClient, que faria três — perfil, stats e rank — para usar
+ * um campo só.
+ */
+const NOME_TTL_MS = 30 * 60_000;
+const NOME_MAX    = 500;
+const _nomes = new TtlCache({ ttlMs: NOME_TTL_MS, max: NOME_MAX });
+
+async function getServerPlayerName(playerId, mode = PRIVATE_MODE) {
+  const chave = `${mode}:${playerId}`;
+
+  const guardado = _nomes.get(chave);
+  metrics.cache('nomeJogador', guardado !== undefined);
+  if (guardado !== undefined) return guardado;
+
+  return dedupe(`bpname:${chave}`, async () => {
+    const res = await banchoV2Get(mode, `/players/${idSegment(playerId)}`);
+    const nome = res?.data?.name ?? null;
+    _nomes.set(chave, nome);
+    return nome;
+  });
+}
+
+/**
+ * Uma linha da tabela de scores + o mapa dela → o score que o resto do bot lê.
+ *
+ * A metade do SCORE é a do `normalizeScorePrivate` (mods, acertos, acurácia,
+ * grade, data), porque a linha vem no mesmo formato v2 que ele já traduz. O que
+ * muda é a metade do MAPA: o `get_map_info` entrega artista, título e
+ * dificuldade em campos separados, então aqui eles não passam pela extração por
+ * regex que o nome de arquivo exige — e o embed sai com o artista no lugar
+ * certo, em vez de grudado no título.
+ */
+function normalizeServerScore(row, map) {
+  const base = normalizeScorePrivate({ map_id: map?.id ?? null, map_set_id: map?.set_id ?? null }, row);
+  if (!map) return base;
+
+  return {
+    ...base,
+    beatmap: {
+      ...base.beatmap,
+      id:                map.id ?? null,
+      version:           map.version ?? '?',
+      max_combo:         map.max_combo ?? null,
+      difficulty_rating: Number(map.diff ?? 0),
+    },
+    beatmapset: {
+      ...base.beatmapset,
+      id:     map.set_id ?? null,
+      title:  map.title ?? '???',
+      artist: map.artist ?? '',
+      covers: { list: `https://assets.ppy.sh/beatmaps/${map.set_id ?? ''}/covers/list.jpg` },
+    },
+  };
+}
+
 // ─── bancho.py: leitura para ações administrativas ────────────────────────────
 // A API v2 do bancho.py-ex é somente leitura, então ela serve para *consultar*
 // o estado (privilégios de quem mandou o comando, status atual de um mapa) —
@@ -489,6 +647,10 @@ module.exports = {
   recentScores,
   beatmapScores: privateBeatmapScores,
   leaderboard,
+  // Parte do contrato só neste adaptador: o osu! oficial não tem endpoint de
+  // "melhores scores do servidor", e o Ripple exige um mapa (`md5|b`). O
+  // osuClient trata o método ausente como "este servidor não sabe responder".
+  topScores,
   userUrl,
   mapUrl,
 
@@ -501,6 +663,9 @@ module.exports = {
   // Específicos deste tipo de servidor, usados pelos comandos administrativos.
   enrichScores,
   resolvePlayerId,
+  getServerMapByMd5,
+  getServerPlayerName,
+  normalizeServerScore,
   getServerPlayerRaw,
   getServerPlayerStats,
   getServerProfilePage,

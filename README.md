@@ -17,6 +17,7 @@ Funciona no Bancho, no Akatsuki e em servidores bancho.py.
 | `/score` | Scores num mapa |
 | `/compare` | Compara dois jogadores |
 | `/leaderboard` | Ranking de pp do servidor, 10 por página |
+| `/topscores` | Melhores plays do servidor inteiro (só bancho.py) |
 | `/whatif <pp>` | Quanto PP você ganharia com uma play nova |
 | `/pp <alvo>` | O que falta para chegar a um total de PP |
 | `/simulate <mapa>` | Quanto PP daria uma play específica |
