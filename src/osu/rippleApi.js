@@ -41,7 +41,7 @@ async function rippleGet(mode, caminho, params = {}) {
   const server = servers.get(mode);
 
   return withRetry(async () => {
-    await rateLimiter.acquire(`server:${server.key}`);
+    await rateLimiter.acquire(`server:${server.namespace}`);
     const res = await axios.get(`${apiBase(mode)}${caminho}`, { params, timeout: 10000 });
 
     // O Ripple responde 200 com `code` no corpo — um 404 lógico não vira
@@ -283,7 +283,7 @@ async function recentScores(userId, limit, mode) {
  */
 async function beatmapScores(userId, beatmapId, mode) {
   const server = servers.get(mode);
-  await rateLimiter.acquire(`server:${server.key}`);
+  await rateLimiter.acquire(`server:${server.namespace}`);
 
   const res = await axios.get(`${server.webUrl}/api/get_scores`, {
     params: {

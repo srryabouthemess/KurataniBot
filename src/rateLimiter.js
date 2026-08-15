@@ -83,10 +83,39 @@ const BUCKETS = {
   osuOAuth:   1,  // /oauth/token
 };
 
-// Servidores privados usam `server:<chave>`, criado sob demanda: são hosts
-// diferentes, com limites independentes — um servidor lento não tem por que
-// segurar a fila do outro.
-const PER_SERVER = 5;
+/**
+ * Servidores privados usam `server:<namespace>`, criado sob demanda: são hosts
+ * diferentes, com limites independentes — um servidor lento não tem por que
+ * segurar a fila do outro.
+ *
+ * **A chave é o NAMESPACE, e não a chave do servidor.** A variante RX é o mesmo
+ * cadastro no mesmo host (ver servers.js): com uma chave por variante, `daycore`
+ * e `daycore_rx` tinham baldes separados contra a mesma máquina, e o teto real
+ * contra ela era o dobro do configurado. Um balde que não sabe quantos clientes
+ * dele existem não é um limite.
+ *
+ * O 5 original foi cautela sem medição. Medido numa página fria de /topplays no
+ * Daycore (10 requisições: perfil, stats, rank, lista e cinco detalhes de
+ * score), com processo novo a cada rodada:
+ *
+ *              uma página        duas páginas ao mesmo tempo (19 req)
+ *    5/s    1627ms, 163ms de fila     3295ms, 2361ms de fila
+ *    6/s     919ms, sem fila          2310ms, 1495ms
+ *    8/s     910ms, sem fila          1518ms,  784ms
+ *   10/s     915ms, sem fila          1039ms,  191ms
+ *
+ * Com uma pessoa por vez a fila zera já em 6, e daí para cima a curva é plana —
+ * a diferença entre 8, 10 e 12 é ruído de rede. O que separa os números é o
+ * atendimento simultâneo, onde as requisições de duas páginas se somam no mesmo
+ * balde: é ali que o 10 ainda tira 590ms do 8.
+ *
+ * E, somado à chave por namespace, 10 é **menos** carga do que havia antes: o
+ * teto contra a máquina do servidor sai de 5+5 por variante para 10 no total.
+ *
+ * Se algum dia aparecer 429 ou lentidão do lado do servidor, este é o primeiro
+ * número a baixar — e agora ele tem uma tabela ao lado dizendo o que se perde.
+ */
+const PER_SERVER = 10;
 
 const buckets = Object.fromEntries(
   Object.entries(BUCKETS).map(([name, perSecond]) => [name, new LeakyBucket(name, perSecond)])

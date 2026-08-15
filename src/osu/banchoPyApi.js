@@ -41,7 +41,7 @@ const PRIVATE_MODE = servers.resolveKey('private') ?? servers.defaultKey();
 async function webApiGet(mode, endpoint, params = {}) {
   const server = servers.get(mode);
   const res = await withRetry(async () => {
-    await rateLimiter.acquire(`server:${server.key}`);
+    await rateLimiter.acquire(`server:${server.namespace}`);
     return axios.get(`${server.webApi}/${endpoint}`, { params, timeout: 10000 });
   });
   return res.data;
@@ -57,7 +57,7 @@ async function webApiGet(mode, endpoint, params = {}) {
 async function banchoV1Get(mode, endpoint, params = {}) {
   const server = servers.get(mode);
   const res = await withRetry(async () => {
-    await rateLimiter.acquire(`server:${server.key}`);
+    await rateLimiter.acquire(`server:${server.namespace}`);
     return axios.get(`${server.banchoV1}/${endpoint}`, {
       params,
       timeout: 10000,
@@ -71,7 +71,7 @@ async function banchoV1Get(mode, endpoint, params = {}) {
 async function banchoV2Get(mode, path, params = {}) {
   const server = servers.get(mode);
   const res = await withRetry(async () => {
-    await rateLimiter.acquire(`server:${server.key}`);
+    await rateLimiter.acquire(`server:${server.namespace}`);
     return axios.get(`${server.banchoV2}${path}`, { params, timeout: 10000 });
   });
   return res.data;
@@ -351,7 +351,7 @@ async function getServerPlayerRaw(playerId, mode = PRIVATE_MODE) {
  */
 async function getServerProfilePage(playerId, mode = PRIVATE_MODE) {
   const server = servers.get(mode);
-  await rateLimiter.acquire(`server:${server.key}`);
+  await rateLimiter.acquire(`server:${server.namespace}`);
 
   const res = await axios.get(`${server.webUrl}/u/${idSegment(playerId)}`, {
     timeout: 12000,
