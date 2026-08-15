@@ -259,3 +259,77 @@ test('site fora do ar recusa em vez de estourar', async () => {
     console.error = original;
   }
 });
+
+// ─── E onde ele NÃO pode ser aceito ──────────────────────────────────────────
+// A busca era na página inteira, e naquela página cabe muito texto que não é do
+// dono da conta: nome de mapa que ele jogou, clã, o que o tema renderizar. Quem
+// emite o desafio é justamente a parte que este fluxo não confia — e ela CONHECE
+// o código. Bastava fazê-lo aparecer em qualquer canto da página para o vínculo
+// ser criado em nome de outra pessoa.
+
+/** Página como o Shiina-Web monta: userpage é um bloco no meio do resto. */
+const paginaCom = ({ userpage = null, resto = '' }) => `
+  <html><body>
+    <div class="profile-header"><h1>Profile of alvo</h1></div>
+    ${userpage === null ? '' : `<div class="p-2 userpage mx-1 border rounded mb-2">${userpage}</div>`}
+    <div class="recent-plays">${resto}</div>
+  </body></html>`;
+
+test('código fora do bloco do userpage NÃO confirma', async () => {
+  // O ataque: o admin que pediu o vínculo sobe um mapa com o nome do código e
+  // leva o alvo a jogá-lo. O código aparece na página, mas o dono da conta
+  // nunca escreveu nada.
+  const staff = comPerfil({
+    html: paginaCom({ userpage: 'meu perfil', resto: 'jogou KB-VSEBUPGE [Insane]' }),
+  });
+
+  const original = console.error;
+  console.error = () => {};   // o desvio é logado de propósito; aqui só não polui
+  try {
+    assert.equal(
+      await staff.codeIsOnProfile({ id: 13, userpage_content: null }, 'KB-VSEBUPGE'),
+      false,
+      'aceitou um código plantado fora do que o dono da conta escreve',
+    );
+  } finally {
+    console.error = original;
+  }
+});
+
+test('perfil sem userpage nenhum recusa, mesmo com o código na página', async () => {
+  // Perfil vazio não renderiza o bloco — conferido em contas reais do Daycore.
+  // Sem bloco, "não confirmado" é a resposta certa: ou a pessoa não salvou nada,
+  // ou o tema mudou. As duas falham fechado.
+  const staff = comPerfil({ html: paginaCom({ userpage: null, resto: 'KB-VSEBUPGE' }) });
+
+  const original = console.error;
+  console.error = () => {};
+  try {
+    assert.equal(await staff.codeIsOnProfile({ id: 13, userpage_content: null }, 'KB-VSEBUPGE'), false);
+  } finally {
+    console.error = original;
+  }
+});
+
+test('o bloco sobrevive a div dentro do userpage', async () => {
+  // O conteúdo é escrito pela pessoa e pode ter div: parar no primeiro </div>
+  // cortaria o texto dela no meio, e o código depois do corte seria recusado.
+  const staff = comPerfil({
+    html: paginaCom({ userpage: '<div class="box"><b>oi</b></div> KB-VSEBUPGE' }),
+  });
+
+  assert.equal(await staff.codeIsOnProfile({ id: 13, userpage_content: null }, 'KB-VSEBUPGE'), true);
+});
+
+test('o recorte devolve só o que está dentro do bloco', async () => {
+  const { userpageBlock } = require('../src/commands/staff');
+
+  const bloco = userpageBlock(paginaCom({ userpage: 'DENTRO', resto: 'FORA' }));
+  assert.ok(bloco.includes('DENTRO'));
+  assert.ok(!bloco.includes('FORA'));
+
+  // Sem bloco e sem fechamento, devolve null — e o chamador recusa.
+  assert.equal(userpageBlock(paginaCom({ userpage: null })), null);
+  assert.equal(userpageBlock('<div class="userpage">sem fechar'), null);
+  assert.equal(userpageBlock(''), null);
+});

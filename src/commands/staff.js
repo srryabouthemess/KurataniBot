@@ -10,7 +10,7 @@ const daycore = require('../daycoreAdmin');
 const db = require('../db');
 const { t } = require('../i18n');
 const { exigirSubcomando } = require('../subcommands');
-const { logError } = require('../logger');
+const { logError, logErrorOnce } = require('../logger');
 
 // Vale para o tempo de ir ao site, editar o perfil e voltar, sem deixar código
 // válido pendurado por horas.
@@ -53,35 +53,96 @@ function decideRegister(vinculoExistente, memberId) {
 }
 
 /**
- * O código está mesmo no perfil daquela conta?
+ * O pedaço da página que o DONO da conta escreve.
  *
- * Duas fontes, e a ordem importa pouco porque as duas são baratas:
+ * O Shiina-Web marca o bloco do userpage com a classe `userpage`, e só o
+ * renderiza quando há texto salvo — conferido em perfis reais: com texto, o
+ * bloco existe e contém exatamente o que a pessoa escreveu; sem texto, ele nem
+ * aparece no HTML.
+ *
+ * A varredura conta abertura e fechamento de `<div>` em vez de parar no
+ * primeiro `</div>`: o conteúdo é escrito pela pessoa e pode ter div dentro,
+ * e cortar no meio deixaria de fora justamente o fim do texto dela.
+ *
+ * @returns {string|null} null quando não há bloco — que é o caso normal de
+ *   quem ainda não salvou nada, e também o sinal de que o tema mudou.
+ */
+function userpageBlock(html) {
+  const abertura = /<div[^>]*class=(["'])[^"']*\buserpage\b[^"']*\1[^>]*>/i.exec(String(html ?? ''));
+  if (!abertura) return null;
+
+  const inicio = abertura.index + abertura[0].length;
+  const tags = /<(\/?)div\b/gi;
+  tags.lastIndex = inicio;
+
+  let profundidade = 1;
+  for (let m = tags.exec(html); m; m = tags.exec(html)) {
+    profundidade += m[1] ? -1 : 1;
+    if (profundidade === 0) return html.slice(inicio, m.index);
+  }
+
+  // Sem fechamento: HTML truncado ou tema diferente. Não dá para dizer onde o
+  // bloco termina, então não dá para afirmar que o código está dentro dele.
+  return null;
+}
+
+/**
+ * O código está mesmo no perfil daquela conta — no pedaço que só o dono escreve?
+ *
+ * Duas fontes:
  *
  *   1. `userpage_content` da API v2. É onde o campo DEVERIA estar — o bancho
  *      declara e seleciona a coluna. Hoje ela vem `null` mesmo com o perfil
  *      preenchido, porque quem grava o userpage é o Shiina-Web e ele guarda
  *      noutro lugar da mesma base. Fica aqui porque, se um dia passarem a
  *      escrever na coluna, este é o caminho certo e mais barato.
- *   2. A página pública renderizada. É a fonte que hoje reflete o que a pessoa
- *      salvou de verdade — medido contra um perfil com código salvo.
+ *   2. O BLOCO do userpage dentro da página renderizada.
  *
- * Procurar a string na página inteira é robusto de propósito: não depende de
- * classe de CSS nem de estrutura de HTML, que mudam a cada tema. O código tem
- * entropia suficiente para casar por acaso ser desprezível, e ninguém além de
- * quem entra na conta consegue plantá-lo naquela página.
+ * ── Por que não a página inteira ──────────────────────────────────────────────
+ * Era assim, e o argumento parecia bom: procurar a string no HTML todo não
+ * depende de classe de CSS nem de estrutura, que mudam a cada tema. Só que
+ * naquela página cabe muito texto que NÃO é do dono da conta — nome de mapa que
+ * ele jogou, clã, o que mais o tema renderizar.
+ *
+ * E quem emite o desafio é justamente a parte que este fluxo não confia: um
+ * administrador do Discord que peça o vínculo de outra pessoa CONHECE o código.
+ * Bastava fazê-lo aparecer em qualquer canto daquela página — subindo um mapa
+ * com aquele nome e levando o alvo a jogá-lo, por exemplo — para o vínculo ser
+ * criado em nome dela. O recorte fecha isso: o bloco do userpage só muda por
+ * quem entra na conta.
+ *
+ * Falha FECHADO, como o resto da porta administrativa. Sem bloco, a resposta é
+ * "não confirmado" — e ela está certa nos dois casos possíveis: ou a pessoa
+ * ainda não salvou nada, ou o tema mudou e o recorte precisa ser reajustado.
  */
 async function codeIsOnProfile(player, code) {
   if (String(player?.userpage_content ?? '').includes(code)) return true;
 
+  let html;
   try {
-    const html = await osu.getServerProfilePage(player.id);
-    return html.includes(code);
+    html = await osu.getServerProfilePage(player.id);
   } catch (error) {
     // Site fora do ar não é "código ausente", mas o efeito para quem chamou é o
     // mesmo: não dá para confirmar agora. Fica no log para não virar mistério.
     logError('staff:profile', error);
     return false;
   }
+
+  const bloco = userpageBlock(html);
+  if (bloco !== null && bloco.includes(code)) return true;
+
+  // O código aparece na página, mas fora do pedaço que o dono escreve. É o
+  // sintoma de exatamente duas coisas, e as duas pedem olho humano: o tema mudou
+  // (e o recorte não acha mais o bloco), ou alguém plantou o código onde a
+  // pessoa não controla. Nenhuma delas pode virar "confirmado", e nenhuma delas
+  // deve passar em silêncio — daí o log, uma vez por causa.
+  if (html.includes(code)) {
+    logErrorOnce('staff:userpage', new Error(
+      `o código de ${player.id} aparece na página de perfil, mas fora do bloco do userpage`,
+    ));
+  }
+
+  return false;
 }
 
 /**
@@ -420,4 +481,9 @@ module.exports = {
   decideRegister,
   resolveVoucher,
   codeIsOnProfile,
+
+  // Exportado para teste: é o recorte que separa o que o dono da conta escreveu
+  // do resto da página. Se ele passar a devolver demais, a prova de posse volta
+  // a aceitar texto que a pessoa não controla — e nada na tela denunciaria.
+  userpageBlock,
 };

@@ -8,6 +8,13 @@ Revisão de segurança do projeto inteiro, e a correção do único achado explo
 
 ## 🔒 Segurança
 
+- **A prova de posse de conta passou a olhar só o que o dono escreve.** [`staff.js`](src/commands/staff.js)
+  - O `/staff confirm` procurava o código na **página de perfil inteira**, e o argumento parecia bom: não depender de classe de CSS nem de estrutura, que mudam a cada tema. Só que naquela página cabe muito texto que não é do dono da conta — nome de mapa que ele jogou, clã, o que mais o tema renderizar.
+  - E quem emite o desafio é justamente a parte que este fluxo **não confia**: um administrador do Discord que peça o vínculo de outra pessoa conhece o código. Bastava fazê-lo aparecer em qualquer canto daquela página — subindo um mapa com aquele nome e levando o alvo a jogá-lo — para o vínculo de staff ser criado em nome dela. É o mesmo furo que o desafio existe para fechar, por outra porta.
+  - Agora o código só vale dentro do bloco `userpage`, que é o pedaço que só muda por quem entra na conta. A varredura conta abertura e fechamento de `<div>` em vez de parar no primeiro `</div>`: o conteúdo é escrito pela pessoa e pode ter div dentro.
+  - **Conferido contra o servidor de verdade**, e não só contra fixture: em perfis reais do Daycore, o bloco existe e contém exatamente o texto salvo; com o código dentro dele o recorte confirma, com o código plantado no fim da página recusa. Perfil vazio **não renderiza o bloco** — e aí "não confirmado" é a resposta certa, porque quem não salvou nada também não salvou o código.
+  - Falha fechado, como o resto da porta administrativa. E o caso em que o código aparece na página **fora** do bloco vira log: é o sintoma de exatamente duas coisas — o tema mudou, ou alguém plantou o código onde a pessoa não controla —, e as duas pedem olho humano.
+
 - **Texto de fora deixou de entrar cru nos embeds.** [`markdown.js`](src/markdown.js), e os sete pontos que exibem nome de mapa ou de jogador
   - Nome de mapa, de mapper e nick são escolhidos por quem os criou, e o bot os interpolava direto em posição de markdown. Um título com `](url)` fecha o link do bot e abre outro — o embed passa a exibir um **link clicável para onde o atacante quiser**, com a credibilidade do bot em volta.
   - Não era teórico. Prova executada contra o código real, com o título `Musica](https://sitefalso.example/roubo) [clique aqui`: o embed saía com `[MC - Musica](https://sitefalso.example/roubo)`. Custa nada explorar — mapa graveyard não passa por moderação, e `/score <id>` exibe o título de qualquer mapa sem nem precisar jogá-lo.
