@@ -11,7 +11,7 @@
  * exclusivo de servidor privado, então o endereço é sempre o oficial.
  */
 
-require('dotenv').config();
+require('dotenv').config({ quiet: true });
 const axios = require('axios');
 
 const db = require('./db');

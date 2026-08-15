@@ -11,7 +11,7 @@
  * A dependência é de mão única — o osuClient importa daqui, e não o contrário.
  */
 
-require('dotenv').config();
+require('dotenv').config({ quiet: true });
 const db = require('./db');
 const servers = require('./servers');
 const { modsToBits, stripClassic, difficultyMods } = require('./mods');

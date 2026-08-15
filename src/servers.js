@@ -30,7 +30,7 @@
 // isso quem o carregasse antes do dotenv (um script, um teste, outro ponto de
 // entrada) montaria um registro vazio — e aí todo servidor privado cairia
 // calado no oficial. É idempotente.
-require('dotenv').config();
+require('dotenv').config({ quiet: true });
 
 const OFFICIAL_KEY = 'official';
 

@@ -2,7 +2,7 @@ const { REST, Routes } = require('discord.js');
 const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
-require('dotenv').config();
+require('dotenv').config({ quiet: true });
 const db = require('./db');
 const { logError } = require('./logger');
 

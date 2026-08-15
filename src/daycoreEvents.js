@@ -24,7 +24,7 @@
  * log — inclusive a reconexão, que o client tenta sozinho.
  */
 
-require('dotenv').config();
+require('dotenv').config({ quiet: true });
 const { createClient } = require('redis');
 
 const { logError } = require('./logger');

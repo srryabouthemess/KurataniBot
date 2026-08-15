@@ -41,16 +41,42 @@ test('nunca passa do teto de chamadas em voo', async () => {
 });
 
 test('o item lento não segura os outros', async () => {
-  // Em lotes de 2, o primeiro lote [200, 10] levaria 200ms antes de o segundo
-  // começar, e o total passaria de 400ms. Com a piscina, os rápidos passam pelo
-  // lento e o total fica perto do próprio lento.
-  const itens = [200, 10, 10, 10, 10, 10];
+  // O que se quer provar é SOBREPOSIÇÃO: enquanto o lento está em voo, a outra
+  // posição vaga e revaga, e os cinco rápidos passam por ele. Em lotes de 2, o
+  // rápido que caiu no mesmo lote do lento é o único que roda — os outros quatro
+  // esperam o lote fechar.
+  //
+  // Isto era cronometrado ("total < 300ms" para um item de 200ms), e o relógio
+  // errava dos dois lados. Falhava sozinho quando a máquina estava carregada —
+  // medido a 303, 306, 343 e 352ms em quatro rodadas com o runner disputando
+  // 32 processos em 12 núcleos —, e ainda assim APROVAVA uma implementação em
+  // lotes, que sai em ~220ms e passaria pelo limite folgado. Sem timer nenhum,
+  // o caso vale nas duas pontas.
+  let liberarOLento;
+  const oLentoEmVoo = new Promise(resolve => { liberarOLento = resolve; });
 
-  const inicio = Date.now();
-  await mapLimit(itens, 2, async (ms) => { await sleep(ms); });
-  const total = Date.now() - inicio;
+  const comecaram = [];
+  const itens = ['lento', 'r1', 'r2', 'r3', 'r4', 'r5'];
 
-  assert.ok(total < 180 + 120, `levou ${total}ms; os rápidos ficaram presos ao lento`);
+  const trabalho = mapLimit(itens, 2, async (item) => {
+    comecaram.push(item);
+    if (item === 'lento') await oLentoEmVoo;
+    return item;
+  });
+
+  // setImmediate corre depois da fila de microtarefas: quando ele chega, tudo
+  // que podia andar sem esperar o lento já andou.
+  await new Promise(resolve => setImmediate(resolve));
+  const enquantoOLentoRodava = [...comecaram];
+
+  liberarOLento();
+  const saida = await trabalho;
+
+  assert.deepEqual(
+    enquantoOLentoRodava, itens,
+    'os rápidos ficaram presos ao lento em vez de reaproveitar a posição livre',
+  );
+  assert.deepEqual(saida, itens, 'a ordem da entrada precisa sobreviver');
 });
 
 test('lista vazia não trava nem estoura', async () => {

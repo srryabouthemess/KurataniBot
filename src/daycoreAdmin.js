@@ -28,7 +28,7 @@
  * para o Prometheus do bancho.
  */
 
-require('dotenv').config();
+require('dotenv').config({ quiet: true });
 const { createClient } = require('redis');
 const osu = require('./osuClient');
 const { logError } = require('./logger');
