@@ -103,7 +103,16 @@ module.exports = {
         strings: s,
         // O contexto do canal acompanha a página em que os botões pararam.
         onPage: page => mapContext.remember(interaction, pageMapId.get(page), mode),
-        prefetch: page => osu.getBeatmapFile(recents[page]?.beatmap_id ?? recents[page]?.beatmap?.id),
+        // Mesma ordem do /topplays: primeiro o enriquecimento (uma requisição
+        // por play em servidor privado), depois o arquivo do mapa.
+        prefetch: async (page) => {
+          const proxima = recents[page];
+          if (!proxima) return;
+
+          const [scored] = await osu.enrichScores([proxima], mode);
+          const [cheia]  = await osu.enrichBeatmapData([scored]);
+          if (cheia?.beatmap?.id) await osu.getBeatmapFile(cheia.beatmap.id);
+        },
       });
     } catch (error) {
       logError('recent', error);

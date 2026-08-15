@@ -33,6 +33,15 @@ Sessão de aparência, que virou de latência no fim: os comandos que mostram pl
   - O teste trava a corrida sem depender de cronômetro: o perfil só resolve **depois** que a busca de scores começou, então uma versão em série vira impasse. Verificado que ele falha — serializando as duas chamadas de propósito, sai "a busca de scores esperou o perfil, em vez de sair junto".
   - **Medido e descartado na mesma sessão:** camada em memória na frente do `beatmap_meta` (0,023ms por leitura), cache do idioma no `t()` (0,016ms), leitura do `.osu` do SQLite (0,045ms) e a montagem dos cinco blocos de uma página (0,5–1,2ms, com **zero** de event loop parado). O trabalho local não é mais gargalo — a sessão de desempenho de hoje cedo já colheu isso, e o que sobrou na tela é rede.
 
+- **O detalhe de score do bancho.py virou cache, e o prefetch passou a aquecer a página inteira.** [`banchoPyApi.js`](src/osu/banchoPyApi.js), [`topplays.js`](src/commands/topplays.js), [`recent.js`](src/commands/recent.js)
+  - `/scores/{id}` era o endpoint mais caro do bot em servidor privado: **uma requisição por score**, cinco por página do `/topplays` e uma por play do `/recent`, sem nada guardado. Medido numa página de cinco: 294ms numa rodada, 843ms na seguinte.
+  - O dado é quase imutável — acertos, combo, mods e data de um score que já aconteceu não mudam mais. O TTL de uma hora existe pelo que **pode** mudar: o pp, quando quem hospeda roda um recálculo em massa.
+  - Só o payload da v2 é guardado, e não o score normalizado: o lado v1 da mescla muda conforme quem chama (o `beatmapScores` monta um sintético a partir do mapa), então guardar o resultado pronto serviria a mescla de um no outro.
+  - O `prefetch` da paginação adiantava só o `.osu` da próxima página — o que era certo quando o cálculo de PP dominava o relógio. Hoje o cálculo custa zero quente, e o que sobrou na virada de página era justamente o enriquecimento. Agora ele vem primeiro, e o arquivo depois.
+  - **Os dois andam juntos de propósito:** o prefetch sem o cache dobraria as requisições (a página seria enriquecida uma vez para aquecer e outra para exibir). E ele criou uma corrida nova — clicar em ▶️ antes de o aquecimento terminar pedia os mesmos scores de novo —, coberta pelo `dedupe` do `inflight.js`, o mesmo que o download de `.osu` já usava.
+  - Medido contra o Daycore, com 85 top plays: **página exibida de novo, 306ms → 1ms**; **virada de página, 1640ms → 1ms** (a página seguinte já aquecida). A taxa de acerto do cache numa sessão de quatro páginas ficou em 40%.
+  - Falha não entra no cache, resposta vazia entra (é um resultado, e sem isso ela era repedida a cada exibição), e score sem id não cria chave: uma chave `${mode}:undefined` faria scores diferentes dividirem a mesma entrada. Os ids também são separados por servidor — são de cada instalação, e servir o de um no outro exibiria a play errada com um número plausível.
+
 ## 🐛 Correções
 
 - **`+HD` deixou de tirar a estrela das mãos da API.** [`mods.js`](src/mods.js), [`pp.js`](src/pp.js)

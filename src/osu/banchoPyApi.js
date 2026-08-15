@@ -16,9 +16,12 @@
 const axios = require('axios');
 const servers = require('../servers');
 const rateLimiter = require('../rateLimiter');
+const metrics = require('../metrics');
 const { decodeMods } = require('../mods');
 const { idSegment } = require('../urlSafe');
 const { withRetry } = require('../retry');
+const { dedupe } = require('../inflight');
+const { TtlCache } = require('../ttlCache');
 
 // O servidor padrão de quem consulta sem dizer qual. Hoje só os comandos
 // administrativos, que operam uma instância só.
@@ -222,13 +225,62 @@ async function resolvePlayerId(username, mode = PRIVATE_MODE) {
 }
 
 // Busca detalhes completos de cada score via v2
+/**
+ * Detalhe de um score, guardado porque ele quase não muda.
+ *
+ * Este endpoint é o mais caro do bot em servidor privado: é UMA requisição POR
+ * SCORE, cinco por página do /topplays e uma por play do /recent, e nada disso
+ * era reaproveitado. Medido numa página de cinco: 294ms numa rodada, 843ms na
+ * seguinte — de 25% a 75% do tempo total do comando.
+ *
+ * E o dado é quase imutável: acertos, combo, mods e data de um score que já
+ * aconteceu não mudam mais. O TTL existe pelo que PODE mudar — o pp, quando
+ * quem hospeda roda um recálculo em massa. Uma hora é o prazo de um número
+ * ficar velho na tela; guardar para sempre não é possível por causa disso.
+ *
+ * Só o payload da v2 entra aqui, e não o score já normalizado: o lado v1 da
+ * mescla muda conforme quem chama (o beatmapScores monta um sintético a partir
+ * do mapa), então guardar o resultado pronto serviria a mescla de um no outro.
+ */
+const DETALHE_TTL_MS = 60 * 60_000;
+const DETALHE_MAX    = 2000;
+const _detalhes = new TtlCache({ ttlMs: DETALHE_TTL_MS, max: DETALHE_MAX });
+
+async function scoreDetail(scoreId, mode) {
+  const chave = `${mode}:${scoreId}`;
+
+  const guardado = _detalhes.get(chave);
+  metrics.cache('scoreDetalhe', guardado !== undefined);
+  // `!== undefined` e não um truthy: a resposta vazia é um resultado legítimo
+  // ("o servidor não sabe o detalhe deste score") e também merece ser guardada,
+  // senão ela é repedida a cada exibição.
+  if (guardado !== undefined) return guardado;
+
+  // O dedupe cobre a corrida que o prefetch da paginação criou: quem clica em ▶️
+  // antes de a próxima página terminar de ser aquecida pede os mesmos scores de
+  // novo, e sem isto os dois pedidos saem (ver inflight.js).
+  return dedupe(`bpscore:${chave}`, async () => {
+    const res = await banchoV2Get(mode, `/scores/${idSegment(scoreId)}`);
+    const detalhe = res?.data ?? null;
+    _detalhes.set(chave, detalhe);
+    return detalhe;
+  });
+}
+
 async function enrichScores(v1Scores, mode = PRIVATE_MODE) {
   return Promise.all(
     v1Scores.map(async (s) => {
+      // Sem id não há o que buscar nem o que guardar — e uma chave
+      // `${mode}:undefined` faria scores diferentes dividirem a mesma entrada.
+      if (s.score_id === undefined || s.score_id === null) {
+        return normalizeScorePrivate(s, null);
+      }
+
       try {
-        const res = await banchoV2Get(mode, `/scores/${idSegment(s.score_id)}`);
-        return normalizeScorePrivate(s, res?.data ?? null);
+        return normalizeScorePrivate(s, await scoreDetail(s.score_id, mode));
       } catch {
+        // Falha não entra no cache: uma queda de rede viraria "sem detalhe" por
+        // uma hora, que é o mesmo cuidado que o rememberFCpp já toma no pp.js.
         return normalizeScorePrivate(s, null);
       }
     })

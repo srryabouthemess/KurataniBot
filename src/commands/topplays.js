@@ -98,12 +98,20 @@ module.exports = {
         buildEmbed,
         strings: s,
         onPage: page => mapContext.remember(interaction, pageMapId.get(page), mode),
-        // Baixa os .osu da próxima página enquanto a pessoa lê a atual: o
-        // gargalo de uma página nova é o limite de download, não o cálculo.
-        prefetch: page => Promise.all(
-          plays.slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE)
-            .map(play => osu.getBeatmapFile(play.beatmap?.id ?? play.beatmap_id))
-        ),
+        // Adianta a próxima página inteira enquanto a pessoa lê a atual.
+        //
+        // O enriquecimento vem PRIMEIRO, e não os arquivos: em servidor privado
+        // ele é uma requisição por score (294–843ms medidos numa página de
+        // cinco), enquanto o .osu quase sempre já está no cache em disco. Era o
+        // que sobrava no relógio depois que o cálculo de PP saiu dele.
+        prefetch: async (page) => {
+          const proxima = plays.slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE);
+          const cheias  = await osu.enrichBeatmapData(await osu.enrichScores(proxima, mode));
+
+          await Promise.all(
+            cheias.map(play => play.beatmap?.id && osu.getBeatmapFile(play.beatmap.id))
+          );
+        },
       });
     } catch (error) {
       logError('topplays', error);
