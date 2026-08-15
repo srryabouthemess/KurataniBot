@@ -7,8 +7,25 @@
  * custa requisições extras (estrelas, pp de FC, metadados do mapa). Aqui não há
  * nada a enriquecer: a resposta do ranking já traz tudo que a linha mostra.
  *
- * Então as 100 vêm numa chamada só e a paginação acontece em memória — clicar em
- * ▶️ não toca a rede, e o `prefetch` da paginação não tem serventia nenhuma.
+ * E o limite das APIs é por REQUISIÇÃO, não por linha de resposta: as 100
+ * posições cabem num parâmetro (`limit=100` no bancho.py, `l=100` no Ripple),
+ * então buscá-las custa UMA chamada nos servidores privados e duas no oficial,
+ * cuja página é fixa em 50. Medido pelos contadores do rateLimiter, uma execução
+ * de cada, processo novo:
+ *
+ *   /leaderboard  Bancho      2 requisições  (+1 de OAuth, que vale ~1h)
+ *   /leaderboard  Daycore     1
+ *   /leaderboard  Akatsuki    1
+ *   /topplays     Daycore    11              ← uma página, para comparar
+ *
+ * Contra baldes de 8/s (`osuApi`) e 10/s por servidor privado, nenhuma das
+ * medições esperou na fila.
+ *
+ * Buscar tudo de uma vez é o que gasta MENOS. Uma requisição por clique em ▶️
+ * daria até dez para quem folheia até o fim, e repetiria a busca ao voltar para
+ * uma página já vista; assim, folhear custa zero — e o `prefetch` da paginação
+ * não tem serventia nenhuma. Repetido dentro do TTL do cache, o comando inteiro
+ * custa zero: 3, 0 e 0 requisições em três execuções seguidas.
  *
  * ── O número da esquerda é a POSIÇÃO NA LISTA ────────────────────────────────
  * E não o rank que a API mandou, que nem sempre existe e nem sempre significa o
