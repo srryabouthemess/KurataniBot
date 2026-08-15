@@ -1,7 +1,7 @@
 const { SlashCommandBuilder, EmbedBuilder, ApplicationIntegrationType, InteractionContextType, MessageFlags } = require('discord.js');
 const osu = require('../osuClient');
 const servers = require('../servers');
-const { resolvePlayer } = require('../userLink');
+const { resolvePlayer, fetchPlayer } = require('../userLink');
 const mapContext = require('../mapContext');
 const playEmbed = require('../embeds/play');
 const { paginate } = require('../pagination');
@@ -42,14 +42,16 @@ module.exports = {
       return interaction.reply({ content: resolved.error, flags: MessageFlags.Ephemeral });
     }
 
-    const { username, mode } = resolved;
+    const { mode } = resolved;
     await interaction.deferReply();
 
     try {
-      const user = await osu.getUser(username, mode);
+      // Perfil e plays na mesma viagem quando o link já deu o id (ver userLink).
+      const { user, scores: plays } = await fetchPlayer(
+        resolved,
+        id => osu.getBestScores(id, FETCH_LIMIT, mode),
+      );
       if (!user) return interaction.editReply(s.player_not_found);
-
-      const plays = await osu.getBestScores(user.id, FETCH_LIMIT, mode);
       if (plays.length === 0) return interaction.editReply(s.topplays_none);
 
       const totalPages = Math.ceil(plays.length / PAGE_SIZE);

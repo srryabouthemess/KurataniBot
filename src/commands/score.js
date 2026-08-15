@@ -1,7 +1,7 @@
 const { SlashCommandBuilder, EmbedBuilder, ApplicationIntegrationType, InteractionContextType, MessageFlags } = require('discord.js');
 const osu = require('../osuClient');
 const servers = require('../servers');
-const { resolvePlayer } = require('../userLink');
+const { resolvePlayer, fetchPlayer } = require('../userLink');
 const mapContext = require('../mapContext');
 const playEmbed = require('../embeds/play');
 const { paginate } = require('../pagination');
@@ -58,7 +58,7 @@ module.exports = {
       return interaction.reply({ content: resolved.error, flags: MessageFlags.Ephemeral });
     }
 
-    const { username, mode } = resolved;
+    const { mode } = resolved;
 
     // Sem a opção `map`, usa o mapa da mensagem respondida ou o último que
     // apareceu no canal — é o que torna possível responder à play de outra
@@ -77,8 +77,10 @@ module.exports = {
     await interaction.deferReply();
 
     try {
-      const [user, beatmap] = await Promise.all([
-        osu.getUser(username, mode),
+      // As três chamadas saem juntas: o mapa nunca dependeu do jogador, e os
+      // scores dele no mapa só esperavam pelo id — que o link já deu (userLink).
+      const [{ user, scores }, beatmap] = await Promise.all([
+        fetchPlayer(resolved, id => osu.getUserBeatmapScores(id, beatmapId, mode)),
         osu.getBeatmap(beatmapId),
       ]);
 
@@ -89,8 +91,6 @@ module.exports = {
       if (!beatmap && servers.isOfficial(mode)) {
         return interaction.editReply(s.simulate_map_not_found);
       }
-
-      const scores = await osu.getUserBeatmapScores(user.id, beatmapId, mode);
 
       // O mapa embrulhado como se fosse uma play: é a forma que o embeds/play
       // sabe ler, e evita um segundo caminho de leitura de metadados só para o

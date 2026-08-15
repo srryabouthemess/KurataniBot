@@ -2,9 +2,9 @@
 
 ---
 
-# Sessão de 2026-08-14 (embeds)
+# Sessão de 2026-08-14 (embeds e latência)
 
-Sessão de aparência: os comandos que mostram play passaram a desenhar todos do mesmo jeito, no formato denso que a comunidade de osu! já lê sem pensar (o do BathBot). Duas correções de número apareceram no caminho, encontradas justamente por olhar as telas lado a lado.
+Sessão de aparência, que virou de latência no fim: os comandos que mostram play passaram a desenhar todos do mesmo jeito, no formato denso que a comunidade de osu! já lê sem pensar (o do BathBot); duas correções de número apareceram no caminho, encontradas justamente por olhar as telas lado a lado; e a medição seguinte mostrou que o trabalho local deixou de ser gargalo — o que sobrou é rede, e parte dela era espera que não comprava nada.
 
 ## ✨ Novos recursos
 
@@ -22,6 +22,16 @@ Sessão de aparência: os comandos que mostram play passaram a desenhar todos do
 
 - **O score total aparece nas plays de servidor privado.** [`banchoPyApi.js`](src/osu/banchoPyApi.js), [`rippleApi.js`](src/osu/rippleApi.js)
   - A pontuação (a de milhões, não o pp) já vinha da API oficial e era descartada pelos dois adaptadores. Zero vira `null`: na tela, um zero pareceria play sem nota.
+
+## ⚡ Desempenho
+
+- **O perfil e os scores do jogador passaram a sair na mesma viagem.** [`userLink.js`](src/userLink.js), e os seis comandos que consultam jogador
+  - Todo comando fazia `getUser(nome)` e só então `getBestScores(user.id)`, a segunda esperando a primeira porque precisa do id. Só que quem usou `/link` **já entrega o id**: o `resolvePlayer` devolve o `osu_id` de propósito, justamente para poupar o `resolvePlayerId` de cada comando. A espera pela primeira chamada não comprava nada.
+  - Medido em três rodadas, do perfil até a lista de 100 top plays: **638ms → 367ms no Bancho (-271ms)** e **388ms → 175ms no Daycore (-213ms)**. Vale para `/recent`, `/topplays`, `/score`, `/profile`, `/whatif` e `/pp`; o `/score` ganha um terceiro paralelo, porque os metadados do mapa nunca dependeram do jogador.
+  - **Só vale para quem tem link.** Escrevendo o nome (`k!rs mrekk`) não há o que paralelizar — o id só existe depois da primeira resposta, e o caminho antigo continua ali.
+  - **O `allSettled` não é preciosismo.** Em paralelo a busca de scores parte de um id ainda não validado, e o caso comum de id inválido (conta apagada, link antigo) é justamente ela estourar. Com `Promise.all` esse erro venceria a corrida e o comando responderia "erro ao buscar" no lugar de "jogador não encontrado" — trocando uma resposta que explica o que fazer por uma que não explica nada. A ordem de quem manda ficou explícita: perfil que falha sobe, perfil vazio encerra ali, e só com o jogador existindo é que a falha dos scores importa.
+  - O teste trava a corrida sem depender de cronômetro: o perfil só resolve **depois** que a busca de scores começou, então uma versão em série vira impasse. Verificado que ele falha — serializando as duas chamadas de propósito, sai "a busca de scores esperou o perfil, em vez de sair junto".
+  - **Medido e descartado na mesma sessão:** camada em memória na frente do `beatmap_meta` (0,023ms por leitura), cache do idioma no `t()` (0,016ms), leitura do `.osu` do SQLite (0,045ms) e a montagem dos cinco blocos de uma página (0,5–1,2ms, com **zero** de event loop parado). O trabalho local não é mais gargalo — a sessão de desempenho de hoje cedo já colheu isso, e o que sobrou na tela é rede.
 
 ## 🐛 Correções
 

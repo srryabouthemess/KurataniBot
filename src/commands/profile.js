@@ -1,7 +1,7 @@
 const { SlashCommandBuilder, EmbedBuilder, ApplicationIntegrationType, InteractionContextType, MessageFlags } = require('discord.js');
 const osu = require('../osuClient');
 const servers = require('../servers');
-const { resolvePlayer } = require('../userLink');
+const { resolvePlayer, fetchPlayer } = require('../userLink');
 const emojis = require('../emojis');
 const { t } = require('../i18n');
 const { logError } = require('../logger');
@@ -43,15 +43,19 @@ module.exports = {
       return interaction.reply({ content: resolved.error, flags: MessageFlags.Ephemeral });
     }
 
-    const { username, mode } = resolved;
+    const { mode } = resolved;
     await interaction.deferReply();
 
     try {
-      const user = await osu.getUser(username, mode);
+      // A top play sai junto do perfil quando o link já deu o id (ver userLink):
+      // só o enriquecimento dela é que precisa esperar, porque parte do score.
+      const { user, scores: rawBest } = await fetchPlayer(
+        resolved,
+        id => osu.getBestScores(id, 1, mode),
+      );
       if (!user) return interaction.editReply(s.player_not_found);
 
       const stats     = user.statistics;
-      const rawBest   = await osu.getBestScores(user.id, 1, mode);
       const bestPlays = await osu.enrichScores(rawBest, mode);
       const bestPlay  = bestPlays[0] || null;
 
