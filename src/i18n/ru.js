@@ -191,7 +191,7 @@ module.exports = ({ ADMIN }) => ({
   admin_priv_fetch_failed: `❌ Сейчас не удалось получить ваши привилегии на ${ADMIN}. Попробуйте позже.`,
   admin_missing_priv:      (role) => `❌ У вас нет прав для этого на ${ADMIN} (ваша роль там: **${role}**).`,
   admin_redis_unconfigured:`❌ Подключение к ${ADMIN} не настроено (отсутствует \`REDIS_HOST\` в \`.env\`). Без него бот не может применять изменения на сервере.`,
-  admin_redis_unreachable: (err) => `❌ Сейчас нет связи с ${ADMIN} (Redis недоступен${err ? `: ${err}` : ''}). Ничего не изменено.`,
+  admin_redis_unreachable: `❌ Сейчас нет связи с ${ADMIN} (Redis недоступен). Ничего не изменено.`,
   admin_action_failed:     '❌ Произошла ошибка при выполнении действия. Ничего не подтверждено — проверьте состояние перед повтором.',
 
   ann_title:               (status) => `Карта теперь ${status}`,

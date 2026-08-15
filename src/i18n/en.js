@@ -191,7 +191,7 @@ module.exports = ({ ADMIN }) => ({
   admin_priv_fetch_failed: `❌ Could not read your ${ADMIN} privileges right now. Try again shortly.`,
   admin_missing_priv:      (role) => `❌ You do not have permission for this on ${ADMIN} (your role there: **${role}**).`,
   admin_redis_unconfigured:`❌ The ${ADMIN} connection is not configured (missing \`REDIS_HOST\` in \`.env\`). Without it the bot cannot apply changes to the server.`,
-  admin_redis_unreachable: (err) => `❌ Could not reach ${ADMIN} right now (Redis unreachable${err ? `: ${err}` : ''}). Nothing was changed.`,
+  admin_redis_unreachable: `❌ Could not reach ${ADMIN} right now (Redis unreachable). Nothing was changed.`,
   admin_action_failed:     '❌ An error occurred while performing the action. Nothing was confirmed — check the state before retrying.',
 
   ann_title:               (status) => `Map is now ${status}`,

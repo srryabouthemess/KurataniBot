@@ -202,7 +202,10 @@ module.exports = ({ ADMIN }) => ({
   admin_priv_fetch_failed: `❌ Não consegui consultar seus privilégios no ${ADMIN} agora. Tente de novo em instantes.`,
   admin_missing_priv:      (role) => `❌ Você não tem permissão para isso no ${ADMIN} (seu cargo lá: **${role}**).`,
   admin_redis_unconfigured:`❌ A conexão com o ${ADMIN} não está configurada (falta \`REDIS_HOST\` no \`.env\`). Sem ela o bot não consegue aplicar mudanças no servidor.`,
-  admin_redis_unreachable: (err) => `❌ Não consegui falar com o ${ADMIN} agora (Redis inacessível${err ? `: ${err}` : ''}). Nada foi alterado.`,
+  // Sem o motivo técnico: ele vai para o log (ver staffGuard.js), porque a
+  // mensagem do cliente Redis costuma trazer host e porta, e quem lê a resposta
+  // no Discord não faz nada com isso.
+  admin_redis_unreachable: `❌ Não consegui falar com o ${ADMIN} agora (Redis inacessível). Nada foi alterado.`,
   admin_action_failed:     '❌ Ocorreu um erro ao executar a ação. Nada foi confirmado — verifique o estado antes de tentar de novo.',
 
   ann_title:               (status) => `Mapa agora está ${status}`,

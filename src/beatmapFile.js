@@ -20,6 +20,11 @@ const { dedupe } = require('./inflight');
 const { idSegment } = require('./urlSafe');
 const { withRetry } = require('./retry');
 
+// 16MB. O maior `.osu` do cache real tem alguns poucos MB (mapa de maratona com
+// dezenas de milhares de objetos), então o teto é generoso o bastante para nunca
+// ser sentido em uso normal — ele existe para o caso anormal.
+const MAX_FILE_BYTES = 16 * 1024 * 1024;
+
 /**
  * @returns {Promise<Uint8Array>}
  * @throws se o download falhar em todas as tentativas
@@ -37,6 +42,13 @@ async function getBeatmapFile(mapId) {
       const res = await axios.get(`https://osu.ppy.sh/osu/${idSegment(mapId)}`, {
         responseType: 'arraybuffer',
         timeout: 15000,
+        // Teto de tamanho, e não só de tempo: um corpo enorme entraria inteiro
+        // na memória e depois no cache.db, e o teto do cache conta ARQUIVOS, não
+        // bytes. O host é fixo, então isto exige o osu! respondendo o que não
+        // devia — mas é a única resposta que o bot lê sem limite nenhum, e o
+        // .osu de maratona não passa de ~2MB.
+        maxContentLength: MAX_FILE_BYTES,
+        maxBodyLength:    MAX_FILE_BYTES,
       });
 
       const arr = new Uint8Array(res.data);

@@ -206,19 +206,22 @@ async function rankBeatmap(beatmapId, status, frozen = true) {
  * conta do **Discord**, e o vínculo entre as duas vive só aqui dentro
  * (`staff_links`, alimentada pelo /staff register).
  *
- * Isso deixava o log do servidor contar meia verdade: quem tem Administrator no
- * Discord pode vincular a própria conta ao nick de outro staff e agir com o
- * privilégio dele — e a auditoria do servidor culparia o dono da conta, sem
- * nenhum rastro do Discord. O registro que aponta a conta real (`admin_actions`)
- * fica dentro do próprio bot, ou seja, dentro do componente que teria sido
- * comprometido.
+ * Isso deixava o log do servidor contar meia verdade: quando o vínculo era
+ * auto-declarado, quem tinha Administrator no Discord podia apontar a própria
+ * conta para o nick de outro staff e agir com o privilégio dele — e a auditoria
+ * do servidor culparia o dono da conta, sem nenhum rastro do Discord. O registro
+ * que aponta a conta real (`admin_actions`) fica dentro do próprio bot, ou seja,
+ * dentro do componente que teria sido comprometido.
  *
  * Anexar o Discord ao motivo faz o log do **servidor** guardar as duas pontas,
  * então a auditoria deixa de depender de o bot estar íntegro.
  *
- * Não resolve a raiz: o /staff register continua sendo auto-declarado, e a
- * correção de verdade é provar posse da conta (código temporário no perfil do
- * osu!, ou OAuth do próprio servidor) — ainda por fazer.
+ * A raiz foi resolvida depois, e este comentário já a descreveu como pendente
+ * por mais tempo do que devia: o `/staff register` só emite um código, e quem
+ * cria o vínculo é o `/staff confirm`, depois de achar esse código no userpage
+ * da conta de jogo — página que só muda por quem entra nela (ver commands/
+ * staff.js). A assinatura continua valendo pelo que ela sempre fez: amarrar a
+ * ação a uma conta do Discord dentro do log de quem recebeu a ação.
  */
 const SIGNATURE_MARK = 'via KurataniBot';
 

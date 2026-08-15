@@ -28,6 +28,7 @@
 
 const { getStaffLink } = require('./db');
 const daycore = require('./daycoreAdmin');
+const { logError } = require('./logger');
 
 /**
  * Resolve quem está rodando o comando e confirma que pode.
@@ -69,14 +70,22 @@ async function resolveStaff(interaction, requiredPriv, s) {
 /**
  * Confirma que dá para falar com o Redis antes de prometer qualquer ação.
  * Sem isso o comando publicaria no vazio e reportaria sucesso.
+ *
+ * O MOTIVO da falha vai para o log, não para o Discord: a mensagem do cliente
+ * Redis costuma trazer host e porta da infraestrutura, e quem lê a resposta não
+ * faz nada com isso — quem diagnostica tem o log. É o mesmo princípio que o
+ * logger.js já aplica ao não imprimir o `.config` do axios.
+ *
  * @returns {Promise<string|null>} mensagem de erro, ou null se estiver tudo certo
  */
 async function checkRedisOrError(s) {
   const check = await daycore.checkConnection();
   if (check.ok) return null;
-  return check.reason === 'unconfigured'
-    ? s.admin_redis_unconfigured
-    : s.admin_redis_unreachable(check.error ?? '');
+
+  if (check.reason === 'unconfigured') return s.admin_redis_unconfigured;
+
+  logError('staffGuard:redis', new Error(check.error ?? 'sem detalhe'));
+  return s.admin_redis_unreachable;
 }
 
 module.exports = { resolveStaff, checkRedisOrError };
