@@ -252,13 +252,61 @@ async function getUser(username, mode = DEFAULT_MODE) {
   return user;
 }
 
+// ─── Cache de top plays ───────────────────────────────────────────────────────
 /**
- * Scores crus, sem enriquecer: quem chama enriquece só a página que vai exibir.
- * Enriquecer as 100 buscadas de uma vez seria uma rajada de requisições.
+ * A lista de melhores plays, do cache quando possível.
+ *
+ * Quatro comandos pedem a mesma coisa — /topplays, /whatif e /pp buscam as 100,
+ * o /profile busca a primeira —, e ela não era guardada em lugar nenhum. Olhar o
+ * próprio perfil costuma ser exatamente essa sequência, e cada comando pagava
+ * 375ms (Bancho) ou 194–262ms (Daycore) pela lista que o anterior acabou de
+ * buscar.
+ *
+ * **O mesmo TTL do cache de usuário, e isso não é coincidência.** Os dois
+ * aparecem no mesmo embed: o pp do jogador na linha do autor sai do `getUser`, e
+ * a lista logo abaixo sai daqui. Com prazos diferentes, dava para ver um pp já
+ * atualizado sobre uma lista velha — o par ficaria contando duas histórias. Com
+ * o mesmo prazo, ou os dois estão frescos ou os dois estão velhos.
+ *
+ * O preço é esse mesmo: uma top play nova pode demorar até um minuto para
+ * aparecer. É o mesmo preço que o perfil já cobra, pela mesma razão.
+ *
+ * A chave inclui o LIMITE. O /profile pede 1 e o /topplays pede 100; servir a
+ * lista curta para quem pediu a longa cortaria 99 plays em silêncio, e o
+ * /whatif responderia com uma conta feita sobre uma play só.
+ *
+ * A lista é entregue por referência, e não copiada: conferido que nenhum
+ * chamador ordena no lugar — os quatro fazem `[...plays].sort()` ou `slice()`.
  */
-const getBestScores = (userId, limit = 10, mode = DEFAULT_MODE) =>
-  apiFor(mode).bestScores(userId, limit, mode);
+const BEST_TTL_MS = USER_CACHE_TTL_MS;
+const BEST_MAX    = 300;
+const _bestCache = new TtlCache({ ttlMs: BEST_TTL_MS, max: BEST_MAX });
 
+async function getBestScores(userId, limit = 10, mode = DEFAULT_MODE) {
+  const chave = `${mode}:${userId}:${limit}`;
+
+  const guardado = _bestCache.get(chave);
+  metrics.cache('topPlays', Boolean(guardado));
+  if (guardado) return guardado;
+
+  const scores = await apiFor(mode).bestScores(userId, limit, mode);
+  // Falha não chega aqui: ela sobe para quem chamou, e nada é guardado.
+  _bestCache.set(chave, scores);
+  return scores;
+}
+
+/**
+ * As plays recentes, SEM cache — e é o único lugar onde isso é decisão, não
+ * esquecimento.
+ *
+ * Aqui a resposta certa é sempre a mais nova: quem acabou de jogar e roda `k!rs`
+ * está perguntando justamente pelo que um cache de um minuto esconderia. O
+ * comando existe para responder "o que eu acabei de fazer", e um valor guardado
+ * responderia "o que você fez antes".
+ *
+ * Scores crus, sem enriquecer: quem chama enriquece só a página que vai exibir.
+ * Enriquecer as 50 buscadas de uma vez seria uma rajada de requisições.
+ */
 const getRecentScores = (userId, limit = 1, mode = DEFAULT_MODE) =>
   apiFor(mode).recentScores(userId, limit, mode);
 
