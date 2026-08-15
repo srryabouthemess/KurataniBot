@@ -400,8 +400,17 @@ const supportsTopScores = (mode = DEFAULT_MODE) => typeof apiFor(mode).topScores
  * no Ripple, e mesmo entre bancho.py depende do front-end. Quem não tem devolve
  * lista vazia por este mesmo despacho, e quem exibe simplesmente não desenha
  * nada — nenhum comando precisa saber de qual servidor está falando.
+ *
+ * O "mesmo entre bancho.py" acima é o motivo do segundo teste. Perguntar só se
+ * o método existe responde pelo TIPO do servidor, e isso bastava enquanto todo
+ * bancho.py rodava Shiina-Web; com o EZPP Farm deixou de bastar, e a resposta
+ * passou a depender do servidor. Adaptador que sabe distinguir diz como.
  */
-const supportsPlayerGroups = (mode = DEFAULT_MODE) => typeof apiFor(mode).playerGroups === 'function';
+const supportsPlayerGroups = (mode = DEFAULT_MODE) => {
+  const api = apiFor(mode);
+  if (typeof api.playerGroups !== 'function') return false;
+  return typeof api.hasPlayerGroups === 'function' ? api.hasPlayerGroups(mode) : true;
+};
 
 /**
  * Os grupos daquele jogador, ou lista vazia se o servidor não tiver o conceito.

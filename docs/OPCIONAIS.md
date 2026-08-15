@@ -17,11 +17,12 @@ Cada seção é independente — ligue só o que você quer.
 
 ## Servidores privados
 
-O **Akatsuki** já vem de fábrica (`akatsuki` e `akatsuki_rx`). Para escolher quais embutidos carregar:
+O **Akatsuki** (`akatsuki`, `akatsuki_rx`) e o **EZPP Farm** (`ezppfarm`, `ezppfarm_rx`) já vêm de fábrica. Para escolher quais embutidos carregar:
 
 ```bash
-BUILTIN_SERVERS=            # nenhum
-BUILTIN_SERVERS=akatsuki    # só esse (padrão)
+BUILTIN_SERVERS=                     # nenhum
+BUILTIN_SERVERS=akatsuki,ezppfarm    # os dois (padrão, se a linha não existir)
+BUILTIN_SERVERS=ezppfarm             # só esse
 ```
 
 Qualquer instância bancho.py entra pelo `.env`:
@@ -41,7 +42,17 @@ Só a URL é obrigatória. A chave (`daycore`, `daycore_rx`) vira o valor da op�
 
 As URLs de API seguem a convenção do [onl-docker](https://github.com/osu-NoLimits/onl-docker) — `api.<domínio>` e `a.<domínio>` —, sobrescrevíveis com `SERVER_<CHAVE>_API` e `SERVER_<CHAVE>_AVATARS`. `SERVER_<CHAVE>_LABEL` muda o nome exibido. O Discord limita 25 escolhas por opção.
 
-**"bancho.py" aqui é a stack completa.** Rank global e top plays vêm da Shiina-Web (o front-end), não do bancho.py. Outro front-end responde o resto e falha nesses dois — perfil sai *Unranked* e `/topplays` vazio.
+**Rank global e top plays vêm do front-end, não do bancho.py.** Na stack padrão quem responde é a Shiina-Web (`get_rank_cache`, `get_player_scores`, em `<site>/api/v1`). Se o seu servidor roda outro front-end, diga:
+
+```bash
+SERVER_<CHAVE>_WEB=none
+```
+
+e o bot busca as duas coisas no próprio bancho.py — o rank sai de `get_player_info` (que ainda traz o rank do país de brinde) e as plays do `get_player_scores` de lá. É o que o EZPP Farm usa. Sem isso, os pedidos vão para um endereço que devolve a página HTML: o perfil sai *Unranked* e o `/topplays` vazio, sem erro nenhum no log.
+
+O mesmo campo aceita um endereço, para front-end que serve a API noutro lugar: `SERVER_<CHAVE>_WEB=https://front.exemplo.org/api/v1`.
+
+**Sem Shiina-Web não há grupos de jogador.** Os selos embaixo do nick (✅ Legit, ❌ Cheating…) são desenho dela — o `/leaderboard` e o `/topscores` simplesmente não os exibem, e o `/topscores` deixa de filtrar por grupo.
 
 **Ripple/Hanayo não se configura pelo `.env`.** A API é outra (tudo em `<site>/api/v1`), então precisa de adaptador próprio — o `kind: 'ripple'` existe e atende o Akatsuki. Para outro, acrescente aos embutidos em `src/servers.js`.
 

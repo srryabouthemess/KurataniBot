@@ -17,9 +17,14 @@
  * a uma quando o servidor foge do padrão.
  *
  * ATENÇÃO ao que "suportar bancho.py" quer dizer: o rank global e as top plays
- * vêm de `get_rank_cache` e `get_player_scores`, que são da **Shiina-Web**, não
- * do bancho.py. Um servidor com outro front-end responde o resto e falha nesses
- * dois — por isso o campo é `web`, separado da `api`.
+ * saíam de `get_rank_cache` e `get_player_scores`, que são da **Shiina-Web**,
+ * não do bancho.py — por isso o campo `webApi` é separado da `api`.
+ *
+ * Servidor com outro front-end (o EZPP Farm é um) declara `webApi: null`, ou
+ * `SERVER_<chave>_WEB=none` no `.env`, e o adaptador busca as duas coisas no
+ * próprio bancho.py. O campo continua existindo porque as duas fontes não são
+ * intercambiáveis: os endpoints têm o mesmo nome e devolvem formatos
+ * diferentes, então quem lê precisa saber de qual está falando.
  *
  * Cada servidor com `RELAX=true` ganha uma segunda entrada `<chave>_rx`: é o
  * mesmo cadastro (mesmo `namespace`, mesmo link do usuário), mudando só o
@@ -61,6 +66,40 @@ function titleCase(key) {
   return key.charAt(0).toUpperCase() + key.slice(1);
 }
 
+/**
+ * Monta um servidor bancho.py a partir dos endereços já resolvidos.
+ *
+ * Vive separado da leitura do `.env` porque os embutidos precisam da mesma
+ * forma sem passar por ela — antes um servidor de fábrica teria de repetir à
+ * mão os sete campos, e um deles ficaria para trás no dia em que a forma
+ * mudasse.
+ *
+ * `webApi` é o ÚNICO campo que aceita `null`, e é o que separa os dois mundos:
+ * `null` quer dizer "este servidor não tem Shiina-Web". Ver o comentário do
+ * cabeçalho e o `temShiina` no adaptador.
+ */
+function banchoPyServer({ key, label, site, api, avatars, webApi }) {
+  return {
+    key,
+    label,
+    kind:      'banchopy',
+    namespace: key,
+    gameMode:  0,
+    relax:     false,
+    webUrl:    site,
+    avatars,
+    // Sem api key: nenhum dos endpoints que o bot usa pede autenticação, e o
+    // campo existia sem nunca ser enviado a lugar nenhum — credencial parada só
+    // aparece em backup e captura de tela. Se algum endpoint passar a exigir,
+    // volta aqui junto do código que a usa.
+    // Shiina-Web: get_rank_cache, get_player_scores.
+    webApi,
+    // bancho.py-ex: busca exata por nome (v1) e leitura de scores/mapas (v2).
+    banchoV1:  `${api}/v1`,
+    banchoV2:  `${api}/v2`,
+  };
+}
+
 function buildBanchoPy(key) {
   const site = envFor(key, 'URL');
   if (!site) {
@@ -75,25 +114,22 @@ function buildBanchoPy(key) {
     return null;
   }
 
-  return {
+  // SERVER_<chave>_WEB: endereço da API do front-end. O padrão vale para quem
+  // roda a Shiina-Web; `none` é para servidor com outro front-end, e faz o
+  // adaptador buscar rank e scores direto no bancho.py.
+  const front = envFor(key, 'WEB');
+  const webApi = front?.toLowerCase() === 'none'
+    ? null
+    : (front?.replace(/\/+$/, '') ?? `${web}/api/v1`);
+
+  return banchoPyServer({
     key,
-    label:     envFor(key, 'LABEL') ?? titleCase(key),
-    kind:      'banchopy',
-    namespace: key,
-    gameMode:  0,
-    relax:     false,
-    webUrl:    web,
-    avatars:   envFor(key, 'AVATARS') ?? subdomain(web, 'a') ?? `${web}/a`,
-    // Sem api key: nenhum dos endpoints que o bot usa pede autenticação, e o
-    // campo existia sem nunca ser enviado a lugar nenhum — credencial parada só
-    // aparece em backup e captura de tela. Se algum endpoint passar a exigir,
-    // volta aqui junto do código que a usa.
-    // Shiina-Web: get_rank_cache, get_player_scores.
-    webApi:    `${web}/api/v1`,
-    // bancho.py-ex: busca exata por nome (v1) e leitura de scores/mapas (v2).
-    banchoV1:  `${api}/v1`,
-    banchoV2:  `${api}/v2`,
-  };
+    label:   envFor(key, 'LABEL') ?? titleCase(key),
+    site:    web,
+    api,
+    avatars: envFor(key, 'AVATARS') ?? subdomain(web, 'a') ?? `${web}/a`,
+    webApi,
+  });
 }
 
 /**
@@ -156,6 +192,29 @@ const BUILTINS = {
     relax:     false,
     webUrl:    'https://akatsuki.gg',
     avatars:   'https://a.akatsuki.gg',
+    builtinRelax: true,
+  },
+
+  // O EZPP Farm é bancho.py, mas o front-end NÃO é a Shiina-Web: `ez-pp.farm`
+  // é uma aplicação Svelte, e `/api/v1/...` lá devolve o HTML da página em vez
+  // de JSON. Daí o `webApi: null` — sem ele, o rank global e as top plays
+  // tentariam ler uma página inteira como se fosse a resposta de uma API.
+  //
+  // Tudo o que a Shiina-Web serviria tem contraparte no próprio bancho.py
+  // (`get_player_info` com `scope=stats` traz o rank, `get_player_scores` traz
+  // as plays), e é de lá que o adaptador busca quando este campo é nulo.
+  //
+  // Entra de fábrica pelo mesmo motivo do Akatsuki: servidor grande, API
+  // pública e estável, e nada aqui depende de configuração de quem hospeda.
+  ezppfarm: {
+    ...banchoPyServer({
+      key:     'ezppfarm',
+      label:   'EZPP Farm',
+      site:    'https://ez-pp.farm',
+      api:     'https://api.ez-pp.farm',
+      avatars: 'https://a.ez-pp.farm',
+      webApi:  null,
+    }),
     builtinRelax: true,
   },
 };

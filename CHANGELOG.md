@@ -2,6 +2,46 @@
 
 ---
 
+# Sessão de 2026-08-15 (EZPP Farm)
+
+O bot atende mais um servidor: o **[EZPP Farm](https://ez-pp.farm/)**, com as chaves `ezppfarm` e `ezppfarm_rx`. Ele é bancho.py, mas foi o primeiro a chegar **sem a Shiina-Web** — e era exatamente disso que o registro avisava desde que virou configuração: "um servidor com outro front-end responde o resto e falha nesses dois". O aviso deixou de ser uma nota e virou um caminho de código.
+
+## ✨ Novos recursos
+
+- **EZPP Farm, de fábrica.** [`servers.js`](src/servers.js)
+  - Entra como embutido pelo mesmo critério do Akatsuki — servidor grande, API pública e estável, e nada aqui depende de configuração de quem hospeda. Some com `BUILTIN_SERVERS` como o outro, e `BUILTIN_SERVERS=ezppfarm` agora é uma escolha que faz sentido.
+  - Vem com a variante Relax (`ezppfarm_rx`), que num servidor chamado *EZ PP farm* não é detalhe: o `mode=4` responde e tem ranking próprio — o #1 vanilla tem 27.054pp, o #1 relax tem 46.732pp.
+  - Como é o primeiro embutido do tipo bancho.py, a montagem do servidor saiu de dentro da leitura do `.env` (`banchoPyServer`). Antes um embutido teria de repetir os sete campos à mão, e um deles ficaria para trás no dia em que a forma mudasse.
+
+- **Servidor bancho.py sem Shiina-Web.** [`banchoPyApi.js`](src/osu/banchoPyApi.js), [`servers.js`](src/servers.js), [`osuClient.js`](src/osuClient.js)
+  - `webApi: null` no registro (ou `SERVER_<CHAVE>_WEB=none` no `.env`) diz "este não tem front-end Shiina-Web", e as três chamadas que dependiam dela passam a sair do próprio bancho.py.
+  - **A falha que isso evita era muda, e é o ponto todo.** `ez-pp.farm/api/v1/get_player_scores` não dá 404: responde **200 com o HTML da página**. `res.scores ?? []` leria isso como lista vazia — perfil *Unranked* e `/topplays` sem nada, sem uma linha no log. Por isso a decisão é declarada no registro e não sondada: quem hospeda sabe qual front-end subiu, e adivinhar custaria uma requisição por consulta para descobrir algo que não muda.
+  - **O rank veio de graça, e com um campo a mais.** Sem `get_rank_cache`, a posição sai de `get_player_info` com `scope=stats` — o mesmo endpoint que o `resolvePlayerId` já usa —, que devolve `rank` **e** `country_rank` por modo. O `get_rank_cache` só dava o global; o `normalizeUserPrivate` já aceitava os dois desde sempre e recebia `null` no segundo. Zero vira `null` de propósito (`|| null`, não `??`): quem nunca jogou aquele modo vem com zero, e "rank 0" na tela é pior que *Unranked*.
+  - **Os dois `get_player_scores` têm o mesmo nome e formatos diferentes.** A Shiina-Web achata o mapa (`map_id`, `map_set_id`, `map_name`) e chama o id de `score_id`; o bancho.py aninha o mapa em `beatmap` e chama o id de `id`. A tradução (`nativeScore`) acontece **na entrada**, e é o que mantém o `normalizeScorePrivate` e o `enrichScores` sem um segundo caminho — eles nunca ficam sabendo de qual dos dois o score veio.
+  - O `map_name` é **remontado** no formato de nome de arquivo (`Artista - Título (Mapper) [Dificuldade]`) em vez de repassar os campos separados, que a resposta nativa traz prontos. Parece o caminho mais longo e é de propósito: os campos separados exigiriam um `if` dentro do normalizador, e é justamente ele que não pode saber a diferença.
+  - O combo passou a cair para o lado v1 (`v2?.max_combo ?? v1.max_combo ?? null`), porque a resposta nativa já o traz. Na Shiina-Web o campo não existe e o `?? null` continua valendo — nada muda para o Daycore.
+
+## 🐛 Correções
+
+- **`supportsPlayerGroups` respondia pelo tipo do servidor, e passou a responder pelo servidor.** [`osuClient.js`](src/osuClient.js), [`banchoPyApi.js`](src/osu/banchoPyApi.js)
+  - Perguntar só se o adaptador expõe o método bastava enquanto todo bancho.py rodava Shiina-Web. Com o EZPP Farm deixou de bastar: o mesmo adaptador atende os dois casos, e a resposta certa depende do servidor.
+  - Sem isso, o `/leaderboard` baixaria **uma página de 30-70KB por linha** para raspar selos que não existem naquele front-end, e devolveria lista vazia depois — dez páginas de HTML por comando, para nada. O adaptador agora corta antes de pedir, e o `hasPlayerGroups` diz por servidor.
+  - Efeito no EZPP Farm: o `/leaderboard` sai sem selos e o `/topscores` sem o filtro de grupo, que é o correto — o conceito é desenho da Shiina-Web, não do bancho.py.
+
+## 🧪 Testes
+
+- `test/banchoPyNativo.test.js` (novo) trava a tradução do score nativo campo a campo. O estrago dela seria **mudo**: nada estoura, os campos só chegam vazios no embed — mapa `???`, dificuldade `?`, capa quebrada. Inclui os casos degenerados (score sem `beatmap`, mapa sem mapper), onde o risco é inventar `undefined - undefined [?]` como título.
+- `test/servers.test.js` ganhou o `SERVER_<CHAVE>_WEB` (`none`, ausente e endereço próprio) e os embutidos do EZPP Farm, incluindo que a variante RX herda o `webApi: null` e o namespace.
+- Os casos novos do `WEB` ficaram num bloco **separado**, e está escrito por quê: o `load` limpa o `process.env` e o `defaultKey` lê o `OSU_MODE` na hora da chamada, então recarregar o registro no meio de outro bloco apaga o padrão dos casos seguintes dele. Aconteceu ao escrever isto.
+- Conferido ao vivo contra o servidor, nos dois modos: perfil com rank global e de país, top plays com título/dificuldade/mods/combo corretos, plays recentes, ranking e avatares. 428 testes passando.
+
+## 📝 Documentação
+
+- [`docs/OPCIONAIS.md`](docs/OPCIONAIS.md) e [`.env.example`](.env.example) explicam o `SERVER_<CHAVE>_WEB`, o sintoma de esquecê-lo (perfil *Unranked* e `/topplays` vazio, sem erro) e a ausência de grupos sem Shiina-Web.
+- O `.env.example` ganhou o `BUILTIN_SERVERS` **comentado**, com o aviso em maiúsculas: ausente = todos, mas **vazia = nenhum**. Deixar a linha ativa e vazia no arquivo de exemplo desligaria Akatsuki e EZPP Farm para quem o copiasse.
+
+---
+
 # Sessão de 2026-08-15 (ranking do servidor)
 
 Dois comandos novos, e duas perguntas que o bot só sabia responder sobre uma pessoa passaram a valer para o servidor: `/leaderboard` mostra o ranking de pp de qualquer servidor que o bot atenda — Bancho (global ou por país), Akatsuki, Akatsuki RX, Daycore e Daycore RX —, e `/topscores` mostra as melhores plays do servidor inteiro, onde a API permite.

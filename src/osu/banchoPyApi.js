@@ -33,11 +33,24 @@ const PRIVATE_MODE = servers.resolveKey('private') ?? servers.defaultKey();
 // nenhuma chamada do bot escreve na API oficial.)
 
 /**
+ * Se aquele servidor tem o front-end Shiina-Web.
+ *
+ * O registro decide (`webApi: null`), e não este arquivo: quem hospeda sabe
+ * qual front-end subiu, e adivinhar por sondagem custaria uma requisição a
+ * cada consulta para descobrir algo que não muda.
+ *
+ * Vale para o servidor, não para o tipo — o mesmo adaptador atende bancho.py
+ * com Shiina-Web (Daycore) e sem (EZPP Farm).
+ */
+const temShiina = (mode) => Boolean(servers.get(mode).webApi);
+
+/**
  * GET na API do front-end (Shiina-Web) do servidor.
  *
  * É um serviço DIFERENTE do bancho.py, apesar de conviverem no mesmo domínio:
- * `get_rank_cache` e `get_player_scores` existem aqui e não lá. Um servidor
- * bancho.py com outro front-end responde o resto e falha nestes dois.
+ * `get_rank_cache` e `get_player_scores` existem aqui e não lá. Só chame
+ * depois de conferir o `temShiina` — num servidor sem Shiina-Web este endereço
+ * responde 200 com o HTML da página, que viraria "resposta vazia" silenciosa.
  */
 async function webApiGet(mode, endpoint, params = {}) {
   const server = servers.get(mode);
@@ -142,7 +155,10 @@ function normalizeScorePrivate(v1, v2) {
  
   const pp = parseFloat(v2?.pp ?? v1.pp ?? 0);
   const acc = parseFloat(v2?.acc ?? v1.acc ?? 0) / 100;
-  const max_combo = v2?.max_combo ?? null;
+  // O combo cai para o lado v1 porque a resposta nativa do bancho.py já o traz
+  // (a da Shiina-Web não tem o campo, e ali o `?? null` continua valendo). Sem
+  // isso, uma falha no detalhe da v2 apagaria um número que já estava em mãos.
+  const max_combo = v2?.max_combo ?? v1.max_combo ?? null;
   const grade = v2?.grade ?? v1.grade ?? 'F';
  
   const mods = v2
@@ -195,6 +211,51 @@ function normalizeScorePrivate(v1, v2) {
         list: `https://assets.ppy.sh/beatmaps/${v1.map_set_id ?? ''}/covers/list.jpg`,
       },
     },
+  };
+}
+
+/**
+ * Score do `get_player_scores` do bancho.py na forma que a Shiina-Web entrega.
+ *
+ * Os dois endpoints têm o mesmo nome e devolvem coisas diferentes: a Shiina-Web
+ * manda o mapa achatado (`map_id`, `map_set_id`, `map_name`) e o id em
+ * `score_id`; o bancho.py manda o mapa aninhado em `beatmap` e o id em `id`.
+ * Traduzir aqui, na entrada, é o que mantém o `normalizeScorePrivate` e o
+ * `enrichScores` sem um segundo caminho — eles nunca ficam sabendo de qual dos
+ * dois o score veio.
+ *
+ * O `map_name` é remontado no formato do nome de arquivo (`Artista - Título
+ * (Mapper) [Dificuldade]`) porque é dele que o normalizador extrai título e
+ * dificuldade por regex. Reconstruir a string em vez de passar os campos
+ * separados parece o caminho mais longo, e é de propósito: os campos separados
+ * exigiriam um `if` dentro do normalizador, e é justamente ele que não pode
+ * saber a diferença.
+ */
+function nativeScore(s) {
+  const bm = s.beatmap ?? {};
+
+  const nomeDoMapa = bm.title
+    ? `${bm.artist ?? ''} - ${bm.title}${bm.creator ? ` (${bm.creator})` : ''} [${bm.version ?? '?'}]`
+    : '';
+
+  return {
+    score_id:    s.id ?? null,
+    map_id:      bm.id ?? null,
+    map_set_id:  bm.set_id ?? null,
+    map_name:    nomeDoMapa,
+    pp:          s.pp,
+    acc:         s.acc,
+    mods:        s.mods,
+    grade:       s.grade,
+    score:       s.score,
+    play_time:   s.play_time,
+    max_combo:   s.max_combo ?? null,
+    // O normalizador já lê `n300`/`n100`/`n50`/`nmiss` — repassados com o mesmo
+    // nome, sem tradução.
+    n300:  s.n300,
+    n100:  s.n100,
+    n50:   s.n50,
+    nmiss: s.nmiss,
   };
 }
 
@@ -510,6 +571,12 @@ const GRUPOS_MAX    = 300;
 const _grupos = new TtlCache({ ttlMs: GRUPOS_TTL_MS, max: GRUPOS_MAX });
 
 async function getServerPlayerGroups(playerId, mode = PRIVATE_MODE) {
+  // Grupo é um selo desenhado pela Shiina-Web, e o que se lê aqui é o HTML dela.
+  // Noutro front-end a página existe e responde 200, só que sem os selos: a
+  // raspagem devolveria lista vazia depois de baixar 30-70KB por jogador, uma
+  // vez por linha do /leaderboard. Quem não tem o conceito não paga por ele.
+  if (!temShiina(mode)) return [];
+
   const chave = `${mode}:${playerId}`;
 
   const guardado = _grupos.get(chave);
@@ -644,37 +711,59 @@ async function fetchUser(username, mode) {
     banchoV2Get(mode, `/players/${idSegment(playerId)}/stats/${idSegment(modeNum)}`),
   ]);
 
-  // O endpoint de stats não retorna rank — buscamos via leaderboard do
-  // front-end. Conta nova, sem cache ainda, ou front sem esse endpoint: o rank
-  // fica null e sai como "Unranked", em vez de derrubar a consulta inteira.
+  // O endpoint de stats da v2 não retorna rank; de onde ele vem depende do
+  // front-end. Em qualquer um dos dois caminhos, falhar aqui deixa o rank em
+  // null (sai como "Unranked") em vez de derrubar a consulta inteira — o perfil
+  // inteiro não se perde por causa de uma posição.
   let globalRank = null;
+  let countryRank = null;
+
   try {
-    const rankRes = await webApiGet(mode, 'get_rank_cache', { id: playerId, mode: modeNum });
-    if (Array.isArray(rankRes) && rankRes.length > 0) {
-      globalRank = rankRes[rankRes.length - 1].rank ?? null;
+    if (temShiina(mode)) {
+      const rankRes = await webApiGet(mode, 'get_rank_cache', { id: playerId, mode: modeNum });
+      if (Array.isArray(rankRes) && rankRes.length > 0) {
+        globalRank = rankRes[rankRes.length - 1].rank ?? null;
+      }
+    } else {
+      // O bancho.py devolve as duas posições dentro das estatísticas, indexadas
+      // por modo — e de graça, já que é o mesmo endpoint do resolvePlayerId.
+      // Aqui sai o rank do país junto, que o `get_rank_cache` não dá.
+      const info = await banchoV1Get(mode, 'get_player_info', { id: playerId, scope: 'stats' });
+      const st = info?.player?.stats?.[modeNum];
+      // `|| null` e não `?? null`: quem nunca jogou aquele modo vem com zero, e
+      // "rank 0" na tela é pior do que "Unranked".
+      globalRank  = st?.rank || null;
+      countryRank = st?.country_rank || null;
     }
   } catch {
     // segue sem rank
   }
 
-  return normalizeUserPrivate(playerRes?.data ?? null, statsRes?.data ?? null, mode, globalRank);
+  return normalizeUserPrivate(playerRes?.data ?? null, statsRes?.data ?? null, mode, globalRank, countryRank);
 }
 
-async function bestScores(userId, limit, mode) {
-  const res = await webApiGet(mode, 'get_player_scores', {
-    id: userId, mode: servers.get(mode).gameMode, scope: 'best', limit,
-  });
-  // Cru de propósito: enriquecer as N buscadas de uma vez seria uma rajada de
-  // requisições. Quem chama enriquece só a página que vai exibir.
+/**
+ * As plays daquele jogador, do front-end quando existe e do bancho.py quando
+ * não — os dois endpoints se chamam `get_player_scores` e aceitam os mesmos
+ * parâmetros, mudando só o host e o formato da resposta (ver nativeScore).
+ *
+ * Cru de propósito: enriquecer as N buscadas de uma vez seria uma rajada de
+ * requisições. Quem chama enriquece só a página que vai exibir.
+ */
+async function playerScores(userId, limit, scope, mode) {
+  const params = { id: userId, mode: servers.get(mode).gameMode, scope, limit };
+
+  if (!temShiina(mode)) {
+    const res = await banchoV1Get(mode, 'get_player_scores', params);
+    return (res?.scores ?? []).map(nativeScore);
+  }
+
+  const res = await webApiGet(mode, 'get_player_scores', params);
   return res.scores ?? [];
 }
 
-async function recentScores(userId, limit, mode) {
-  const res = await webApiGet(mode, 'get_player_scores', {
-    id: userId, mode: servers.get(mode).gameMode, scope: 'recent', limit,
-  });
-  return res.scores ?? [];
-}
+const bestScores   = (userId, limit, mode) => playerScores(userId, limit, 'best', mode);
+const recentScores = (userId, limit, mode) => playerScores(userId, limit, 'recent', mode);
 
 /**
  * Teto de colocados por resposta. Não é escolha nossa: o endpoint valida
@@ -739,6 +828,10 @@ module.exports = {
   topScores,
   // Idem: grupo é coisa do front-end Shiina-Web, e nem todo servidor tem.
   playerGroups: getServerPlayerGroups,
+  // Diferente dos outros dois, esta capacidade não se decide pelo TIPO do
+  // servidor: entre os bancho.py, uns têm Shiina-Web e outros não. Por isso o
+  // adaptador expõe o método e, junto, quem responde por servidor.
+  hasPlayerGroups: temShiina,
   userUrl,
   mapUrl,
 
@@ -750,6 +843,9 @@ module.exports = {
   // E para o recorte dos grupos, que sai de HTML indentado — o tipo de coisa
   // que passa a devolver zero sem ninguém perceber.
   parseGroups,
+  // E para a tradução do score nativo, cujo estrago seria mudo: os campos que
+  // ela erra não estouram, só chegam vazios no embed.
+  nativeScore,
 
   // Específicos deste tipo de servidor, usados pelos comandos administrativos.
   enrichScores,

@@ -2,7 +2,7 @@
 
 Bot de Discord para estatísticas do **osu!** — perfil, plays recentes, top plays, comparações e simulações de PP.
 
-Funciona no Bancho, no Akatsuki e em servidores bancho.py.
+Funciona no Bancho, no Akatsuki, no EZPP Farm e em servidores bancho.py.
 
 ---
 
@@ -64,7 +64,7 @@ Pronto. O bot registra os comandos sozinho.
 
 Nada disto é necessário — o bot já funciona no Bancho com o que está acima.
 
-- **Servidores privados** (Akatsuki já vem pronto; bancho.py se configura em duas linhas)
+- **Servidores privados** (Akatsuki e EZPP Farm já vêm prontos; bancho.py se configura em duas linhas)
 - **Comandos por texto** — `k!rs mrekk` em vez de `/rs`
 - **Emojis de rank** nas plays
 - **Usar em DM**

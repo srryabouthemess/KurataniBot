@@ -53,6 +53,7 @@ test('configuração nova', async t => {
     assert.equal(s.webApi,   'https://daycore.org/api/v1');
   });
 
+
   await t.test('RX é entrada própria, com a mesma conta', () => {
     assert.equal(servers.get('daycore_rx').label, 'Daycore RX');
     assert.equal(servers.get('daycore_rx').gameMode, 4);
@@ -164,6 +165,36 @@ test('entradas inválidas não derrubam as válidas', async t => {
   });
 });
 
+// ─── Front-end do servidor ───────────────────────────────────────────────────
+// Nem todo bancho.py roda a Shiina-Web, e o rank global e as plays saem dela.
+// `webApi: null` é como o registro diz "este não tem", e o adaptador então
+// busca as duas coisas no próprio bancho.py.
+//
+// Cada caso recarrega o registro, então isto vive num teste separado: o `load`
+// limpa o `process.env`, e o `defaultKey` lê o OSU_MODE na hora da chamada —
+// chamar `load` no meio de outro bloco apaga o padrão dos casos seguintes dele.
+
+test('front-end declarado no .env', async t => {
+  await t.test('SERVER_<chave>_WEB=none marca servidor sem Shiina-Web', () => {
+    const s = load({ SERVERS: 'outro', SERVER_OUTRO_URL: 'https://outro.org', SERVER_OUTRO_WEB: 'none' });
+    assert.equal(s.get('outro').webApi, null);
+    // O resto do endereçamento não muda: só o front-end saiu.
+    assert.equal(s.get('outro').banchoV1, 'https://api.outro.org/v1');
+  });
+
+  await t.test('ausente, o padrão da Shiina-Web continua valendo', () => {
+    const s = load({ SERVERS: 'outro', SERVER_OUTRO_URL: 'https://outro.org' });
+    assert.equal(s.get('outro').webApi, 'https://outro.org/api/v1');
+  });
+
+  await t.test('também aceita um endereço próprio', () => {
+    const s = load({ SERVERS: 'outro', SERVER_OUTRO_URL: 'https://outro.org', SERVER_OUTRO_WEB: 'https://front.outro.org/api/v1/' });
+    // Barra do fim removida — quem chama concatena `/endpoint`, e a dobrada
+    // daria 404 em todo pedido.
+    assert.equal(s.get('outro').webApi, 'https://front.outro.org/api/v1');
+  });
+});
+
 // ─── Servidores embutidos ────────────────────────────────────────────────────
 // O osu! oficial é fixo porque é um só. O Akatsuki vem de fábrica por ser
 // grande e ter API pública estável — mas dá para desligar, senão quem hospeda o
@@ -199,10 +230,40 @@ test('embutidos', async t => {
     assert.equal(s.get('daycore_rx').rx, 0);
   });
 
+  await t.test('o EZPP Farm vem por padrão, com a variante RX', () => {
+    const s = comEmbutidos();
+    assert.equal(s.get('ezppfarm').kind, 'banchopy');
+    assert.equal(s.get('ezppfarm').label, 'EZPP Farm');
+    assert.equal(s.get('ezppfarm_rx').relax, true);
+    // bancho.py: Relax é o modo 4, ao contrário do Ripple logo acima.
+    assert.equal(s.get('ezppfarm_rx').gameMode, 4);
+  });
+
+  await t.test('o EZPP Farm declara que não tem Shiina-Web', () => {
+    // É o que manda o adaptador buscar rank e plays no próprio bancho.py. Sem
+    // isto, as duas coisas iriam para `ez-pp.farm/api/v1`, que responde 200 com
+    // o HTML da página — e a falha seria muda, não um erro.
+    const s = comEmbutidos();
+    assert.equal(s.get('ezppfarm').webApi, null);
+    assert.equal(s.get('ezppfarm').banchoV1, 'https://api.ez-pp.farm/v1');
+    assert.equal(s.get('ezppfarm').banchoV2, 'https://api.ez-pp.farm/v2');
+    assert.equal(s.get('ezppfarm').avatars,  'https://a.ez-pp.farm');
+    // A variante RX é o mesmo cadastro: herda o endereço e o namespace.
+    assert.equal(s.get('ezppfarm_rx').webApi, null);
+    assert.equal(s.namespace('ezppfarm_rx'), s.namespace('ezppfarm'));
+  });
+
   await t.test('dá para desligar', () => {
     const s = load({ BUILTIN_SERVERS: '' });
     assert.equal(s.has('akatsuki'), false);
+    assert.equal(s.has('ezppfarm'), false);
     assert.equal(s.get('official').kind, 'official', 'o oficial não é um embutido opcional');
+  });
+
+  await t.test('dá para ligar só um deles', () => {
+    const s = load({ BUILTIN_SERVERS: 'ezppfarm' });
+    assert.equal(s.has('ezppfarm'), true);
+    assert.equal(s.has('akatsuki'), false);
   });
 
   await t.test('embutido desconhecido é ignorado com aviso, não derruba', () => {
