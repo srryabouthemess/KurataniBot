@@ -17,6 +17,13 @@ Um comando novo, e o quarto método do contrato dos adaptadores: `/leaderboard` 
   - A acurácia da linha passa pelo idioma, e não pelo `toFixed(2)` do embed de play: ela divide a linha com um pp de cinco dígitos e com o número de plays, os dois já formatados assim. Em pt-BR o `toFixed` daria `32.138,70pp • 98.26%`, dois separadores decimais na mesma linha.
   - A bandeira é montada dos indicadores regionais em vez de `:flag_br:`, que depende da tabela de emojis do Discord e sairia como texto cru para um código que não esteja lá. `XX` — o que o bancho.py grava para conta sem país — não vira bandeira nenhuma.
 
+## 🐛 Correções
+
+- **O `/top` driblava o cooldown do `/topplays`.** [`cooldowns.js`](src/cooldowns.js)
+  - Encontrado ao acrescentar o `/lb` na mesma tabela. O bucket é escolhido pelo **nome invocado**, e a lista de aliases cobria `wi`, `rs`, `c` e `choke` — mas não `top`. Resultado: o comando mais caro do bot (o `heavy`, que enriquece cinco plays por página) atendia com o cooldown mais frouxo, bastando escrever o atalho.
+  - É a repetição exata do defeito que o comentário ali já contava ter corrigido para o `/wi`, o que mostra que "lembrar de mapear" não era garantia de nada. Agora a lista está completa — `osu` entrou junto, mesmo com o `/profile` no `default` hoje, para o atalho seguir o comando no dia em que ele mudar de bucket.
+  - O teste novo não repete a lista: ele lê os atalhos do **catálogo do `/help`**, que o `help.test.js` já confere contra os comandos registrados de verdade. Um atalho novo cai neste teste sozinho, sem ninguém precisar lembrar.
+
 ---
 
 # Sessão de 2026-08-15 (segurança)

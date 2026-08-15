@@ -28,7 +28,16 @@ const BUCKETS = {
  * O bucket é escolhido pelo nome do comando invocado, então um alias que não
  * estivesse mapeado caía no 'default' e driblava o cooldown mais rígido do
  * comando original — era o caso do /wi, que custa o mesmo que o /whatif.
- * Resolver aqui evita que o próximo alias repita o problema.
+ *
+ * A lista precisa estar COMPLETA, e não só cobrir os que hoje custam caro: o
+ * /top ficou de fora quando o /wi foi resolvido, e seguia caindo no 'default'
+ * enquanto o /topplays estava no 'heavy' — o comando mais pesado do bot com o
+ * cooldown mais frouxo, bastando escrever o atalho. O `osu` entra pelo mesmo
+ * motivo, mesmo com o /profile no 'default' hoje: o dia em que ele mudar de
+ * bucket, o atalho vai junto.
+ *
+ * O `test/cooldowns.test.js` confere a lista contra os atalhos que o /help
+ * declara, para o próximo alias não nascer de fora dela.
  */
 const ALIASES = {
   wi:    'whatif',
@@ -36,6 +45,8 @@ const ALIASES = {
   c:     'score',
   choke: 'score',
   lb:    'leaderboard',
+  top:   'topplays',
+  osu:   'profile',
 };
 
 /** Qual bucket cada comando usa. Ausente = 'default'. */
@@ -60,6 +71,18 @@ const COMMAND_BUCKET = {
 const state = new Map(Object.keys(BUCKETS).map(name => [name, new Map()]));
 
 /**
+ * Em que bucket um comando cai, já resolvendo o alias.
+ *
+ * Exportado porque é a pergunta que o teste faz: alias e comando de origem
+ * precisam cair no mesmo lugar, e isso não dá para observar pelo `check`, que
+ * devolve segundos de espera.
+ */
+function bucketOf(commandName) {
+  const canonical = ALIASES[commandName] ?? commandName;
+  return COMMAND_BUCKET[canonical] ?? 'default';
+}
+
+/**
  * Consome um ticket. Retorna 0 se pode executar, ou os segundos restantes
  * de espera se estiver em cooldown.
  *
@@ -68,8 +91,7 @@ const state = new Map(Object.keys(BUCKETS).map(name => [name, new Map()]));
  * @returns {number} segundos de espera (0 = liberado)
  */
 function check(userId, commandName) {
-  const canonical  = ALIASES[commandName] ?? commandName;
-  const bucketName = COMMAND_BUCKET[canonical] ?? 'default';
+  const bucketName = bucketOf(commandName);
   const { delay, span, limit } = BUCKETS[bucketName];
   const users = state.get(bucketName);
 
@@ -119,4 +141,4 @@ function prune() {
 const pruneTimer = setInterval(prune, 10 * 60 * 1000);
 pruneTimer.unref();
 
-module.exports = { check, prune };
+module.exports = { check, prune, bucketOf };
