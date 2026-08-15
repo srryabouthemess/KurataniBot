@@ -39,6 +39,11 @@ Dois comandos novos, e duas perguntas que o bot só sabia responder sobre uma pe
 
 ## 🐛 Correções
 
+- **O `/wipe` deixou de recusar a própria conta; o `/moderate` continua recusando.** [`wipe.js`](src/commands/wipe.js)
+  - A trava tinha sido copiada de um comando para o outro, e só num deles ela se sustenta. No `/moderate` é estrutural: sem ela, um staff restrito poderia se **desrestringir** — é escalada de privilégio, e por isso fica.
+  - No `/wipe` não há esse ganho: ninguém obtém nada apagando os próprios scores. Sobrava o argumento do engano, e contra engano este comando já tem o que o outro não tem — a confirmação mostra os números que serão destruídos (`3076pp, 679 plays`) e expira em 60 segundos. O que a trava impedia, na prática, era um Developer limpar a própria conta de teste.
+  - A ausência ficou **escrita no lugar dela**, com o porquê da assimetria: sem isso, a próxima leitura lado a lado dos dois arquivos convidaria alguém a "restaurar a simetria" e a devolver o problema.
+
 - **O `/top` driblava o cooldown do `/topplays`.** [`cooldowns.js`](src/cooldowns.js)
   - Encontrado ao acrescentar o `/lb` na mesma tabela. O bucket é escolhido pelo **nome invocado**, e a lista de aliases cobria `wi`, `rs`, `c` e `choke` — mas não `top`. Resultado: o comando mais caro do bot (o `heavy`, que enriquece cinco plays por página) atendia com o cooldown mais frouxo, bastando escrever o atalho.
   - É a repetição exata do defeito que o comentário ali já contava ter corrigido para o `/wi`, o que mostra que "lembrar de mapear" não era garantia de nada. Agora a lista está completa — `osu` entrou junto, mesmo com o `/profile` no `default` hoje, para o atalho seguir o comando no dia em que ele mudar de bucket.

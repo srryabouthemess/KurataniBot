@@ -112,9 +112,19 @@ module.exports = {
       const target = await daycore.getPlayerPrivileges(targetId);
       if (!target) return interaction.editReply(s.player_not_found);
 
-      // Mesma regra do /moderate, e aqui ela vale mesmo com DEVELOPER exigido:
-      // apagar a si mesmo por engano é o acidente mais fácil de cometer.
-      if (target.id === staff.osuId) return interaction.editReply(s.mod_cannot_self);
+      // ── Aqui NÃO há trava de "não pode em si mesmo", e o /moderate tem ──────
+      // A assimetria é de propósito, e não descuido de quem copiou o outro.
+      //
+      // No /moderate a trava é estrutural: sem ela, um staff restrito poderia
+      // se DESRESTRINGIR. Bloquear o alvo igual ao autor fecha uma escalada de
+      // privilégio, e por isso continua lá.
+      //
+      // No wipe não existe esse ganho — ninguém obtém nada apagando os próprios
+      // scores. Sobrava só o argumento do engano, e contra engano este comando
+      // já tem o que o outro não tem: a confirmação mostra os números que serão
+      // destruídos ("3076pp, 679 plays") e expira em 60 segundos. Limpar a
+      // própria conta de teste é coisa normal de quem administra o servidor, e
+      // era exatamente o que a trava impedia.
 
       // Lido ANTES de qualquer publicação: é o que a confirmação mostra e o que
       // o log guarda. Depois do wipe estes números não existem mais.
