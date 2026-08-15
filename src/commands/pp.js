@@ -2,33 +2,21 @@ const { SlashCommandBuilder, EmbedBuilder, ApplicationIntegrationType, Interacti
 const osu = require('../osuClient');
 const servers = require('../servers');
 const { resolvePlayer, fetchPlayer } = require('../userLink');
+const playEmbed = require('../embeds/play');
 const { t } = require('../i18n');
 const { logError } = require('../logger');
 const { safeEditReply } = require('../replies');
 
-/**
- * Calcula o PP total ponderado de uma lista de plays.
- * Fórmula: sum(pp[i] * 0.95^i) para i = 0, 1, 2, ...
- */
-function calcWeightedPP(plays) {
-  return plays.reduce((sum, play, i) => sum + play.pp * Math.pow(0.95, i), 0);
-}
+// A soma ponderada e a simulação de uma play hipotética moram no weightedPP.js:
+// o /whatif faz a mesma conta pela pergunta oposta ("quanto X me daria" contra
+// "quanto falta para X"), e duas cópias de uma fórmula que precisa concordar já
+// custaram caro neste projeto antes.
+const { weightedPP: calcWeightedPP, comPlayHipotetica } = require('../weightedPP');
 
-/**
- * Insere uma play hipotética de `x` pp na lista atual e retorna o novo PP
- * ponderado (top 100) e a posição que ela ocupou.
- */
-function simulateInsert(currentPlays, x) {
-  const hypothetical = { pp: x };
-  const simulated = [...currentPlays, hypothetical]
-    .sort((a, b) => b.pp - a.pp)
-    .slice(0, 100);
-
-  return {
-    weightedPP: calcWeightedPP(simulated),
-    position: simulated.indexOf(hypothetical) + 1,
-  };
-}
+const simulateInsert = (currentPlays, x) => {
+  const { weighted, position } = comPlayHipotetica(currentPlays, x);
+  return { weightedPP: weighted, position };
+};
 
 /**
  * Encontra por busca binária o menor valor de pp de uma única play
@@ -236,12 +224,8 @@ module.exports = {
         return interaction.editReply(s.no_plays(user.username, osu.getModeLabel(mode)));
       }
 
-      const stats      = user.statistics;
-      const currentPP  = stats.pp;
-      const rankDisplay = stats.global_rank ? `#${stats.global_rank.toLocaleString()}` : s.profile_unranked;
-      const countryPart = (!user._private && stats.country_rank)
-        ? ` ${user.country_code}#${stats.country_rank.toLocaleString()}`
-        : ` ${user.country_code}`;
+      const stats     = user.statistics;
+      const currentPP = stats.pp;
 
       const targetLabel = targetPP.toLocaleString(s.locale);
 
@@ -249,11 +233,7 @@ module.exports = {
       if (currentPP >= targetPP) {
         const embed = new EmbedBuilder()
           .setColor(0x99ff99)
-          .setAuthor({
-            name:    `${user.username}: ${stats.pp.toFixed(2)}pp (${rankDisplay}${countryPart})`,
-            iconURL: `https://flagcdn.com/w20/${user.country_code.toLowerCase()}.png`,
-            url:     osu.getUserUrl(user.id, mode),
-          })
+          .setAuthor(playEmbed.author(user, mode, s))
           .setThumbnail(user.avatar_url)
           .setDescription(s.pp_already(user.username, currentPP.toFixed(2), targetLabel));
         return interaction.editReply({ embeds: [embed] });
@@ -273,11 +253,7 @@ module.exports = {
 
         const embed = new EmbedBuilder()
           .setColor(result.possible ? 0x99ccff : 0xff9999)
-          .setAuthor({
-            name:    `${user.username}: ${stats.pp.toFixed(2)}pp (${rankDisplay}${countryPart})`,
-            iconURL: `https://flagcdn.com/w20/${user.country_code.toLowerCase()}.png`,
-            url:     osu.getUserUrl(user.id, mode),
-          })
+          .setAuthor(playEmbed.author(user, mode, s))
           .setThumbnail(user.avatar_url)
           .setTitle(s.pp_howmany_title(user.username, targetLabel))
           .setFooter({ text: s.footer_based_on(osu.getModeLabel(mode), plays.length) });
@@ -329,11 +305,7 @@ module.exports = {
 
       const embed = new EmbedBuilder()
         .setColor(0x99ccff)
-        .setAuthor({
-          name:    `${user.username}: ${stats.pp.toFixed(2)}pp (${rankDisplay}${countryPart})`,
-          iconURL: `https://flagcdn.com/w20/${user.country_code.toLowerCase()}.png`,
-          url:     osu.getUserUrl(user.id, mode),
-        })
+        .setAuthor(playEmbed.author(user, mode, s))
         .setThumbnail(user.avatar_url)
         .setTitle(title)
         .setDescription(description)

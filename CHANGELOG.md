@@ -6,6 +6,17 @@
 
 Revisão de segurança do projeto inteiro, e a correção do único achado explorável por qualquer pessoa. A cadeia de privilégio dos comandos administrativos — a parte que mexe no servidor de jogo de verdade — resistiu à revisão.
 
+## 🧹 Organização
+
+- **As duas cópias da fórmula de PP ponderado viraram uma.** [`weightedPP.js`](src/weightedPP.js)
+  - O `/pp` e o `/whatif` respondem perguntas opostas sobre o **mesmo** número ("quanto falta para chegar em X" e "quanto X me daria"), e cada um trouxe a própria cópia da soma `0.95^i` e da inserção da play hipotética. Duas cópias de uma fórmula que precisa concordar é o arranjo que já custou caro aqui: o pp local do `/score` e o do `/recent` divergiram, um calculava e o outro imprimia zero.
+  - O detalhe que viajou junto: a play hipotética é procurada por **referência**, e não por valor de pp — num empate exato, o `sort` estável deixa a hipotética depois da real, e procurar pelo número devolveria a posição da outra. Os dois comandos documentavam isso separadamente; agora é uma explicação só, no lugar onde a busca acontece.
+  - Como é refatoração, o teste compara a peça nova com a implementação **antiga**, escrita no arquivo de teste como referência: mesma soma, mesma posição, mesmo "entrou" — com 0, 1, 5, 50, 100 e 137 plays.
+
+- **A linha do autor deixou de ter cinco versões.** [`pp.js`](src/commands/pp.js), [`whatif.js`](src/commands/whatif.js)
+  - A refatoração dos embeds centralizou `nick: 4.821,30pp (#12 BR#3)` no `embeds/play.js`, mas deixou para trás quatro cópias — três no `/pp` e uma no `/whatif` — que a essa altura já **discordavam** da versão boa: sem separador de milhar e sem o idioma no `toLocaleString`.
+  - Junto veio uma inconsistência que a correção expôs: no `/whatif`, o autor passou a dizer `32.138,70pp` enquanto a descrição logo abaixo dizia `32138.70pp`, no mesmo embed. O formatador virou peça exportada, e os dois passaram a usá-lo.
+
 ## 🔒 Segurança
 
 - **A prova de posse de conta passou a olhar só o que o dono escreve.** [`staff.js`](src/commands/staff.js)

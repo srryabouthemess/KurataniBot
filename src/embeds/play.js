@@ -56,6 +56,18 @@ const truncate = (text, max) =>
 const dec = (value) => Number(Number(value).toFixed(2)).toString();
 
 /**
+ * Um valor de pp como a pessoa lê: separador de milhar do idioma dela, duas
+ * casas sempre. Os cinco dígitos de quem está no topo ("32138.70") não se leem
+ * de relance.
+ *
+ * Exportado porque a linha do autor não é o único lugar que mostra pp: o
+ * /whatif projeta um total no mesmo embed, e dois formatos lado a lado fazem o
+ * leitor conferir se são a mesma coisa.
+ */
+const ppLegivel = (valor, locale) =>
+  Number(valor ?? 0).toLocaleString(locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+/**
  * Timestamp relativo do Discord ("há 4 horas"), que cada pessoa lê no fuso e no
  * idioma dela — e que o rodapé antes escrevia numa data fixa em pt-BR.
  */
@@ -258,10 +270,7 @@ function author(user, mode, s) {
     ? ` ${pais}#${stats.country_rank.toLocaleString(s.locale)}`
     : (pais ? ` ${pais}` : '');
 
-  // Com separador de milhar: os cinco dígitos de quem está no topo ("32138.70")
-  // não se leem de relance, e o rank ao lado já sai no formato do idioma.
-  const pp = Number(stats.pp ?? 0)
-    .toLocaleString(s.locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const pp = ppLegivel(stats.pp, s.locale);
 
   return {
     name:    `${user.username}: ${pp}pp (${rank}${regional})`,
@@ -373,4 +382,5 @@ module.exports = {
   COLOR, COLOR_FAIL,
   author, single, listItem,
   mapTitle, mapLine, mapMeta,
+  ppLegivel,
 };

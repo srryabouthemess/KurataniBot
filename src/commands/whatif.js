@@ -2,46 +2,30 @@ const { SlashCommandBuilder, EmbedBuilder, ApplicationIntegrationType, Interacti
 const osu = require('../osuClient');
 const servers = require('../servers');
 const { resolvePlayer, fetchPlayer } = require('../userLink');
+const playEmbed = require('../embeds/play');
+const { ppLegivel } = playEmbed;
 const { md } = require('../markdown');
 const { t } = require('../i18n');
 const { logError } = require('../logger');
 const { safeEditReply } = require('../replies');
 
-/**
- * Calcula o PP total ponderado de uma lista de plays.
- * Fórmula: sum(pp[i] * 0.95^i) para i = 0, 1, 2, ...
- * O bonus de PP por playcount não é incluído (é constante e não muda).
- */
-function calcWeightedPP(plays) {
-  return plays.reduce((sum, play, i) => sum + play.pp * Math.pow(0.95, i), 0);
-}
+// A soma ponderada e a inserção da play hipotética moram no weightedPP.js: o
+// /pp faz a mesma conta pela pergunta oposta ("quanto falta para X" contra
+// "quanto X me daria"), e as duas cópias precisavam concordar para sempre.
+const { weightedPP, comPlayHipotetica } = require('../weightedPP');
 
-/**
- * Simula o PP total se o jogador fizesse uma play de `hypotheticalPP`.
- * Retorna null se a play hipotética não entraria no top (PP menor que a última).
- */
+/** Quanto o jogador ganharia com uma play de `hypotheticalPP`. */
 function simulateWhatIf(currentPlays, hypotheticalPP) {
-  // Insere a play hipotética e reordena por PP decrescente. Usamos a mesma
-  // referência de objeto pra achar a posição depois — comparar por valor de
-  // pp (`p.pp === hypotheticalPP`) dava posição errada em caso de empate
-  // exato com uma play real, já que sort() é estável e o array espalhado
-  // deixa a hipotética depois das reais empatadas.
-  const hypothetical = { pp: hypotheticalPP };
-  const simulated = [...currentPlays, hypothetical]
-    .sort((a, b) => b.pp - a.pp)
-    .slice(0, 100); // mantém só as top 100
+  const { weighted, position, entrou } = comPlayHipotetica(currentPlays, hypotheticalPP);
+  const currentPP = weightedPP(currentPlays);
 
-  const currentPP   = calcWeightedPP(currentPlays);
-  const simulatedPP = calcWeightedPP(simulated);
-  const gain        = simulatedPP - currentPP;
-
-  // Posição que a play hipotética ocupa (0 se foi cortada do top 100)
-  const position = simulated.indexOf(hypothetical) + 1;
-
-  // Se não entrou (PP menor que todas as 100 plays atuais)
-  const didEnter = position > 0 && position <= simulated.length;
-
-  return { currentPP, simulatedPP, gain, position, didEnter };
+  return {
+    currentPP,
+    simulatedPP: weighted,
+    gain:        weighted - currentPP,
+    position,
+    didEnter:    entrou,
+  };
 }
 
 module.exports = {
@@ -119,11 +103,6 @@ module.exports = {
       // é subtraído do alvo antes da busca, aqui é somado ao resultado.
       const offset   = stats.pp - currentWeighted;
       const newTotal = simulatedPP + offset;
-      const rankDisplay = stats.global_rank ? `#${stats.global_rank.toLocaleString()}` : s.profile_unranked;
-      const countryPart = (!user._private && stats.country_rank)
-        ? ` ${user.country_code}#${stats.country_rank.toLocaleString()}`
-        : ` ${user.country_code}`;
-
       // Melhor play atual para comparação
       const bestPlay    = plays[0];
       const isBestPlay  = hypotheticalPP > bestPlay.pp;
@@ -139,7 +118,10 @@ module.exports = {
       }
 
       // Linha de ganho de PP
-      const gainLine = s.whatif_gain(gain.toFixed(2), newTotal.toFixed(2));
+      // No mesmo formato da linha do autor, que sai do embeds/play: os dois
+      // números aparecem no MESMO embed, e "32.138,70pp" em cima de
+      // "32138.70pp" faz o leitor conferir se são a mesma coisa.
+      const gainLine = s.whatif_gain(ppLegivel(gain, s.locale), ppLegivel(newTotal, s.locale));
 
       // Top 5 plays para contexto, destacando onde a hipotética entraria.
       // Os títulos só precisam ser buscados pras 5 que realmente vão aparecer
@@ -169,11 +151,7 @@ module.exports = {
 
       const embed = new EmbedBuilder()
         .setColor(gain > 0 ? 0x99ff99 : 0xaaaaaa)
-        .setAuthor({
-          name:    `${user.username}: ${stats.pp.toFixed(2)}pp (${rankDisplay}${countryPart})`,
-          iconURL: `https://flagcdn.com/w20/${user.country_code.toLowerCase()}.png`,
-          url:     osu.getUserUrl(user.id, mode),
-        })
+        .setAuthor(playEmbed.author(user, mode, s))
         .setThumbnail(user.avatar_url)
         .setTitle(s.whatif_title(user.username, hypotheticalPP))
         .setDescription(
