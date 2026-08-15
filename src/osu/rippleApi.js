@@ -301,6 +301,50 @@ async function beatmapScores(userId, beatmapId, mode) {
   return lista.map(s => normalizeLegacyScore(s, beatmapId)).filter(Boolean);
 }
 
+/** Teto de colocados por página no Ripple (conferido: `l=100` responde 100). */
+const RANKING_MAX = 100;
+
+/**
+ * O ranking de pp do servidor, do primeiro colocado para baixo.
+ *
+ * O `rx` entra aqui como em todo o resto do adaptador: é a dimensão que separa
+ * o ranking vanilla do de Relax, e não um modo de jogo (ver o cabeçalho).
+ *
+ * As estatísticas de cada linha vêm em `chosen_mode` — o modo/rx que foi
+ * pedido —, e não no array `stats` indexado que o `/users/full` devolve.
+ *
+ * O `global_leaderboard_rank` existe na resposta e fica de fora de propósito:
+ * com `country` ele continua sendo o rank global, o mesmo descompasso que a API
+ * oficial tem. A posição na lista é o número que os três adaptadores conseguem
+ * dizer com o mesmo significado.
+ */
+function normalizeRankingEntry(user) {
+  const st = user.chosen_mode ?? {};
+
+  return {
+    id:        user.id ?? null,
+    username:  user.username ?? '?',
+    country:   (user.country || '').toUpperCase() || null,
+    pp:        Number(st.pp ?? 0),
+    // De 0 a 100, como o normalizeUser acima já lê deste mesmo campo.
+    accuracy:  Number(st.accuracy ?? 0),
+    playCount: Number(st.playcount ?? 0),
+  };
+}
+
+async function leaderboard(mode, { limit = 50, country = null } = {}) {
+  const data = await rippleGet(mode, '/leaderboard', {
+    mode: Number(servers.get(mode).gameMode ?? 0),
+    rx:   rxOf(mode),
+    p:    1,
+    l:    Math.min(limit, RANKING_MAX),
+    ...(country ? { country: String(country).toUpperCase() } : {}),
+  });
+
+  const lista = Array.isArray(data?.users) ? data.users : [];
+  return lista.map(normalizeRankingEntry);
+}
+
 const userUrl = (userId, mode) => `${servers.get(mode).webUrl}/u/${urlSegment(userId)}`;
 const mapUrl  = (mapId, _setId, mode) => `${servers.get(mode).webUrl}/b/${urlSegment(mapId)}`;
 
@@ -309,6 +353,7 @@ module.exports = {
   bestScores,
   recentScores,
   beatmapScores,
+  leaderboard,
   userUrl,
   mapUrl,
 
@@ -317,5 +362,6 @@ module.exports = {
   normalizeScore,
   normalizeLegacyScore,
   normalizeUser,
+  normalizeRankingEntry,
   parseSongName,
 };

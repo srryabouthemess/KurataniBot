@@ -10,6 +10,7 @@
  *   bestScores(userId, limit, mode)    → scores crus, do melhor para o pior
  *   recentScores(userId, limit, mode)  → scores crus, do mais recente
  *   beatmapScores(userId, mapId, mode) → scores do jogador num mapa
+ *   leaderboard(mode, opts)            → ranking de pp, do primeiro para baixo
  *   userUrl(userId, mode)              → link do perfil
  *   mapUrl(mapId, setId, mode)         → link do mapa
  *
@@ -330,6 +331,52 @@ async function getUserBeatmapScores(userId, beatmapId, mode = DEFAULT_MODE) {
   return withMap.sort((a, b) => (b.pp ?? -1) - (a.pp ?? -1));
 }
 
+// ─── Ranking do servidor ──────────────────────────────────────────────────────
+/**
+ * O ranking de pp daquele servidor, do primeiro colocado para baixo.
+ *
+ * Cada entrada é `{ id, username, country, pp, accuracy, playCount }` — o
+ * suficiente para uma linha de lista, e nada além. Não é um usuário
+ * normalizado de propósito: nenhum dos três endpoints manda data de criação,
+ * última visita ou nível, e devolver a forma de usuário com metade dos campos
+ * nulos convidaria a lê-los.
+ *
+ * ATENÇÃO à acurácia: aqui ela vai de 0 a 100, como o `hit_accuracy` do perfil
+ * — e ao contrário da acurácia de um score, que circula de 0 a 1 no resto do
+ * bot.
+ *
+ * ── Por que o cache é mais longo que o de perfil ──────────────────────────────
+ * O de usuário e o de top plays são um minuto porque aparecem no MESMO embed:
+ * o pp da linha do autor e a lista logo abaixo teriam de envelhecer juntos. Um
+ * ranking não tem esse par — ele é a foto do servidor inteiro, e quem o abre
+ * não está conferindo o número de ninguém em particular.
+ *
+ * Cinco minutos é o preço de a lista não refletir uma play feita agora, e o que
+ * ele compra é o comando repetido no canal (que é como um ranking costuma ser
+ * consultado) não pagar rede nenhuma. A navegação entre páginas já não paga:
+ * quem chama busca a lista inteira de uma vez e pagina em memória.
+ *
+ * A chave inclui o LIMITE e o PAÍS. Sem eles, um `/leaderboard country:BR`
+ * serviria a lista global guardada momentos antes.
+ */
+const RANKING_TTL_MS = 5 * 60_000;
+const RANKING_MAX    = 60;
+const _rankingCache = new TtlCache({ ttlMs: RANKING_TTL_MS, max: RANKING_MAX });
+
+async function getLeaderboard(mode = DEFAULT_MODE, { limit = 50, country = null } = {}) {
+  const pais  = country ? String(country).toUpperCase() : null;
+  const chave = `${mode}:${limit}:${pais ?? ''}`;
+
+  const guardado = _rankingCache.get(chave);
+  metrics.cache('ranking', Boolean(guardado));
+  if (guardado) return guardado;
+
+  const entradas = await apiFor(mode).leaderboard(mode, { limit, country: pais });
+  // Falha não chega aqui: ela sobe para quem chamou, e nada é guardado.
+  _rankingCache.set(chave, entradas);
+  return entradas;
+}
+
 /**
  * Completa scores crus com os detalhes que só uma segunda chamada traz.
  *
@@ -362,6 +409,7 @@ module.exports = {
   getBestScores,
   getRecentScores,
   getUserBeatmapScores,
+  getLeaderboard,
   getBeatmap: fetchBeatmap,
   enrichBeatmapData,
   enrichScores,

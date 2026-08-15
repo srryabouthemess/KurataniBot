@@ -55,6 +55,7 @@ module.exports = ({ ADMIN }) => ({
   help_cmd_topplays:       'Melhores plays, 5 por página.',
   help_cmd_score:          'Scores num mapa, com o PP que cada um valeria com FC.',
   help_cmd_compare:        'Compara dois jogadores lado a lado.',
+  help_cmd_leaderboard:    'Ranking de pp do servidor, 10 por página.',
   help_cmd_whatif:         'Quanto PP você ganharia com uma play nova.',
   help_cmd_pp:             'O que falta para chegar a um total de PP.',
   help_cmd_simulate:       'Quanto PP daria uma play específica num mapa.',
@@ -92,6 +93,19 @@ module.exports = ({ ADMIN }) => ({
   topplays_footer:         (page, total, label) => `Página ${page}/${total} • osu • ${label}`,
   topplays_error:          'Erro ao buscar as top plays.',
   pagination_not_yours:    '❌ Apenas quem usou o comando pode navegar entre as páginas.',
+
+  // ── /leaderboard ──────────────────────────────────────────────────────────
+  // A linha de cada colocado não passa por aqui: ela é só número com unidade
+  // ("12.753,00pp", "95,74%", "498 plays"), do mesmo jeito que o embed de play
+  // dispensa rótulo. `plays` fica em inglês pelo motivo dos rótulos do
+  // /compare — é jargão de osu!, igual em qualquer idioma do jogo.
+  leaderboard_title:           (label) => `Ranking de pp do ${label}`,
+  leaderboard_title_country:   (label, pais) => `Ranking de pp do ${label} — ${pais}`,
+  leaderboard_none:            (label) => `Ninguém no ranking do **${label}** ainda.`,
+  leaderboard_none_country:    (label, pais) => `Nenhum jogador de **${pais}** no ranking do **${label}**.`,
+  leaderboard_invalid_country: '❌ Use o código do país com duas letras (ex: `BR`, `US`, `RU`).',
+  leaderboard_error:           'Erro ao buscar o ranking do servidor.',
+  leaderboard_footer:          (page, total, label) => `Página ${page}/${total} • ${label}`,
 
   recent_none:             (name) => `Nenhuma play recente encontrada para **${name}**.`,
   recent_error:            'Erro ao buscar a play recente. Verifique se o jogador existe.',

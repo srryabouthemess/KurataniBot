@@ -51,6 +51,7 @@ module.exports = ({ ADMIN }) => ({
   help_cmd_topplays:       'Лучшие плеи, по 5 на странице.',
   help_cmd_score:          'Скоры на карте и сколько PP дал бы каждый при FC.',
   help_cmd_compare:        'Сравнение двух игроков.',
+  help_cmd_leaderboard:    'Рейтинг pp сервера, по 10 на странице.',
   help_cmd_whatif:         'Сколько PP принесёт новый плей.',
   help_cmd_pp:             'Чего не хватает до нужного количества PP.',
   help_cmd_simulate:       'Сколько PP дал бы конкретный плей на карте.',
@@ -85,6 +86,18 @@ module.exports = ({ ADMIN }) => ({
   topplays_footer:         (page, total, label) => `Страница ${page}/${total} • osu • ${label}`,
   topplays_error:          'Ошибка при получении топ плеев.',
   pagination_not_yours:    '❌ Только автор команды может переключать страницы.',
+
+  // ── /leaderboard ──────────────────────────────────────────────────────────
+  // Строка каждого места — это только числа с единицами ("12 753,00pp",
+  // "95,74%", "498 plays"), поэтому сюда она не попадает. `plays` остаётся
+  // по-английски — жаргон osu!, одинаковый на любом языке игры.
+  leaderboard_title:           (label) => `Рейтинг pp — ${label}`,
+  leaderboard_title_country:   (label, country) => `Рейтинг pp — ${label} — ${country}`,
+  leaderboard_none:            (label) => `В рейтинге **${label}** пока никого нет.`,
+  leaderboard_none_country:    (label, country) => `В рейтинге **${label}** нет игроков из **${country}**.`,
+  leaderboard_invalid_country: '❌ Укажите двухбуквенный код страны (например `BR`, `US`, `RU`).',
+  leaderboard_error:           'Ошибка при получении рейтинга сервера.',
+  leaderboard_footer:          (page, total, label) => `Страница ${page}/${total} • ${label}`,
 
   recent_none:             (name) => `Недавних плеев для **${name}** не найдено.`,
   recent_error:            'Ошибка при получении последнего плея. Проверьте, существует ли игрок.',

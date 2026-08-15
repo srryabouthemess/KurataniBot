@@ -62,6 +62,7 @@ for (const server of servers.all()) {
   caso(`profile ${server.key}`,  'profile.js',  { player, server: server.key });
   caso(`topplays ${server.key}`, 'topplays.js', { player, server: server.key });
   caso(`recent ${server.key}`,   'recent.js',   { player, server: server.key });
+  caso(`leaderboard ${server.key}`, 'leaderboard.js', { server: server.key });
 }
 caso('pp',       'pp.js',       { player: PLAYERS.official, target: 6000 });
 caso('simulate', 'simulate.js', { map: String(MAPA), mods: 'HDDT', acc: 99 });

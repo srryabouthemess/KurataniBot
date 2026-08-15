@@ -16,13 +16,14 @@ Funciona no Bancho, no Akatsuki e em servidores bancho.py.
 | `/topplays` | Melhores plays, 5 por página |
 | `/score` | Scores num mapa |
 | `/compare` | Compara dois jogadores |
+| `/leaderboard` | Ranking de pp do servidor, 10 por página |
 | `/whatif <pp>` | Quanto PP você ganharia com uma play nova |
 | `/pp <alvo>` | O que falta para chegar a um total de PP |
 | `/simulate <mapa>` | Quanto PP daria uma play específica |
 | `/link` | Vincula sua conta do osu! ao Discord |
 | `/language` | Português, English ou Русский |
 
-Atalhos: `/osu`, `/rs`, `/top`, `/wi`, `/c` e `/choke`.
+Atalhos: `/osu`, `/rs`, `/top`, `/wi`, `/c`, `/choke` e `/lb`.
 
 **Use `/link set <seu nick>` uma vez** e os outros comandos passam a saber quem você é.
 

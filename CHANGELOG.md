@@ -2,6 +2,23 @@
 
 ---
 
+# Sessão de 2026-08-15 (ranking do servidor)
+
+Um comando novo, e o quarto método do contrato dos adaptadores: `/leaderboard` mostra o ranking de pp de qualquer servidor que o bot atenda — Bancho (global ou por país), Akatsuki, Akatsuki RX, Daycore e Daycore RX.
+
+## ✨ Novos recursos
+
+- **`/leaderboard` (atalho `/lb`).** [`leaderboard.js`](src/commands/leaderboard.js), [`officialApi.js`](src/osu/officialApi.js), [`banchoPyApi.js`](src/osu/banchoPyApi.js), [`rippleApi.js`](src/osu/rippleApi.js)
+  - Dez colocados por página, com `country` opcional para filtrar por país. A opção `server` segue a mesma prioridade dos outros comandos (opção → servidor preferido → padrão), mas **sem exigir link**: um ranking não é de ninguém, e cobrar `/link set` para ver a lista do servidor não faria sentido.
+  - Cada tipo de servidor serve isso de um endpoint diferente, e os três foram conferidos contra as APIs de verdade antes de virar código: `/rankings/osu/performance` no oficial, `get_leaderboard` da **v1 do bancho.py-ex** (e não da Shiina-Web, apesar do nome parecido com o `get_rank_cache` que já usávamos), e `/api/v1/leaderboard` no Ripple, onde o `rx` continua sendo dimensão e não modo de jogo.
+  - **O número da esquerda é a posição na lista, e não o rank que a API mandou.** Os três discordam sobre esse campo: o bancho.py não devolve rank nenhum; o oficial e o Ripple devolvem o rank **global** mesmo numa consulta por país — medido, o #1 do Brasil chega como `global_rank: 51`. Publicá-lo daria uma coluna que não bate com a ordem exibida, então a normalização o descarta de propósito, e um teste trava a decisão.
+  - **A lista inteira vem de uma vez (100) e a paginação acontece em memória.** É o contrário do `/topplays`, que busca 100 e enriquece só a página exibida — lá cada play custa requisições extras (estrelas, pp de FC, metadados), aqui a resposta do ranking já traz tudo que a linha mostra. Clicar em ▶️ não toca a rede, e o `prefetch` da paginação não teria o que aquecer.
+  - **Cache de cinco minutos, e não o de um minuto do perfil.** Aquele é curto porque o pp do jogador e a lista de top plays aparecem no mesmo embed e teriam de envelhecer juntos; um ranking não tem esse par. O que os cinco minutos compram é o comando repetido no canal — que é como um ranking costuma ser consultado — não pagar rede nenhuma.
+  - A acurácia da linha passa pelo idioma, e não pelo `toFixed(2)` do embed de play: ela divide a linha com um pp de cinco dígitos e com o número de plays, os dois já formatados assim. Em pt-BR o `toFixed` daria `32.138,70pp • 98.26%`, dois separadores decimais na mesma linha.
+  - A bandeira é montada dos indicadores regionais em vez de `:flag_br:`, que depende da tabela de emojis do Discord e sairia como texto cru para um código que não esteja lá. `XX` — o que o bancho.py grava para conta sem país — não vira bandeira nenhuma.
+
+---
+
 # Sessão de 2026-08-15 (segurança)
 
 Revisão de segurança do projeto inteiro, e a correção do único achado explorável por qualquer pessoa. A cadeia de privilégio dos comandos administrativos — a parte que mexe no servidor de jogo de verdade — resistiu à revisão.

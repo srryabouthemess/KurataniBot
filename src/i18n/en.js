@@ -51,6 +51,7 @@ module.exports = ({ ADMIN }) => ({
   help_cmd_topplays:       'Best plays, 5 per page.',
   help_cmd_score:          'Scores on a map, with the PP each would be worth on FC.',
   help_cmd_compare:        'Compare two players side by side.',
+  help_cmd_leaderboard:    "The server's pp ranking, 10 per page.",
   help_cmd_whatif:         'How much PP a new play would earn you.',
   help_cmd_pp:             'What you still need to reach a PP total.',
   help_cmd_simulate:       'How much PP a specific play on a map would be worth.',
@@ -85,6 +86,18 @@ module.exports = ({ ADMIN }) => ({
   topplays_footer:         (page, total, label) => `Page ${page}/${total} • osu • ${label}`,
   topplays_error:          'Error fetching top plays.',
   pagination_not_yours:    "❌ Only the person who ran the command can navigate the pages.",
+
+  // ── /leaderboard ──────────────────────────────────────────────────────────
+  // Each ranking row is numbers with their unit only ("12,753.00pp", "95.74%",
+  // "498 plays"), so it never comes through here — same call the play embed
+  // makes about labels.
+  leaderboard_title:           (label) => `${label} pp ranking`,
+  leaderboard_title_country:   (label, country) => `${label} pp ranking — ${country}`,
+  leaderboard_none:            (label) => `Nobody on the **${label}** ranking yet.`,
+  leaderboard_none_country:    (label, country) => `No **${country}** players on the **${label}** ranking.`,
+  leaderboard_invalid_country: '❌ Use the two-letter country code (e.g. `BR`, `US`, `RU`).',
+  leaderboard_error:           'Error fetching the server ranking.',
+  leaderboard_footer:          (page, total, label) => `Page ${page}/${total} • ${label}`,
 
   recent_none:             (name) => `No recent plays found for **${name}**.`,
   recent_error:            'Error fetching recent play. Check if the player exists.',

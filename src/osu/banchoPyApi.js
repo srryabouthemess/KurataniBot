@@ -435,6 +435,51 @@ async function recentScores(userId, limit, mode) {
   return res.scores ?? [];
 }
 
+/**
+ * Teto de colocados por resposta. Não é escolha nossa: o endpoint valida
+ * `limit <= 100` e responde 422 acima disso (medido). Clampar aqui faz um
+ * pedido maior devolver o que dá, em vez de lista vazia.
+ */
+const RANKING_MAX = 100;
+
+/**
+ * O ranking de pp do servidor, do primeiro colocado para baixo.
+ *
+ * Este vem da API v1 do **bancho.py-ex**, e não da Shiina-Web como o
+ * `get_rank_cache` e o `get_player_scores` logo acima — apesar do nome parecido,
+ * `get_leaderboard` é do outro serviço, no host `api.`. Servidor com front-end
+ * diferente continua respondendo este aqui.
+ *
+ * O filtro de país é case-insensitive (conferido com `br` e `BR`); mandamos em
+ * minúsculo, que é como o bancho.py guarda. País sem ninguém é lista vazia, e
+ * não erro.
+ *
+ * `rank` não sai daqui porque a resposta não tem: o endpoint devolve a lista
+ * ordenada e nada mais. Quem exibe conta a posição.
+ */
+function normalizeRankingEntry(item) {
+  return {
+    id:        item.player_id ?? null,
+    username:  item.name ?? '?',
+    country:   (item.country || '').toUpperCase() || null,
+    pp:        Number(item.pp ?? 0),
+    // `acc` já vem de 0 a 100, como o resto do bot lê a acurácia de um perfil.
+    accuracy:  Number(item.acc ?? 0),
+    playCount: Number(item.plays ?? 0),
+  };
+}
+
+async function leaderboard(mode, { limit = 50, country = null } = {}) {
+  const res = await banchoV1Get(mode, 'get_leaderboard', {
+    mode:  servers.get(mode).gameMode,
+    limit: Math.min(limit, RANKING_MAX),
+    ...(country ? { country: String(country).toLowerCase() } : {}),
+  });
+
+  const lista = Array.isArray(res?.leaderboard) ? res.leaderboard : [];
+  return lista.map(normalizeRankingEntry);
+}
+
 const userUrl = (userId, mode) => `${servers.get(mode).webUrl}/u/${userId}`;
 const mapUrl  = (mapId, _setId, mode) => `${servers.get(mode).webUrl}/b/${mapId}`;
 
@@ -443,12 +488,15 @@ module.exports = {
   bestScores,
   recentScores,
   beatmapScores: privateBeatmapScores,
+  leaderboard,
   userUrl,
   mapUrl,
 
   // Exportado para o teste: é a normalização que já derrubou uma página
   // inteira por causa do formato de um campo.
   parsePlayTime,
+  // Idem para a linha do ranking, que troca o nome de todos os campos.
+  normalizeRankingEntry,
 
   // Específicos deste tipo de servidor, usados pelos comandos administrativos.
   enrichScores,

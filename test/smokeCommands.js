@@ -128,6 +128,10 @@ for (const server of servers.all()) {
   caso(`/profile  ${server.label}`, 'profile.js', { player, server: server.key });
   caso(`/topplays ${server.label}`, 'topplays.js', { player, server: server.key });
   caso(`/recent   ${server.label}`, 'recent.js', { player, server: server.key });
+  // Este não depende de jogador, mas depende do servidor: é o único comando que
+  // chama `leaderboard` no adaptador, e cada tipo o serve de um endpoint
+  // diferente (ver osu/).
+  caso(`/leaderboard ${server.label}`, 'leaderboard.js', { server: server.key });
 }
 
 // ── Cálculo: não dependem de jogador ──────────────────────────────────────────

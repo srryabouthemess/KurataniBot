@@ -3,7 +3,7 @@
  * O índice do bot: o que dá para fazer e por onde começar.
  *
  * A lista é curada, não derivada de `client.commands`. A coleção traz também os
- * aliases (`/osu`, `/rs`, `/top`, `/wi`, `/c`, `/choke`) e os administrativos: listados um por
+ * aliases (`/osu`, `/rs`, `/top`, `/wi`, `/c`, `/choke`, `/lb`) e os administrativos: listados um por
  * linha, dobrariam o tamanho da resposta sem ajudar quem chegou agora. Aqui os
  * aliases aparecem ao lado do comando que eles chamam, e os administrativos só
  * no Discord onde de fato funcionam.
@@ -21,7 +21,7 @@ const { t } = require('../i18n');
 
 /** Os grupos, na ordem em que aparecem. A descrição sai de `help_cmd_<nome>`. */
 const GROUPS = [
-  { key: 'stats',  commands: ['profile', 'recent', 'topplays', 'score', 'compare'] },
+  { key: 'stats',  commands: ['profile', 'recent', 'topplays', 'score', 'compare', 'leaderboard'] },
   { key: 'pp',     commands: ['whatif', 'pp', 'simulate'] },
   { key: 'config', commands: ['link', 'language'] },
 ];
@@ -34,11 +34,12 @@ const ADMIN_GROUP = { key: 'admin', commands: ['nominate', 'moderate', 'wipe', '
 
 /** Atalhos, mostrados junto do comando de origem em vez de em linha própria. */
 const ALIASES = {
-  profile:  ['osu'],
-  recent:   ['rs'],
-  topplays: ['top'],
-  score:    ['c', 'choke'],
-  whatif:   ['wi'],
+  profile:     ['osu'],
+  recent:      ['rs'],
+  topplays:    ['top'],
+  score:       ['c', 'choke'],
+  whatif:      ['wi'],
+  leaderboard: ['lb'],
 };
 
 /** Uma linha do help: nome em negrito, atalhos entre parênteses, descrição. */

@@ -35,6 +35,7 @@ const ALIASES = {
   rs:    'recent',
   c:     'score',
   choke: 'score',
+  lb:    'leaderboard',
 };
 
 /** Qual bucket cada comando usa. Ausente = 'default'. */

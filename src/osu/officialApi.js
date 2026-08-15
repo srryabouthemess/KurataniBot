@@ -221,6 +221,64 @@ async function officialBeatmapset(setId) {
   }));
 }
 
+// ─── Ranking do servidor ──────────────────────────────────────────────────────
+
+/**
+ * Quantos colocados cabem numa resposta de `/rankings`. É fixo na API: não há
+ * parâmetro de tamanho, só o número da página.
+ */
+const RANKING_PAGE = 50;
+
+/**
+ * O ranking de pp, do primeiro colocado para baixo.
+ *
+ * Como a página é fixa em 50, pedir 100 são duas requisições — disparadas
+ * juntas, porque uma não depende da outra.
+ *
+ * ── Por que o `global_rank` de cada item não é normalizado ────────────────────
+ * Com `country` ele continua sendo o rank GLOBAL: medido, o #1 do Brasil vem
+ * com `global_rank: 51`. Publicá-lo daria uma coluna que não bate com a ordem
+ * exibida, e os outros dois adaptadores nem têm o que pôr ali (o bancho.py não
+ * devolve rank nenhum). Quem exibe conta a posição na lista, que quer dizer a
+ * mesma coisa nos três.
+ *
+ * País inexistente responde 404 ("Specified CountryStatistics couldn't be
+ * found") — aqui isso é lista vazia, pelo mesmo motivo do fetchUser: é
+ * resultado de uma busca, não falha de rede.
+ */
+function normalizeRankingEntry(item) {
+  return {
+    id:        item.user?.id ?? null,
+    username:  item.user?.username ?? '?',
+    country:   (item.user?.country_code || '').toUpperCase() || null,
+    pp:        Number(item.pp ?? 0),
+    // 0-100, como o `hit_accuracy` do usuário normalizado — e ao contrário da
+    // acurácia de um score, que circula de 0 a 1.
+    accuracy:  Number(item.hit_accuracy ?? 0),
+    playCount: Number(item.play_count ?? 0),
+  };
+}
+
+async function leaderboard(_mode, { limit = RANKING_PAGE, country = null } = {}) {
+  const paginas = Math.max(1, Math.ceil(limit / RANKING_PAGE));
+  const filtro  = country ? { country: String(country).toUpperCase() } : {};
+
+  const respostas = await Promise.all(
+    Array.from({ length: paginas }, (_, i) =>
+      officialGet('/rankings/osu/performance', { params: { ...filtro, page: i + 1 } })
+        .catch(error => {
+          if (error?.response?.status === 404) return null;
+          throw error;
+        })
+    )
+  );
+
+  return respostas
+    .flatMap(res => (Array.isArray(res?.ranking) ? res.ranking : []))
+    .slice(0, limit)
+    .map(normalizeRankingEntry);
+}
+
 const bestScores = async (userId, limit) =>
   normalizeScores(await scoreGet(`/users/${idSegment(userId)}/scores/best`, { limit }));
 
@@ -235,6 +293,7 @@ module.exports = {
   bestScores,
   recentScores,
   beatmapScores: officialBeatmapScores,
+  leaderboard,
   officialBeatmapset,
   userUrl,
   mapUrl,
@@ -246,4 +305,7 @@ module.exports = {
   // Exportado para o teste: é a tradução entre dois formatos de score, e o
   // formato novo é esparso de um jeito que engana fácil.
   normalizeScore,
+  // Idem para a linha do ranking, onde a acurácia vem numa escala e a posição
+  // não vem de jeito nenhum.
+  normalizeRankingEntry,
 };
