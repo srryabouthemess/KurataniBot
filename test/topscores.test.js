@@ -16,6 +16,7 @@ const assert = require('node:assert');
 const banchoPy = require('../src/osu/banchoPyApi');
 const oficial  = require('../src/osu/officialApi');
 const ripple   = require('../src/osu/rippleApi');
+const topscores = require('../src/commands/topscores');
 
 // Uma linha real de /v2/scores?status=2 e o mapa dela, do get_map_info.
 const SCORE = {
@@ -67,6 +68,59 @@ test('mapa que o servidor não conhece não derruba a play', () => {
   assert.equal(p.pp, 147.99, 'os números do score continuam lá');
   assert.equal(p.beatmap.id, null);
   assert.equal(p.beatmap.difficulty_rating, 0, 'zero é o sinal de "não sei"');
+});
+
+// ─── Grupos do front-end ─────────────────────────────────────────────────────
+// O HTML de verdade quebra as tags em várias linhas, e é justamente isso que
+// derruba um recorte escrito com `.` no lugar de `[\s\S]`.
+
+const PERFIL = `
+  <h1 class="display-5">steamhappy2</h1>
+  <div class="groupPlace d-flex flex-wrap gap-2 mt-2 mb-3">
+          <span
+              class="badge shiina-badge bg-light bg-opacity-25 text-white py-2 rounded-pill pe-3"><span
+                  class="groupEmoji me-2">🗿</span>Fuquila</span>
+          <span
+              class="badge shiina-badge bg-light bg-opacity-25 text-white py-2 rounded-pill pe-3"><span
+                  class="groupEmoji me-2">❌</span>Cheating</span>
+  </div>
+  <div class="stats">
+      <span class="badge shiina-badge">isto NÃO é grupo</span>
+  </div>
+`;
+
+test('os grupos saem do HTML mesmo com as tags quebradas em linhas', () => {
+  const grupos = banchoPy.parseGroups(PERFIL);
+  assert.deepEqual(grupos, [
+    { emoji: '🗿', name: 'Fuquila' },
+    { emoji: '❌', name: 'Cheating' },
+  ]);
+});
+
+test('badge fora do bloco de grupos não entra', () => {
+  // `shiina-badge` é classe de uso geral do tema: sem recortar pelo groupPlace,
+  // qualquer selo da página viraria grupo.
+  const nomes = banchoPy.parseGroups(PERFIL).map(g => g.name);
+  assert.ok(!nomes.includes('isto NÃO é grupo'), `veio ${nomes.join(', ')}`);
+});
+
+test('perfil sem grupo nenhum devolve lista vazia', () => {
+  assert.deepEqual(banchoPy.parseGroups('<h1>joaozinho90k</h1>'), []);
+  assert.deepEqual(banchoPy.parseGroups(''), []);
+  assert.deepEqual(banchoPy.parseGroups(null), []);
+});
+
+test('só Cheating e Fuquila escondem a play', () => {
+  const g = (...nomes) => nomes.map(name => ({ emoji: '', name }));
+
+  assert.equal(topscores.estaOculto(g('Cheating', 'Nominator')), true);
+  assert.equal(topscores.estaOculto(g('Fuquila')), true);
+  // A caixa vem do HTML e não é garantida.
+  assert.equal(topscores.estaOculto(g('cheating')), true);
+
+  assert.equal(topscores.estaOculto(g('Legit', 'Nominator', 'Developer')), false);
+  assert.equal(topscores.estaOculto(g('puppy', 'Supporter')), false);
+  assert.equal(topscores.estaOculto([]), false, 'sem grupo é "não sei", não "escondido"');
 });
 
 test('só o adaptador de bancho.py responde melhores scores do servidor', () => {

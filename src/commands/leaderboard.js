@@ -138,8 +138,19 @@ module.exports = {
        * 'plays' fica em inglês pela mesma razão que os rótulos do /compare:
        * é jargão de osu! e sai igual em qualquer idioma do jogo.
        */
-      function linha(entrada, posicao) {
+      function linha(entrada, posicao, grupos) {
         const flag = bandeira(entrada.country);
+
+        // O clã antes do nick e os selos depois — a mesma ordem do site
+        // (`[flau] nunca 🛠️Developer ✅Legit`). O clã já vem no ranking, sem
+        // custo; os selos custam uma página de perfil por pessoa (ver os grupos
+        // no adaptador de bancho.py).
+        //
+        // Só os EMOJIS, e não os nomes: dez linhas com "✍Nominator ❌Cheating"
+        // escrito por extenso viram parede, e o emoji é a própria iconografia
+        // que o site usa — quem conhece o servidor lê de relance.
+        const cla   = entrada.clanTag ? `${md(`[${entrada.clanTag}]`)} ` : '';
+        const selos = grupos.map(g => md(g.emoji)).filter(Boolean).join('');
         // Nome de jogador é texto de terceiro em posição de link (markdown.js).
         // Sem id não há perfil para onde apontar, e o nome sai sem link em vez
         // de virar um `/users/null` clicável.
@@ -156,16 +167,27 @@ module.exports = {
           minimumFractionDigits: 2, maximumFractionDigits: 2,
         });
 
-        return `**#${posicao}** ${flag ? `${flag} ` : ''}${nome}\n` +
+        return `**#${posicao}** ${flag ? `${flag} ` : ''}${cla}${nome}${selos ? ` ${selos}` : ''}\n` +
                `${ppLegivel(entrada.pp, s.locale)}pp • ${acc}% • ` +
                `${entrada.playCount.toLocaleString(s.locale)} plays`;
       }
 
-      function buildEmbed(page) {
+      // Servidor sem o conceito de grupo (o oficial e o Ripple) nem chega a
+      // perguntar: a lista sai igual à de antes, sem selo nenhum.
+      const temGrupos = osu.supportsPlayerGroups(mode);
+
+      async function buildEmbed(page) {
         const inicio = page * PAGE_SIZE;
-        const blocos = entradas
-          .slice(inicio, inicio + PAGE_SIZE)
-          .map((entrada, i) => linha(entrada, inicio + i + 1));
+        const pagina = entradas.slice(inicio, inicio + PAGE_SIZE);
+
+        // Uma página de perfil por pessoa, e só da página exibida. O cache de
+        // grupos é compartilhado entre páginas e entre comandos, então navegar
+        // não repete quem já apareceu.
+        const grupos = temGrupos
+          ? await Promise.all(pagina.map(entrada => osu.getPlayerGroups(entrada.id, mode)))
+          : pagina.map(() => []);
+
+        const blocos = pagina.map((entrada, i) => linha(entrada, inicio + i + 1, grupos[i]));
 
         return new EmbedBuilder()
           .setColor(COLOR)

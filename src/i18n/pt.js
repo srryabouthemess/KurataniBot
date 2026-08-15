@@ -110,7 +110,8 @@ module.exports = ({ ADMIN }) => ({
 
   // ── /topscores ────────────────────────────────────────────────────────────
   topscores_title:             (label) => `Melhores plays do ${label}`,
-  topscores_footer:            (page, total, label) => `Página ${page}/${total} • ${label}`,
+  topscores_footer:            (page, total, label, ocultas) =>
+    `Página ${page}/${total} • ${label}${ocultas ? ` • ${ocultas} oculta(s)` : ''}`,
   topscores_none:              (label) => `Nenhuma play registrada no **${label}** ainda.`,
   topscores_error:             'Erro ao buscar as melhores plays do servidor.',
   // O motivo vai junto: sem ele a resposta parece defeito do bot, e a pessoa

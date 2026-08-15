@@ -22,6 +22,7 @@ const { idSegment } = require('../urlSafe');
 const { withRetry } = require('../retry');
 const { dedupe } = require('../inflight');
 const { TtlCache } = require('../ttlCache');
+const { logErrorOnce } = require('../logger');
 
 // O servidor padrão de quem consulta sem dizer qual. Hoje só os comandos
 // administrativos, que operam uma instância só.
@@ -359,9 +360,16 @@ const TOP_MAX_PAGES = 30;
  * Os scores voltam CRUS, como os do `bestScores`: quem exibe enriquece só a
  * página que vai mostrar.
  *
+ * ── E voltam TODOS, sem corte ────────────────────────────────────────────────
+ * Cortar aqui impediria quem chama de filtrar: tirar as plays de contas
+ * marcadas (ver os grupos, abaixo) depois de um corte em 50 deixaria buracos no
+ * pódio — 50 menos as escondidas, e não as 50 melhores que sobraram. A lista
+ * inteira já está na memória de qualquer jeito, porque foi preciso lê-la toda
+ * para ordenar.
+ *
  * @returns {Promise<{scores: Array, completo: boolean}>}
  */
-async function topScores(mode, { limit = 50 } = {}) {
+async function topScores(mode) {
   const modeNum = servers.get(mode).gameMode;
   const todos = [];
   let completo = false;
@@ -383,11 +391,10 @@ async function topScores(mode, { limit = 50 } = {}) {
 
   if (!completo) return { scores: [], completo: false };
 
-  const ordenados = todos
-    .sort((a, b) => Number(b.pp ?? 0) - Number(a.pp ?? 0))
-    .slice(0, limit);
-
-  return { scores: ordenados, completo: true };
+  return {
+    scores: todos.sort((a, b) => Number(b.pp ?? 0) - Number(a.pp ?? 0)),
+    completo: true,
+  };
 }
 
 /**
@@ -444,6 +451,82 @@ async function getServerPlayerName(playerId, mode = PRIVATE_MODE) {
     const nome = res?.data?.name ?? null;
     _nomes.set(chave, nome);
     return nome;
+  });
+}
+
+// ─── Grupos do front-end ──────────────────────────────────────────────────────
+
+/** O bloco de grupos, logo abaixo do nick na página de perfil. */
+const GRUPO_BLOCO = /<div[^>]*class="[^"]*groupPlace[^"]*"[^>]*>([\s\S]*?)<\/div>/;
+
+/**
+ * Cada grupo: um `span.shiina-badge` com um `span.groupEmoji` opcional dentro.
+ *
+ * Os `[^>]*` precisam aceitar quebra de linha, e aceitam: o HTML vem indentado
+ * COM as tags abertas em várias linhas (`<span\n  class="...">`). Um `.` comum
+ * no lugar deles casaria só o que estivesse numa linha só — que é como este
+ * recorte falhou na primeira tentativa, devolvendo zero grupo numa página que
+ * tem três.
+ */
+const GRUPO_ITEM = /<span[^>]*class="[^"]*shiina-badge[^"]*"[^>]*>\s*(?:<span[^>]*class="[^"]*groupEmoji[^"]*"[^>]*>([\s\S]*?)<\/span>)?\s*([\s\S]*?)<\/span>/g;
+
+/**
+ * Os grupos de uma página de perfil: `[{ emoji, name }]`.
+ *
+ * ── Por que sai do HTML, e não da API ────────────────────────────────────────
+ * Grupo é do **Shiina-Web**, não do bancho.py: é uma tabela do front-end, e
+ * nenhuma das 62 rotas da API o expõe — nem `/v2/players/{id}`, nem o
+ * `custom_badge_name` (que está nulo em todo mundo).
+ *
+ * E não dá para derivar do `priv`. Medido no Daycore: a yumi tem os bits de
+ * ADMINISTRATOR e DEVELOPER e mostra só "puppy" e "Legit"; o noober tem o bit
+ * de DEVELOPER e mostra "Nominator" e "Cheating". São conjuntos independentes.
+ *
+ * O recorte é DENTRO do `groupPlace` de propósito: `shiina-badge` é classe de
+ * uso geral do tema e aparece em outros pontos da página.
+ */
+function parseGroups(html) {
+  const bloco = String(html ?? '').match(GRUPO_BLOCO)?.[1];
+  if (!bloco) return [];
+
+  return [...bloco.matchAll(GRUPO_ITEM)]
+    .map(m => ({
+      emoji: (m[1] ?? '').trim(),
+      name:  m[2].replace(/<[^>]*>/g, '').trim(),
+    }))
+    .filter(g => g.name);
+}
+
+/**
+ * Os grupos daquele jogador, do cache quando possível.
+ *
+ * Custa uma página inteira de HTML (30-70KB) para ler três palavras, então o
+ * cache não é otimização: é o que torna o uso viável. Grupo muda por decisão de
+ * staff, o que é raro — meia hora é curto para o dado e longo para a lista, que
+ * repete as mesmas pessoas em quase toda linha.
+ */
+const GRUPOS_TTL_MS = 30 * 60_000;
+const GRUPOS_MAX    = 300;
+const _grupos = new TtlCache({ ttlMs: GRUPOS_TTL_MS, max: GRUPOS_MAX });
+
+async function getServerPlayerGroups(playerId, mode = PRIVATE_MODE) {
+  const chave = `${mode}:${playerId}`;
+
+  const guardado = _grupos.get(chave);
+  metrics.cache('gruposJogador', guardado !== undefined);
+  if (guardado !== undefined) return guardado;
+
+  return dedupe(`bpgroups:${chave}`, async () => {
+    try {
+      const grupos = parseGroups(await getServerProfilePage(playerId, mode));
+      _grupos.set(chave, grupos);
+      return grupos;
+    } catch (error) {
+      // Falha de rede NÃO entra no cache, e devolve lista vazia: quem chama
+      // trata "sem grupo" como "não sei", e não como "está limpo".
+      logErrorOnce('banchoPy:grupos', error);
+      return [];
+    }
   });
 }
 
@@ -624,6 +707,9 @@ function normalizeRankingEntry(item) {
     // `acc` já vem de 0 a 100, como o resto do bot lê a acurácia de um perfil.
     accuracy:  Number(item.acc ?? 0),
     playCount: Number(item.plays ?? 0),
+    // O clã vem junto no ranking, sem custo nenhum — o site o exibe antes do
+    // nick (`[flau] nunca`), e é a única fonte dele que não pede requisição.
+    clanTag:   item.clan_tag || null,
   };
 }
 
@@ -651,6 +737,8 @@ module.exports = {
   // "melhores scores do servidor", e o Ripple exige um mapa (`md5|b`). O
   // osuClient trata o método ausente como "este servidor não sabe responder".
   topScores,
+  // Idem: grupo é coisa do front-end Shiina-Web, e nem todo servidor tem.
+  playerGroups: getServerPlayerGroups,
   userUrl,
   mapUrl,
 
@@ -659,6 +747,9 @@ module.exports = {
   parsePlayTime,
   // Idem para a linha do ranking, que troca o nome de todos os campos.
   normalizeRankingEntry,
+  // E para o recorte dos grupos, que sai de HTML indentado — o tipo de coisa
+  // que passa a devolver zero sem ninguém perceber.
+  parseGroups,
 
   // Específicos deste tipo de servidor, usados pelos comandos administrativos.
   enrichScores,

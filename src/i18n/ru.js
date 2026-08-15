@@ -102,7 +102,8 @@ module.exports = ({ ADMIN }) => ({
 
   // ── /topscores ────────────────────────────────────────────────────────────
   topscores_title:             (label) => `Лучшие плеи — ${label}`,
-  topscores_footer:            (page, total, label) => `Страница ${page}/${total} • ${label}`,
+  topscores_footer:            (page, total, label, hidden) =>
+    `Страница ${page}/${total} • ${label}${hidden ? ` • скрыто: ${hidden}` : ''}`,
   topscores_none:              (label) => `На **${label}** ещё нет ни одного плея.`,
   topscores_error:             'Ошибка при получении лучших плеев сервера.',
   // Причина идёт вместе с отказом: без неё ответ выглядит как сбой бота, и его

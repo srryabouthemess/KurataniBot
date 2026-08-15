@@ -102,7 +102,8 @@ module.exports = ({ ADMIN }) => ({
 
   // ── /topscores ────────────────────────────────────────────────────────────
   topscores_title:             (label) => `${label}'s best plays`,
-  topscores_footer:            (page, total, label) => `Page ${page}/${total} • ${label}`,
+  topscores_footer:            (page, total, label, hidden) =>
+    `Page ${page}/${total} • ${label}${hidden ? ` • ${hidden} hidden` : ''}`,
   topscores_none:              (label) => `No plays recorded on **${label}** yet.`,
   topscores_error:             "Error fetching the server's best plays.",
   // The reason ships with the refusal: without it the answer looks like a bug

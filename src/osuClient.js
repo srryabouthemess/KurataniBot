@@ -393,32 +393,54 @@ async function getLeaderboard(mode = DEFAULT_MODE, { limit = 50, country = null 
 const supportsTopScores = (mode = DEFAULT_MODE) => typeof apiFor(mode).topScores === 'function';
 
 /**
+ * Se aquele servidor tem "grupos" de jogador — os selos que o front-end mostra
+ * embaixo do nick (❌ Cheating, 🗿 Fuquila, ✅ Legit, ✍ Nominator...).
+ *
+ * Também é coisa só de bancho.py com Shiina-Web: não existe no osu! oficial nem
+ * no Ripple, e mesmo entre bancho.py depende do front-end. Quem não tem devolve
+ * lista vazia por este mesmo despacho, e quem exibe simplesmente não desenha
+ * nada — nenhum comando precisa saber de qual servidor está falando.
+ */
+const supportsPlayerGroups = (mode = DEFAULT_MODE) => typeof apiFor(mode).playerGroups === 'function';
+
+/**
+ * Os grupos daquele jogador, ou lista vazia se o servidor não tiver o conceito.
+ * @returns {Promise<Array<{emoji: string, name: string}>>}
+ */
+async function getPlayerGroups(playerId, mode = DEFAULT_MODE) {
+  const api = apiFor(mode);
+  return typeof api.playerGroups === 'function' ? api.playerGroups(playerId, mode) : [];
+}
+
+/**
  * As melhores plays do servidor, do cache quando possível.
  *
  * Mesmo prazo do ranking de jogadores, pela mesma razão: é a foto do servidor
  * inteiro, não os números de alguém. E aqui o cache pesa mais, porque a busca é
  * uma varredura de páginas (ver topScores no adaptador) em vez de uma consulta.
  *
+ * A lista vem INTEIRA e ordenada, sem corte: quem chama filtra (por grupo, por
+ * exemplo) e só então corta, senão o corte come as posições que sobrariam.
+ *
  * @returns {Promise<{scores: Array, completo: boolean}>} `completo: false`
  *   quando a varredura estourou o teto — aí a lista não é confiável e vem vazia.
  */
 const _topScoresCache = new TtlCache({ ttlMs: RANKING_TTL_MS, max: RANKING_MAX });
 
-async function getTopScores(mode = DEFAULT_MODE, { limit = 50 } = {}) {
+async function getTopScores(mode = DEFAULT_MODE) {
   const api = apiFor(mode);
   if (typeof api.topScores !== 'function') {
     throw new Error(`servidores do tipo "${servers.get(mode).kind}" não expõem os melhores scores`);
   }
 
-  const chave = `${mode}:${limit}`;
-  const guardado = _topScoresCache.get(chave);
+  const guardado = _topScoresCache.get(mode);
   metrics.cache('topScoresServidor', Boolean(guardado));
   if (guardado) return guardado;
 
-  const resultado = await api.topScores(mode, { limit });
+  const resultado = await api.topScores(mode);
   // A varredura incompleta também é guardada: repetir o comando não vai fazer o
   // servidor encolher, e sem isso cada tentativa refaria as 30 requisições.
-  _topScoresCache.set(chave, resultado);
+  _topScoresCache.set(mode, resultado);
   return resultado;
 }
 
@@ -457,6 +479,8 @@ module.exports = {
   getLeaderboard,
   getTopScores,
   supportsTopScores,
+  getPlayerGroups,
+  supportsPlayerGroups,
   getBeatmap: fetchBeatmap,
   enrichBeatmapData,
   enrichScores,
