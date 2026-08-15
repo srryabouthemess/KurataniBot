@@ -4,12 +4,14 @@
 
 # Sessão de 2026-08-15 (EZPP Farm)
 
-O bot atende mais um servidor: o **[EZPP Farm](https://ez-pp.farm/)**, com as chaves `ezppfarm` e `ezppfarm_rx`. Ele é bancho.py, mas foi o primeiro a chegar **sem a Shiina-Web** — e era exatamente disso que o registro avisava desde que virou configuração: "um servidor com outro front-end responde o resto e falha nesses dois". O aviso deixou de ser uma nota e virou um caminho de código.
+O bot atende mais um servidor: o **[EZPP Farm](https://ez-pp.farm/)**, com as chaves `ezpp` e `ezpp_rx`. Ele é bancho.py, mas foi o primeiro a chegar **sem a Shiina-Web** — e era exatamente disso que o registro avisava desde que virou configuração: "um servidor com outro front-end responde o resto e falha nesses dois". O aviso deixou de ser uma nota e virou um caminho de código.
 
 ## ✨ Novos recursos
 
 - **EZPP Farm, de fábrica.** [`servers.js`](src/servers.js)
-  - Entra como embutido pelo mesmo critério do Akatsuki — servidor grande, API pública e estável, e nada aqui depende de configuração de quem hospeda. Some com `BUILTIN_SERVERS` como o outro, e `BUILTIN_SERVERS=ezppfarm` agora é uma escolha que faz sentido.
+  - Entra como embutido pelo mesmo critério do Akatsuki — servidor grande, API pública e estável, e nada aqui depende de configuração de quem hospeda. Some com `BUILTIN_SERVERS` como o outro, e `BUILTIN_SERVERS=ezpp` agora é uma escolha que faz sentido.
+  - **A chave é `ezpp`/`ezpp_rx`, e o label é "EZPP"/"EZPP RX".** A chave é o que se digita no modo texto (`k!rs fulano -ezpp`, `-ezpprx`), e o label é de onde sai a flag que a mensagem de erro sugere — com "EZPP Farm" ali, o atalho existiria sem nunca ser anunciado. O `-ezpprx` casa pelo label sem espaço, que é o mesmo caminho pelo qual `-daycorerx` já funcionava.
+  - O nome `ezppfarm`, que a primeira versão usou por algumas horas, continua resolvendo pelo mapa de nomes antigos. O `resolveKey` ganhou uma conferência junto: alias que aponta para um **embutido** pode apontar para fora quando ele está desligado, e sem isso `has('ezppfarm')` diria que sim com `BUILTIN_SERVERS` vazio, com o `get` devolvendo o servidor padrão como se fosse o pedido.
   - Vem com a variante Relax (`ezppfarm_rx`), que num servidor chamado *EZ PP farm* não é detalhe: o `mode=4` responde e tem ranking próprio — o #1 vanilla tem 27.054pp, o #1 relax tem 46.732pp.
   - Como é o primeiro embutido do tipo bancho.py, a montagem do servidor saiu de dentro da leitura do `.env` (`banchoPyServer`). Antes um embutido teria de repetir os sete campos à mão, e um deles ficaria para trás no dia em que a forma mudasse.
 

@@ -39,8 +39,22 @@ require('dotenv').config({ quiet: true });
 
 const OFFICIAL_KEY = 'official';
 
-/** Nomes que as versões antigas usavam, quando só existia um servidor privado. */
-const LEGACY_KEYS = { private: null, private_rx: null };
+/**
+ * Nomes antigos que ainda resolvem para a chave atual.
+ *
+ * `private`/`private_rx` são de quando só cabia um servidor privado, e apontam
+ * para o primeiro configurado (preenchidos no fim do `load`).
+ *
+ * `ezppfarm` nasceu e virou `ezpp` no mesmo dia, antes de existir link ou
+ * preferência apontando para ele — está aqui porque custa uma linha e cobre o
+ * que tenha ficado escrito em algum `.env` ou anotação nesse intervalo.
+ */
+const LEGACY_KEYS = {
+  private:     null,
+  private_rx:  null,
+  ezppfarm:    'ezpp',
+  ezppfarm_rx: 'ezpp_rx',
+};
 
 const _byKey = new Map();
 
@@ -206,10 +220,14 @@ const BUILTINS = {
   //
   // Entra de fábrica pelo mesmo motivo do Akatsuki: servidor grande, API
   // pública e estável, e nada aqui depende de configuração de quem hospeda.
-  ezppfarm: {
+  // A chave é `ezpp` (e `ezpp_rx`), e não `ezppfarm`: ela é o que se digita no
+  // modo texto (`k!rs fulano -ezpp`), então o nome curto é o que vale. O label
+  // acompanha, porque é dele que sai a flag sugerida na mensagem de erro — com
+  // "EZPP Farm" ali, o atalho existiria sem nunca ser anunciado.
+  ezpp: {
     ...banchoPyServer({
-      key:     'ezppfarm',
-      label:   'EZPP Farm',
+      key:     'ezpp',
+      label:   'EZPP',
       site:    'https://ez-pp.farm',
       api:     'https://api.ez-pp.farm',
       avatars: 'https://a.ez-pp.farm',
@@ -302,11 +320,18 @@ load();
 
 // ─── Consulta ─────────────────────────────────────────────────────────────────
 
-/** Traduz nome antigo (`private`, `private_rx`) para a chave atual. */
+/** Traduz nome antigo (`private`, `ezppfarm`…) para a chave atual. */
 function resolveKey(key) {
   const wanted = String(key ?? '').toLowerCase();
   if (_byKey.has(wanted)) return wanted;
-  return LEGACY_KEYS[wanted] ?? null;
+
+  // O alias só vale se o alvo estiver mesmo registrado. Os de `private` são
+  // preenchidos a partir do que foi carregado e nunca apontam para fora, mas os
+  // fixos apontam para um EMBUTIDO, que dá para desligar: sem esta conferência,
+  // `has('ezppfarm')` diria que sim com o `BUILTIN_SERVERS` vazio, e o `get`
+  // devolveria o servidor padrão como se fosse o pedido.
+  const antigo = LEGACY_KEYS[wanted];
+  return antigo && _byKey.has(antigo) ? antigo : null;
 }
 
 /** @returns {object} o servidor pedido, ou o padrão quando a chave não existe. */

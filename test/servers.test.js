@@ -10,6 +10,10 @@ process.chdir(os.tmpdir());
 
 const SERVERS_PATH = require.resolve('../src/servers');
 
+// O modo texto resolve `-ezpp` por aqui: a flag não diz qual opção preenche, e
+// sim o valor, e é este casamento que descobre.
+const { matchChoice } = require('../src/prefix/coerce');
+
 /**
  * Recarrega o registro com um ambiente controlado.
  *
@@ -230,40 +234,75 @@ test('embutidos', async t => {
     assert.equal(s.get('daycore_rx').rx, 0);
   });
 
-  await t.test('o EZPP Farm vem por padrão, com a variante RX', () => {
+  await t.test('o EZPP vem por padrão, com a variante RX', () => {
     const s = comEmbutidos();
-    assert.equal(s.get('ezppfarm').kind, 'banchopy');
-    assert.equal(s.get('ezppfarm').label, 'EZPP Farm');
-    assert.equal(s.get('ezppfarm_rx').relax, true);
+    assert.equal(s.get('ezpp').kind, 'banchopy');
+    assert.equal(s.get('ezpp').label, 'EZPP');
+    assert.equal(s.get('ezpp_rx').relax, true);
     // bancho.py: Relax é o modo 4, ao contrário do Ripple logo acima.
-    assert.equal(s.get('ezppfarm_rx').gameMode, 4);
+    assert.equal(s.get('ezpp_rx').gameMode, 4);
   });
 
-  await t.test('o EZPP Farm declara que não tem Shiina-Web', () => {
+  await t.test('a chave curta é a que se digita, e o label acompanha', () => {
+    // No modo texto a flag sai do label (`-ezpp`, `-ezpprx`), e é ele que a
+    // mensagem de erro sugere. Um label "EZPP Farm" esconderia o atalho.
+    const s = comEmbutidos();
+    assert.equal(s.get('ezpp_rx').label, 'EZPP RX');
+    const nomes = s.choices().map(c => c.name);
+    assert.ok(nomes.includes('EZPP') && nomes.includes('EZPP RX'), nomes.join(', '));
+  });
+
+  await t.test('o EZPP declara que não tem Shiina-Web', () => {
     // É o que manda o adaptador buscar rank e plays no próprio bancho.py. Sem
     // isto, as duas coisas iriam para `ez-pp.farm/api/v1`, que responde 200 com
     // o HTML da página — e a falha seria muda, não um erro.
     const s = comEmbutidos();
-    assert.equal(s.get('ezppfarm').webApi, null);
-    assert.equal(s.get('ezppfarm').banchoV1, 'https://api.ez-pp.farm/v1');
-    assert.equal(s.get('ezppfarm').banchoV2, 'https://api.ez-pp.farm/v2');
-    assert.equal(s.get('ezppfarm').avatars,  'https://a.ez-pp.farm');
+    assert.equal(s.get('ezpp').webApi, null);
+    assert.equal(s.get('ezpp').banchoV1, 'https://api.ez-pp.farm/v1');
+    assert.equal(s.get('ezpp').banchoV2, 'https://api.ez-pp.farm/v2');
+    assert.equal(s.get('ezpp').avatars,  'https://a.ez-pp.farm');
     // A variante RX é o mesmo cadastro: herda o endereço e o namespace.
-    assert.equal(s.get('ezppfarm_rx').webApi, null);
-    assert.equal(s.namespace('ezppfarm_rx'), s.namespace('ezppfarm'));
+    assert.equal(s.get('ezpp_rx').webApi, null);
+    assert.equal(s.namespace('ezpp_rx'), s.namespace('ezpp'));
+  });
+
+  await t.test('o nome antigo ainda resolve', () => {
+    const s = comEmbutidos();
+    assert.equal(s.resolveKey('ezppfarm'), 'ezpp');
+    assert.equal(s.resolveKey('ezppfarm_rx'), 'ezpp_rx');
   });
 
   await t.test('dá para desligar', () => {
     const s = load({ BUILTIN_SERVERS: '' });
     assert.equal(s.has('akatsuki'), false);
+    assert.equal(s.has('ezpp'), false);
+    // O alias não pode sobreviver ao embutido: sem a conferência, `has` diria
+    // que sim e o `get` devolveria o padrão como se fosse o EZPP.
     assert.equal(s.has('ezppfarm'), false);
     assert.equal(s.get('official').kind, 'official', 'o oficial não é um embutido opcional');
   });
 
   await t.test('dá para ligar só um deles', () => {
-    const s = load({ BUILTIN_SERVERS: 'ezppfarm' });
-    assert.equal(s.has('ezppfarm'), true);
+    const s = load({ BUILTIN_SERVERS: 'ezpp' });
+    assert.equal(s.has('ezpp'), true);
     assert.equal(s.has('akatsuki'), false);
+  });
+
+  await t.test('as flags do modo texto são as curtas', () => {
+    // O que a pessoa digita: `k!rs fulano -ezpp`. A flag não diz qual opção
+    // está preenchendo, e sim o valor — é o matchChoice que descobre.
+    const s = comEmbutidos();
+    const def = { choices: s.choices() };
+
+    assert.equal(matchChoice(def, 'ezpp')?.value, 'ezpp');
+    // Sem underline: a chave é `ezpp_rx`, e quem digita não põe o traço. Casa
+    // pelo label "EZPP RX" sem espaço.
+    assert.equal(matchChoice(def, 'ezpprx')?.value, 'ezpp_rx');
+    // Maiúsculas não atrapalham.
+    assert.equal(matchChoice(def, 'EZPP')?.value, 'ezpp');
+    // O prefixo comum não faz um cair no outro: `-ezpp` é o vanilla, e só.
+    assert.equal(matchChoice(def, 'akatsuki')?.value, 'akatsuki');
+    assert.equal(matchChoice(def, 'ezppfarm'), undefined, 'o label antigo não é mais uma flag');
   });
 
   await t.test('embutido desconhecido é ignorado com aviso, não derruba', () => {

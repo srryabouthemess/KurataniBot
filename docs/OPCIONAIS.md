@@ -17,13 +17,15 @@ Cada seção é independente — ligue só o que você quer.
 
 ## Servidores privados
 
-O **Akatsuki** (`akatsuki`, `akatsuki_rx`) e o **EZPP Farm** (`ezppfarm`, `ezppfarm_rx`) já vêm de fábrica. Para escolher quais embutidos carregar:
+O **Akatsuki** (`akatsuki`, `akatsuki_rx`) e o **EZPP Farm** (`ezpp`, `ezpp_rx`) já vêm de fábrica. Para escolher quais embutidos carregar:
 
 ```bash
-BUILTIN_SERVERS=                     # nenhum
-BUILTIN_SERVERS=akatsuki,ezppfarm    # os dois (padrão, se a linha não existir)
-BUILTIN_SERVERS=ezppfarm             # só esse
+BUILTIN_SERVERS=                 # nenhum
+BUILTIN_SERVERS=akatsuki,ezpp    # os dois (padrão, se a linha não existir)
+BUILTIN_SERVERS=ezpp             # só esse
 ```
+
+A chave do EZPP é curta de propósito — é ela que se digita no modo texto (`k!rs fulano -ezpp`, `-ezpprx`). O nome antigo `ezppfarm` ainda resolve, para o que tenha ficado escrito por aí.
 
 Qualquer instância bancho.py entra pelo `.env`:
 
