@@ -193,6 +193,19 @@ test('erros de sintaxe explicam o que fazer', async t => {
     assert.match((await run('k!simulate 123 DT abc')).reply, /inteiro/);
   });
 
+  await t.test('número em branco é erro de número, não de faixa', async () => {
+    // `Number('')` é 0, e `Number.isFinite(0)` é verdadeiro: sem o teste de
+    // vazio, o campo em branco virava zero. As opções numéricas de hoje têm
+    // `min_value: 1`, então ele caía no teste de faixa — e quem digitou lia
+    // "fora do limite" para um campo que não preencheu.
+    for (const linha of ['k!pp target:', 'k!pp ""']) {
+      const { context, reply } = await run(linha);
+      assert.equal(context, null, `${linha} não deveria executar`);
+      assert.match(reply, /número/, `${linha} deveria reclamar do número, e disse: ${reply}`);
+      assert.doesNotMatch(reply, /limite/, `${linha} não deveria falar em faixa`);
+    }
+  });
+
   await t.test('choice inválida lista as aceitas', async () => {
     assert.match((await run('k!language set xx')).reply, /pt/);
   });

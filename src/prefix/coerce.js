@@ -96,7 +96,20 @@ async function coerce(def, raw, message, s) {
     }
 
     case OptionType.Number: {
-      const value = Number(raw.replace(',', '.'));
+      const texto = raw.trim().replace(',', '.');
+      // O teste de vazio é separado, e não é redundante: `Number('')` é **0**, e
+      // `Number.isFinite(0)` é verdadeiro. Sem ele, `k!pp target:` (ou um token
+      // de aspas vazias) vira o número zero em vez de erro — o mesmo `Number('')`
+      // que o `num()` do topFilter já guarda pelo mesmo motivo. O ramo Integer
+      // aqui do lado nunca teve o furo, porque a regex dele recusa vazio.
+      //
+      // Hoje as três opções numéricas do bot têm `min_value: 1`, então o zero
+      // cai no teste de faixa logo abaixo e não chega a virar um cálculo — mas
+      // quem digitou lê "fora do intervalo (≥ 1)" para um campo que ficou EM
+      // BRANCO, e a próxima opção sem mínimo aceitaria o zero calada.
+      if (!texto) return { error: s.prefix_invalid_number(def.name) };
+
+      const value = Number(texto);
       if (!Number.isFinite(value)) return { error: s.prefix_invalid_number(def.name) };
       if ((def.min_value != null && value < def.min_value) ||
           (def.max_value != null && value > def.max_value)) {
