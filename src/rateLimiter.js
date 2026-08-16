@@ -77,10 +77,19 @@ class LeakyBucket {
  *
  * Se algum dia aparecer 429 nos downloads, este é o primeiro número a baixar.
  */
+/**
+ * Os dois últimos são os espelhos de `.osu` (ver HOSTS em beatmapFile.js), e são
+ * de propósito mais apertados que o do osu!. Não é medição: é que eles só são
+ * tocados quando o osu! já falhou, então o volume normal deles é ZERO — e são
+ * serviços da comunidade, não uma API que se contratou. Quando o osu! cai, 2/s
+ * ainda dá 120 mapas por minuto, muito mais do que uma página de /topplays pede.
+ */
 const BUCKETS = {
   osuApi:     8,  // GET/POST em osu.ppy.sh/api/v2
   osuMapFile: 4,  // download de .osu em osu.ppy.sh/osu/{id}
   osuOAuth:   1,  // /oauth/token
+  mapFileCatboy:    2,  // espelho de .osu em catboy.best
+  mapFileOsuDirect: 2,  // espelho de .osu em osu.direct
 };
 
 /**
