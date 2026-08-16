@@ -59,6 +59,7 @@ module.exports = ({ ADMIN }) => ({
   help_cmd_topscores:      'Melhores plays do servidor inteiro (só bancho.py).',
   help_cmd_whatif:         'Quanto PP você ganharia com uma play nova.',
   help_cmd_pp:             'O que falta para chegar a um total de PP.',
+  help_cmd_map:            'Um mapa, com o PP que um FC nele daria de 95% a 100%.',
   help_cmd_simulate:       'Quanto PP daria uma play específica num mapa.',
   help_cmd_link:           'Vincula sua conta do osu! ao Discord.',
   help_cmd_language:       'Muda o idioma: Português, English ou Русский.',
@@ -91,7 +92,14 @@ module.exports = ({ ADMIN }) => ({
   // `osu` sozinho, sem a palavra "Modo": o bot só atende osu!standard (o
   // ruleset está fixo na URL da API), e no dia em que atender outro o valor
   // vira osu!taiko / osu!catch / osu!mania, que já se explicam sozinhos.
-  topplays_footer:         (page, total, label) => `Página ${page}/${total} • osu • ${label}`,
+  //
+  // `recorte` ("12/100 plays") só chega quando um filtro tirou alguma play, e
+  // não passa pelo i18n: é número com a unidade junto, como as linhas do
+  // ranking (ver a nota em leaderboard_title).
+  topplays_footer:         (page, total, label, recorte = null) =>
+    [`Página ${page}/${total}`, recorte, 'osu', label].filter(Boolean).join(' • '),
+  topplays_none_match:     'Nenhuma play passa por esses filtros.',
+  topplays_bad_mods:       (input) => `❌ Não reconheci nenhum mod em \`${input}\`. Use os acrônimos (\`HDDT\`), ou \`NM\` para plays sem mod.`,
   topplays_error:          'Erro ao buscar as top plays.',
   pagination_not_yours:    '❌ Apenas quem usou o comando pode navegar entre as páginas.',
 
@@ -185,6 +193,15 @@ module.exports = ({ ADMIN }) => ({
   simulate_combo_fc:       'Full Combo',
   simulate_combo_assumed:  'combo máximo assumido',
   simulate_footer:         (label) => `Simulação • ${label}`,
+
+  // ── /map ──────────────────────────────────────────────────────────────────
+  // A tabela de pp não passa por aqui: é `95%` ao lado de um valor de pp, que
+  // se lê igual nos três idiomas (mesma decisão que o embed de play já toma
+  // sobre rótulos).
+  map_no_file:             '❌ Não consegui ler o arquivo desse mapa, então não há tabela de pp para mostrar.',
+  map_footer:              (label, status, mapper) =>
+    [status, mapper ? `mapa de ${mapper}` : null, label].filter(Boolean).join(' • '),
+  map_error:               '❌ Ocorreu um erro ao buscar esse mapa.',
 
   // Compartilhado entre /pp e /whatif
   no_plays:                (name, label) => `**${name}** não tem plays em ${label}.`,

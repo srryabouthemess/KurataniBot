@@ -15,4 +15,8 @@ const data = {
 module.exports = {
   data: { name: data.name, toJSON: () => data },
   execute: topplays.execute,
+  // As guardas do modo texto vêm junto, como no c.js: elas não estão no
+  // toJSON() (são do comando, não da opção), e sem esta linha o alias parsearia
+  // os mesmos argumentos por regras diferentes das do /topplays.
+  prefix: topplays.prefix,
 };

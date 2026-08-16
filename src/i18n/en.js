@@ -55,6 +55,7 @@ module.exports = ({ ADMIN }) => ({
   help_cmd_topscores:      "The whole server's best plays (bancho.py only).",
   help_cmd_whatif:         'How much PP a new play would earn you.',
   help_cmd_pp:             'What you still need to reach a PP total.',
+  help_cmd_map:            'A map, with the PP a FC on it would be worth at 95–100%.',
   help_cmd_simulate:       'How much PP a specific play on a map would be worth.',
   help_cmd_link:           'Link your osu! account to Discord.',
   help_cmd_language:       'Change the language: Português, English or Русский.',
@@ -84,7 +85,13 @@ module.exports = ({ ADMIN }) => ({
   profile_footer:          (label) => `osu! Stats • ${label}`,
 
   topplays_none:           'No plays found.',
-  topplays_footer:         (page, total, label) => `Page ${page}/${total} • osu • ${label}`,
+  // `recorte` ("12/100 plays") só chega quando um filtro tirou alguma play, e
+  // não passa pelo i18n: é número com a unidade junto, como as linhas do
+  // ranking (ver a nota em leaderboard_title).
+  topplays_footer:         (page, total, label, recorte = null) =>
+    [`Page ${page}/${total}`, recorte, 'osu', label].filter(Boolean).join(' • '),
+  topplays_none_match:     'No plays match these filters.',
+  topplays_bad_mods:       (input) => `❌ \`${input}\` has no mods I recognize. Use acronyms like \`HDDT\`, or \`NM\` for no mods.`,
   topplays_error:          'Error fetching top plays.',
   pagination_not_yours:    "❌ Only the person who ran the command can navigate the pages.",
 
@@ -173,6 +180,15 @@ module.exports = ({ ADMIN }) => ({
   simulate_combo_fc:       'Full Combo',
   simulate_combo_assumed:  'max combo assumed',
   simulate_footer:         (label) => `Simulation • ${label}`,
+
+  // ── /map ──────────────────────────────────────────────────────────────────
+  // The pp table itself never comes through here: it's `95%` next to a pp
+  // value, which reads the same in every language (same call the play embed
+  // makes about labels).
+  map_no_file:             "❌ Couldn't read this map's file, so there's no pp table to show.",
+  map_footer:              (label, status, mapper) =>
+    [status, mapper ? `mapset by ${mapper}` : null, label].filter(Boolean).join(' • '),
+  map_error:               '❌ An error occurred while fetching this map.',
 
   // Shared between /pp and /whatif
   no_plays:                (name, label) => `**${name}** has no plays on ${label}.`,

@@ -55,6 +55,7 @@ module.exports = ({ ADMIN }) => ({
   help_cmd_topscores:      'Лучшие плеи всего сервера (только bancho.py).',
   help_cmd_whatif:         'Сколько PP принесёт новый плей.',
   help_cmd_pp:             'Чего не хватает до нужного количества PP.',
+  help_cmd_map:            'Карта и сколько PP дал бы FC на ней при 95–100%.',
   help_cmd_simulate:       'Сколько PP дал бы конкретный плей на карте.',
   help_cmd_link:           'Привязка аккаунта osu! к Discord.',
   help_cmd_language:       'Смена языка: Português, English или Русский.',
@@ -84,7 +85,13 @@ module.exports = ({ ADMIN }) => ({
   profile_footer:          (label) => `osu! Stats • ${label}`,
 
   topplays_none:           'Плеев не найдено.',
-  topplays_footer:         (page, total, label) => `Страница ${page}/${total} • osu • ${label}`,
+  // `recorte` ("12/100 plays") приходит только когда фильтр что-то отсёк, и
+  // через i18n не проходит: это число с единицей, как строки рейтинга (см.
+  // примечание к leaderboard_title). `plays` остаётся по-английски.
+  topplays_footer:         (page, total, label, recorte = null) =>
+    [`Страница ${page}/${total}`, recorte, 'osu', label].filter(Boolean).join(' • '),
+  topplays_none_match:     'Нет плеев, подходящих под эти фильтры.',
+  topplays_bad_mods:       (input) => `❌ В \`${input}\` не распознан ни один мод. Используйте акронимы (\`HDDT\`) или \`NM\` для плеев без модов.`,
   topplays_error:          'Ошибка при получении топ плеев.',
   pagination_not_yours:    '❌ Только автор команды может переключать страницы.',
 
@@ -173,6 +180,15 @@ module.exports = ({ ADMIN }) => ({
   simulate_combo_fc:       'Full Combo',
   simulate_combo_assumed:  'предполагается макс. комбо',
   simulate_footer:         (label) => `Симуляция • ${label}`,
+
+  // ── /map ──────────────────────────────────────────────────────────────────
+  // Сама таблица pp сюда не попадает: это `95%` рядом со значением pp, что
+  // читается одинаково на любом языке (то же решение, что и у эмбеда плея
+  // насчёт подписей).
+  map_no_file:             '❌ Не удалось прочитать файл этой карты, поэтому таблицы pp нет.',
+  map_footer:              (label, status, mapper) =>
+    [status, mapper ? `карта от ${mapper}` : null, label].filter(Boolean).join(' • '),
+  map_error:               '❌ Произошла ошибка при получении этой карты.',
 
   // Общее для /pp и /whatif
   no_plays:                (name, label) => `У **${name}** нет плеев на ${label}.`,

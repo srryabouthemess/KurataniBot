@@ -5,12 +5,36 @@ const { resolvePlayer, fetchPlayer } = require('../userLink');
 const mapContext = require('../mapContext');
 const playEmbed = require('../embeds/play');
 const { paginate } = require('../pagination');
+const topFilter = require('../topFilter');
 const { t } = require('../i18n');
 const { logError } = require('../logger');
 const { safeEditReply } = require('../replies');
 
 const PAGE_SIZE   = 5;
 const FETCH_LIMIT = 100;
+
+/**
+ * As opções de ordenação como o Discord as mostra.
+ *
+ * O rótulo é traduzido, o valor não: ele é a chave que o topFilter conhece, e
+ * também o que se digita no modo texto (`k!top -acc`, ver coerce.js).
+ */
+const SORT_LABELS = {
+  pp:     { name: 'PP',       'pt-BR': 'PP',        ru: 'PP' },
+  acc:    { name: 'Accuracy', 'pt-BR': 'Acurácia',  ru: 'Точность' },
+  combo:  { name: 'Combo',    'pt-BR': 'Combo',     ru: 'Комбо' },
+  date:   { name: 'Date',     'pt-BR': 'Data',      ru: 'Дата' },
+  misses: { name: 'Misses',   'pt-BR': 'Misses',    ru: 'Миссы' },
+};
+
+const sortChoices = () => topFilter.SORTS.map(value => ({
+  value,
+  name: SORT_LABELS[value].name,
+  name_localizations: {
+    'pt-BR': SORT_LABELS[value]['pt-BR'],
+    ru:      SORT_LABELS[value].ru,
+  },
+}));
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -33,7 +57,44 @@ module.exports = {
         .setDescriptionLocalizations({ 'pt-BR': 'Qual servidor usar? (padrão: o do seu link)' })
         .setRequired(false)
         .addChoices(...servers.choices())
+    )
+    .addStringOption(option =>
+      option
+        .setName('sort')
+        .setDescription('Sort by (default: pp)')
+        .setDescriptionLocalizations({ 'pt-BR': 'Ordenar por (padrão: pp)' })
+        .setRequired(false)
+        .addChoices(...sortChoices())
+    )
+    .addStringOption(option =>
+      option
+        .setName('mods')
+        .setDescription('Only plays with these mods (e.g. HDDT, or NM for no mods)')
+        .setDescriptionLocalizations({ 'pt-BR': 'Só plays com estes mods (ex: HDDT, ou NM para sem mods)' })
+        .setRequired(false)
+        .setMaxLength(20)
+    )
+    .addBooleanOption(option =>
+      option
+        .setName('reverse')
+        .setDescription('Invert the order')
+        .setDescriptionLocalizations({ 'pt-BR': 'Inverte a ordem' })
+        .setRequired(false)
     ),
+
+  prefix: {
+    // No modo texto os argumentos são posicionais, e estes dois não podem
+    // engolir um pedaço de nick: sem as guardas, `k!top nome do cara` daria
+    // "não reconheci mods em `do`" em vez do erro de uso que já existia.
+    //
+    // O `reverse` recusa QUALQUER posicional de propósito: ele continua entrando
+    // por `-reverse` e por `reverse` solto (ver parseArgs), que é como se liga um
+    // booleano ali — nunca por posição.
+    guards: {
+      mods:    value => topFilter.parseModFilter(value) !== null,
+      reverse: () => false,
+    },
+  },
 
   async execute(interaction) {
     const s        = t(interaction);
@@ -42,17 +103,41 @@ module.exports = {
       return interaction.reply({ content: resolved.error, flags: MessageFlags.Ephemeral });
     }
 
+    const modsInput = interaction.options.getString('mods');
+    const filtro    = modsInput ? topFilter.parseModFilter(modsInput) : null;
+
+    // Texto que não vira mod nenhum é ERRO, e não filtro vazio: devolver a lista
+    // inteira faria `mods:XY` parecer "você não tem play com XY" (ver topFilter).
+    if (modsInput && !filtro) {
+      return interaction.reply({
+        content: s.topplays_bad_mods(modsInput),
+        flags: MessageFlags.Ephemeral,
+      });
+    }
+
+    const sort    = interaction.options.getString('sort') ?? 'pp';
+    const reverse = interaction.options.getBoolean('reverse') ?? false;
+
     const { mode } = resolved;
     await interaction.deferReply();
 
     try {
       // Perfil e plays na mesma viagem quando o link já deu o id (ver userLink).
-      const { user, scores: plays } = await fetchPlayer(
+      const { user, scores: todas } = await fetchPlayer(
         resolved,
         id => osu.getBestScores(id, FETCH_LIMIT, mode),
       );
       if (!user) return interaction.editReply(s.player_not_found);
-      if (plays.length === 0) return interaction.editReply(s.topplays_none);
+      if (todas.length === 0) return interaction.editReply(s.topplays_none);
+
+      // Ordenar e filtrar acontece ANTES de qualquer enriquecimento: o custo por
+      // score é da página exibida, não das cem buscadas (ver topFilter.js).
+      const plays = topFilter.arrange(todas, { sort, mods: filtro, reverse });
+      if (plays.length === 0) return interaction.editReply(s.topplays_none_match);
+
+      // Quantas de quantas, só quando o filtro tirou alguma: sem filtro o número
+      // repetiria o que a contagem de páginas já diz.
+      const recorte = plays.length < todas.length ? `${plays.length}/${todas.length} plays` : null;
 
       const totalPages = Math.ceil(plays.length / PAGE_SIZE);
 
@@ -61,11 +146,13 @@ module.exports = {
       // página já vista não passa por lá de novo.
       const pageMapId = new Map();
 
+      const fatia = page => plays.slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE);
+
       async function buildEmbed(page) {
         // Enriquece só os mapas da página atual (5), não os 100 buscados de
         // uma vez — evita rajada de requisições/rate limit na API do osu!
-        const rawPage    = plays.slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE);
-        const scoredPage = await osu.enrichScores(rawPage, mode);
+        const itens      = fatia(page);
+        const scoredPage = await osu.enrichScores(itens.map(item => item.score), mode);
         const pagePlays  = await osu.enrichBeatmapData(scoredPage);
 
         pageMapId.set(page, pagePlays[0]?.beatmap?.id ?? null);
@@ -76,7 +163,10 @@ module.exports = {
         const blocos = await Promise.all(pagePlays.map((play, index) =>
           playEmbed.listItem(play, {
             mode,
-            index:  page * PAGE_SIZE + index + 1,
+            // A posição no top ORIGINAL, e não o lugar nesta lista: com filtro
+            // ou ordenação, renumerar de 1 em diante faria a primeira linha
+            // parecer a melhor play do jogador (ver topFilter.js).
+            index:  itens[index].posicao,
             mapUrl: osu.getMapUrl(play.beatmap.id, play.beatmapset.id, mode),
           })
         ));
@@ -86,7 +176,7 @@ module.exports = {
           .setAuthor(playEmbed.author(user, mode, s))
           .setThumbnail(user.avatar_url ?? null)
           .setDescription(blocos.join('\n\n'))
-          .setFooter({ text: s.topplays_footer(page + 1, totalPages, osu.getModeLabel(mode)) });
+          .setFooter({ text: s.topplays_footer(page + 1, totalPages, osu.getModeLabel(mode), recorte) });
       }
 
       // O embed da página é memoizado pelo paginate(): sem isso, voltar para
@@ -105,7 +195,7 @@ module.exports = {
         // cinco), enquanto o .osu quase sempre já está no cache em disco. Era o
         // que sobrava no relógio depois que o cálculo de PP saiu dele.
         prefetch: async (page) => {
-          const proxima = plays.slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE);
+          const proxima = fatia(page).map(item => item.score);
           const cheias  = await osu.enrichBeatmapData(await osu.enrichScores(proxima, mode));
 
           await Promise.all(

@@ -127,6 +127,11 @@ for (const server of servers.all()) {
   const player = jogadorDe(server);
   caso(`/profile  ${server.label}`, 'profile.js', { player, server: server.key });
   caso(`/topplays ${server.label}`, 'topplays.js', { player, server: server.key });
+  // O mesmo comando com filtro e ordenação: o caminho muda de verdade, porque
+  // ordenar acontece sobre o score CRU, e "cru" tem forma diferente em cada
+  // tipo de servidor (ver topFilter.js) — é o que só roda contra a API real.
+  caso(`/topplays -acc ${server.label}`, 'topplays.js',
+    { player, server: server.key, sort: 'acc', mods: 'HD' });
   caso(`/recent   ${server.label}`, 'recent.js', { player, server: server.key });
   // Este não depende de jogador, mas depende do servidor: é o único comando que
   // chama `leaderboard` no adaptador, e cada tipo o serve de um endpoint
@@ -140,6 +145,9 @@ for (const server of servers.all()) {
 // ── Cálculo: não dependem de jogador ──────────────────────────────────────────
 caso('/pp',       'pp.js',       { map: String(MAPA), acc: 98 });
 caso('/simulate', 'simulate.js', { map: String(MAPA), mods: 'HDDT', acc: 99 });
+// Com mods, que é onde a tabela de pp deixa de ser a do mapa cru: se os
+// atributos ajustados sumirem, é aqui que aparece.
+caso('/map',      'map.js',      { map: String(MAPA), mods: 'HDDT' });
 caso('/whatif',   'whatif.js',   { player: PLAYERS.official, pp: 500 });
 caso('/score',    'score.js',    { player: PLAYERS.official, map: String(MAPA) });
 caso('/compare',  'compare.js',  { player: PLAYERS.official, map: String(MAPA) });
