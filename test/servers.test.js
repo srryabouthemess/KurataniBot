@@ -311,3 +311,60 @@ test('embutidos', async t => {
     assert.equal(s.get('official').kind, 'official');
   });
 });
+
+// ─── Embutidos + .env juntos ─────────────────────────────────────────────────
+// A combinação que roda de verdade, e a única que nenhum caso acima exercita: o
+// `load` desliga os embutidos por padrão justamente para isolar a leitura do
+// .env, e isso escondeu uma classe inteira de bug em vez de cobri-la.
+//
+// Foi por aqui que o /nominate quebrou: com o EZPP entrando de fábrica como
+// bancho.py, o alias `private` deixou de apontar para o servidor de quem
+// hospeda. Ele não é decoração — dele saem o PRIVATE_MODE das leituras
+// administrativas, o rótulo do servidor nas mensagens e o destino da migração
+// dos links antigos.
+
+test('embutidos convivendo com o SERVERS do .env', async t => {
+  // Sem BUILTIN_SERVERS: é como a VPS roda.
+  const comTudo = () => {
+    load({ SERVERS: 'daycore', SERVER_DAYCORE_URL: 'https://daycore.org', SERVER_DAYCORE_RELAX: 'true' });
+    delete process.env.BUILTIN_SERVERS;
+    delete require.cache[SERVERS_PATH];
+    return require('../src/servers');
+  };
+
+  await t.test('o alias é do servidor do .env, não do embutido', () => {
+    const s = comTudo();
+    // Os embutidos estão todos lá, e registrados ANTES do daycore.
+    assert.ok(s.has('ezpp') && s.has('akatsuki'), 'os embutidos precisam estar ligados neste caso');
+    assert.equal(s.resolveKey('private'),    'daycore');
+    assert.equal(s.resolveKey('private_rx'), 'daycore_rx');
+    assert.equal(s.namespace('private'),     'daycore');
+    // O rótulo dos comandos administrativos sai daqui: com o alias errado, a
+    // mensagem de erro dizia "EZPP" para quem estava operando o Daycore.
+    assert.equal(s.label(s.resolveKey('private')), 'Daycore');
+  });
+
+  await t.test('a ordem do SERVERS decide, não a do registro', () => {
+    load({
+      SERVERS: 'outro,daycore',
+      SERVER_OUTRO_URL: 'https://outro.org',
+      SERVER_DAYCORE_URL: 'https://daycore.org',
+    });
+    delete process.env.BUILTIN_SERVERS;
+    delete require.cache[SERVERS_PATH];
+    const s = require('../src/servers');
+    assert.equal(s.resolveKey('private'), 'outro');
+  });
+
+  await t.test('só com embutidos, a varredura geral ainda responde', () => {
+    // Quem hospeda sem SERVERS não pode ficar sem alias nenhum: aí o primeiro
+    // bancho.py registrado é a melhor resposta disponível.
+    const s = load({ BUILTIN_SERVERS: 'ezpp' });
+    assert.equal(s.resolveKey('private'), 'ezpp');
+  });
+
+  await t.test('sem nenhum bancho.py, o alias não existe', () => {
+    const s = load({ BUILTIN_SERVERS: 'akatsuki' });
+    assert.equal(s.resolveKey('private'), null);
+  });
+});

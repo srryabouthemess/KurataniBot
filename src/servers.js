@@ -309,7 +309,17 @@ function load() {
 
   // As chaves antigas apontam para o primeiro servidor privado configurado —
   // é o que mantém de pé os links e a preferência de quem já usava o bot.
-  const firstPrivate = [..._byKey.values()].find(s => s.kind === 'banchopy' && !s.relax);
+  //
+  // "Configurado" quer dizer o `SERVERS` do .env, e não a ordem de registro: os
+  // embutidos entram ANTES, e um deles passar a ser bancho.py rouba o alias de
+  // quem hospeda. Foi o que aconteceu quando o EZPP entrou de fábrica — enquanto
+  // o único embutido era o Akatsuki (kind 'ripple'), a varredura do registro
+  // pulava e acertava por acidente. O `private` virou 'ezpp', e com ele o
+  // PRIVATE_MODE dos comandos administrativos: o /nominate passou a perguntar os
+  // privilégios do staff do Daycore para a API do EZPP, que não conhece aquele
+  // id. A varredura geral fica de reserva, para quem roda só com embutidos.
+  const daEnv = keys.map(k => _byKey.get(k)).find(s => s?.kind === 'banchopy' && !s.relax);
+  const firstPrivate = daEnv ?? [..._byKey.values()].find(s => s.kind === 'banchopy' && !s.relax);
   if (firstPrivate) {
     LEGACY_KEYS.private = firstPrivate.key;
     LEGACY_KEYS.private_rx = _byKey.has(`${firstPrivate.key}_rx`) ? `${firstPrivate.key}_rx` : firstPrivate.key;

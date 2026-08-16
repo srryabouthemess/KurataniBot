@@ -53,12 +53,27 @@ async function resolveStaff(interaction, requiredPriv, s) {
   let player;
   try {
     player = await daycore.getPlayerPrivileges(link.osu_id);
-  } catch {
+  } catch (err) {
+    // O motivo vai para o log porque a resposta não pode trazê-lo: quem roda o
+    // comando não faz nada com "connect ECONNREFUSED", e a URL da API costuma
+    // vir junto. Sem este registro, porém, a falha ficava sem NENHUM rastro dos
+    // dois lados — foi assim que o alias `private` apontando para o servidor
+    // errado passou despercebido, com o bot consultando outra API e a mensagem
+    // dizendo só "tente de novo".
+    logError('staffGuard:priv', err);
     return { error: s.admin_priv_fetch_failed };
   }
   // O vínculo aponta para uma conta que o Daycore não reconhece mais (renomeada,
   // apagada). Recusa em vez de seguir sem saber o priv — falhar fechado.
-  if (!player) return { error: s.admin_priv_fetch_failed };
+  //
+  // Registrado com o id porque a mensagem é a mesma do catch acima, e as duas
+  // causas pedem coisas opostas: aqui a API respondeu e disse que não conhece
+  // aquela conta — ou porque o vínculo envelheceu, ou porque estamos falando com
+  // a API errada.
+  if (!player) {
+    logError('staffGuard:priv', new Error(`jogador ${link.osu_id} não existe em ${daycore.adminServerLabel()}`));
+    return { error: s.admin_priv_fetch_failed };
+  }
 
   if (!daycore.hasPriv(player.priv, requiredPriv)) {
     return { error: s.admin_missing_priv(daycore.privLabel(player.priv)) };
