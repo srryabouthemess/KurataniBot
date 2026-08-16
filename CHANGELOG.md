@@ -22,6 +22,13 @@ Estrelas e PP saíam do `rosu-pp`, que é uma reimplementação em Rust do algor
   - Tirar os dois da lista não afrouxa nada. Quem impede o par `](` de se formar é o escape do **colchete**, que continua no lugar; sem poder fechar o rótulo, o atacante não abre destino nenhum. Os dois testes de link forjado seguem passando.
   - Eles estavam verdes por acidente: comparavam a string crua, onde `\](` não casa com o literal `](` procurado. Agora removem os pares escapados antes de olhar — que é como o Discord lê a linha — e passariam a falhar se o colchete saísse.
 
+- **Emoji no motivo do restrict derrubava o servidor de jogo.** [`daycoreAdmin.js`](src/daycoreAdmin.js)
+  - Relatado por quem usa: "quando você dá restrict usando emoji, o server morre". É verdade, e a causa não está no bot — está no que o bot manda. O bancho grava o motivo em `logs.msg`, que é `varchar(2048) charset utf8`, e **`utf8` no MySQL é utf8mb3**: três bytes por caractere, teto em U+FFFF. Todo emoji moderno mora acima disso e precisa de quatro, então o INSERT devolve erro 1366 e a exceção sobe pela tarefa que escuta o pub/sub.
+  - Consertar a coluna é do outro lado; o que cabe aqui é **não mandar o que o receptor não guarda**. O `signReason` passou a remover o que está fora do BMP, junto do que ele já fazia com caractere de controle.
+  - **O mesmo defeito tinha um segundo caminho, que ninguém tinha achado ainda**: emoji ocupa DUAS posições numa string de JavaScript, e o corte em 512 conta posições. Cortar no meio do par deixava um substituto órfão, que não é UTF-8 válido — o `orjson.loads` do bancho recusaria a mensagem inteira, antes mesmo do banco. Limpar **antes** de cortar fecha os dois: sem par, não há o que partir ao meio.
+  - **A ordem virou parte da defesa contra a assinatura forjada.** Tirar o emoji de `via 😀KurataniBot` *produz* o marcador; se a limpeza rodasse depois da neutralização, um motivo passaria com uma segunda assinatura apontando para outra pessoa. Ela roda antes, e há teste para isso.
+  - Motivo que era só emoji não vira motivo vazio — o campo é obrigatório no comando, e uma restrição sem justificativa no log de quem recebeu seria pior que o emoji perdido. Vai como `(sem motivo legível)`.
+
 - **"from in-game" virou só "in-game" no anúncio.** [`en.js`](src/i18n/en.js), [`pt.js`](src/i18n/pt.js)
   - "Applied by atlas, from in-game" não se lê bem: "in-game" já é o lugar, e o "from" na frente dele sobra. Agora sai `Applied by atlas, in-game` e `Applied in-game` quando o fork não manda o autor.
   - O português seguiu o mesmo termo em vez de traduzir: `Aplicado por atlas, in-game`. Quem lê o canal chama de in-game, não de "pelo jogo". O russo ficou com `из игры`.

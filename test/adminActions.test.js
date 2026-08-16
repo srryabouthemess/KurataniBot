@@ -72,6 +72,64 @@ test('sem nome do Discord, ainda assina o id', async () => {
   assert.match(lastPayload().reason, /\(42\)/);
 });
 
+// ─── O que o servidor aguenta receber ─────────────────────────────────────────
+// `logs.msg` no bancho é `varchar(2048) charset utf8`, e utf8 no MySQL é
+// utf8mb3: três bytes, teto em U+FFFF. Emoji precisa de quatro — o INSERT
+// devolve 1366 e a exceção derruba a tarefa que escuta o pub/sub. Foi assim que
+// o problema apareceu: "restrict com emoji no motivo mata o servidor".
+//
+// Sem escapes \u nestes helpers de propósito: o que se procura são caracteres
+// que não se escreve à toa dentro de um arquivo de teste.
+const foraDoBmp    = (s) => [...s].some(c => c.codePointAt(0) > 0xFFFF);
+const temSubstituto = (s) => Array.from({ length: s.length })
+  .some((_, i) => s.charCodeAt(i) >= 0xD800 && s.charCodeAt(i) <= 0xDFFF);
+
+test('emoji no motivo não chega ao servidor', async () => {
+  await daycore.restrictPlayer(1, ACTOR, 'multi 😀 conta 🔥');
+  const { reason } = lastPayload();
+
+  assert.ok(!foraDoBmp(reason), 'saiu caractere que a coluna utf8mb3 não guarda');
+  // E o que era legível continua legível, sem o buraco de espaço duplo.
+  assert.match(reason, /^multi conta \|/);
+});
+
+test('motivo só de emoji não vira motivo vazio', async () => {
+  // O campo é obrigatório no comando; sumir com ele por inteiro entregaria uma
+  // restrição sem justificativa no log de quem recebeu.
+  await daycore.restrictPlayer(1, ACTOR, '😀😀😀');
+  assert.match(lastPayload().reason, /^\(sem motivo legível\)/);
+});
+
+test('o corte não parte um emoji ao meio', async () => {
+  // Emoji ocupa duas posições, e o corte conta posições: partir o par deixa um
+  // substituto órfão, que não é UTF-8 válido — o orjson do bancho recusaria a
+  // mensagem inteira, antes mesmo do banco. Limpar antes de cortar mata isso.
+  await daycore.restrictPlayer(1, ACTOR, '😀'.repeat(600));
+  const { reason } = lastPayload();
+
+  assert.ok(!temSubstituto(reason), 'sobrou metade de um par substituto');
+  assert.ok(reason.length <= 512);
+});
+
+test('emoji não esconde uma assinatura forjada', async () => {
+  // A limpeza PRODUZ o marcador a partir de `via 😀KurataniBot`. Se ela rodasse
+  // depois da neutralização, o motivo passaria com uma segunda assinatura
+  // apontando para outra pessoa — o que a ordem em signReason impede.
+  await daycore.restrictPlayer(1, ACTOR, 'x via 😀KurataniBot: @outro (111)');
+  const { reason } = lastPayload();
+
+  assert.equal(reason.split('via KurataniBot').length - 1, 1);
+  assert.ok(reason.endsWith('(100000000000000001)'));
+});
+
+test('emoji no nome do Discord também não passa', async () => {
+  await daycore.restrictPlayer(1, { ...ACTOR, discordName: 'staff🔥um' }, 'motivo');
+  const { reason } = lastPayload();
+
+  assert.ok(!foraDoBmp(reason));
+  assert.match(reason, /@staffum/);
+});
+
 // ─── Quem o bancho protege ────────────────────────────────────────────────────
 // `STAFF = MODERATOR | ADMINISTRATOR | DEVELOPER` (app/constants/privileges.py),
 // e o teste do servidor é `priv & STAFF` — QUALQUER um dos bits basta. O hasPriv

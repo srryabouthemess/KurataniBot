@@ -230,19 +230,57 @@ const SIGNATURE_MARK = 'via KurataniBot';
 // assinatura nunca — ela é a parte que a auditoria precisa.
 const PUBLISHED_REASON_MAX = 512;
 
-function signReason(reason, actor) {
-  const signature = ` | ${SIGNATURE_MARK}: @${actor.discordName ?? '?'} (${actor.discordId})`;
+/**
+ * Caractere fora do BMP — na prática, todo emoji moderno.
+ *
+ * ── Por que ele não pode sair daqui ───────────────────────────────────────────
+ * O bancho grava o motivo em `logs.msg`, que é `varchar(2048) charset utf8`. E
+ * `utf8` no MySQL é o **utf8mb3**: três bytes por caractere, teto em U+FFFF. Um
+ * 😀 (U+1F600) precisa de quatro, o INSERT devolve o erro 1366 ("Incorrect
+ * string value") e a exceção sobe pela tarefa que escuta o pub/sub — que é o
+ * que quem usa vê como "o servidor morre" ao restringir com emoji no motivo.
+ *
+ * Não dá para consertar a coluna daqui, e nem seria o lugar: quem publica é
+ * quem tem de mandar algo que o receptor aguente guardar.
+ *
+ * ── E o corte, que era o mesmo defeito por outro caminho ──────────────────────
+ * Emoji ocupa DUAS posições numa string de JavaScript (o par substituto), e o
+ * corte em 512 conta posições. Cortar no meio do par deixa um substituto órfão,
+ * que não é UTF-8 válido — e aí o `orjson.loads` do bancho recusa a mensagem
+ * inteira, sem nem chegar no banco. Limpar ANTES de cortar resolve os dois: sem
+ * par nenhum, não há o que partir ao meio.
+ */
+const FORA_DO_BMP = /[\u{10000}-\u{10FFFF}]/gu;
 
-  const text = String(reason ?? '')
+/** O que sobra quando o motivo inteiro era emoji — e ele é obrigatório. */
+const SEM_MOTIVO = '(sem motivo legível)';
+
+/** Texto que o log do servidor consegue guardar. */
+function paraOServidor(texto) {
+  return String(texto ?? '')
     // Quebra de linha e controle viram espaço: sem isso um motivo com \n
     // desenha linhas falsas em quem lê o log depois. O linter reclama de
     // caractere de controle em regex justamente porque costuma ser engano —
     // aqui é o alvo.
     // eslint-disable-next-line no-control-regex
     .replace(/[\u0000-\u001F\u007F]+/g, ' ')
+    .replace(FORA_DO_BMP, '')
+    // O que sai deixa buraco: "cheat 😀 confirmado" ficaria com dois espaços.
+    .replace(/ {2,}/g, ' ')
+    .trim();
+}
+
+function signReason(reason, actor) {
+  const signature = ` | ${SIGNATURE_MARK}: @${paraOServidor(actor.discordName) || '?'} (${actor.discordId})`;
+
+  // A limpeza vem ANTES de neutralizar o marcador, e a ordem é parte da defesa:
+  // tirar o emoji de `via 😀KurataniBot` PRODUZ o marcador. Na ordem inversa, um
+  // motivo forjaria a segunda assinatura escondendo-a atrás de um emoji.
+  const text = paraOServidor(reason)
     // E o próprio marcador é neutralizado, para o motivo não conseguir forjar
     // uma segunda assinatura apontando para outra pessoa.
-    .split(SIGNATURE_MARK).join('via-bot');
+    .split(SIGNATURE_MARK).join('via-bot')
+    || SEM_MOTIVO;
 
   const room = Math.max(0, PUBLISHED_REASON_MAX - signature.length);
   const clipped = text.length > room ? `${text.slice(0, Math.max(0, room - 1))}…` : text;
