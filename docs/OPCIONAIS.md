@@ -245,7 +245,7 @@ Com `DAYCORE_ANNOUNCE_CHANNEL_ID` preenchido, todo mapa que vira **ranked** ou *
 - **`/wipe` apaga os scores de um modo e zera as estatísticas, sem volta.** Pede confirmação por botão mostrando o que será destruído, e o log guarda esses números — depois do wipe eles não existem em lugar nenhum. O bancho **não** confere privilégio nesse canal: a exigência de `DEVELOPER` é do bot, e é a única que existe.
 - **Nenhum funciona no modo texto:** respondem em ephemeral, e o adaptador do prefixo precisa descartar essa flag.
 - **Confirmação.** O bot não recebe resposta ao publicar no Redis, então relê o estado depois e avisa quando não conseguiu confirmar, em vez de reportar sucesso no escuro. A janela cresce com o tamanho do set, porque o servidor baixa o `.osu` de cada dificuldade que não tem.
-- **Autor do anúncio in-game** só aparece se o fork incluir `author_id`/`author_name` no publish do `_map` (`app/commands.py`). Sem isso sai como "aplicado pelo jogo".
+- **Autor do anúncio in-game** só aparece se o fork incluir `author_id`/`author_name` no publish do `_map` (`app/commands.py`). Sem isso sai como "aplicado in-game".
 
 </details>
 

@@ -243,8 +243,8 @@ module.exports = ({ ADMIN }) => ({
   ann_title:               (status) => `Map is now ${status}`,
   ann_diffs:               (n) => `${n} difficulty(ies) on ${ADMIN}`,
   ann_by:                  (who) => `Applied by ${who}`,
-  ann_by_ingame:           (who) => `Applied by ${who}, from in-game`,
-  ann_ingame_unknown:      'Applied from in-game',
+  ann_by_ingame:           (who) => `Applied by ${who}, in-game`,
+  ann_ingame_unknown:      'Applied in-game',
 
   nom_invalid_map:         '❌ Could not identify that map. Use the beatmap/set ID or a link.',
   nom_map_not_found:       `❌ Map not found on ${ADMIN} or on osu!.`,

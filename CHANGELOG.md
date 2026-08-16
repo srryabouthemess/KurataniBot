@@ -22,6 +22,10 @@ Estrelas e PP saíam do `rosu-pp`, que é uma reimplementação em Rust do algor
   - Tirar os dois da lista não afrouxa nada. Quem impede o par `](` de se formar é o escape do **colchete**, que continua no lugar; sem poder fechar o rótulo, o atacante não abre destino nenhum. Os dois testes de link forjado seguem passando.
   - Eles estavam verdes por acidente: comparavam a string crua, onde `\](` não casa com o literal `](` procurado. Agora removem os pares escapados antes de olhar — que é como o Discord lê a linha — e passariam a falhar se o colchete saísse.
 
+- **"from in-game" virou só "in-game" no anúncio.** [`en.js`](src/i18n/en.js), [`pt.js`](src/i18n/pt.js)
+  - "Applied by atlas, from in-game" não se lê bem: "in-game" já é o lugar, e o "from" na frente dele sobra. Agora sai `Applied by atlas, in-game` e `Applied in-game` quando o fork não manda o autor.
+  - O português seguiu o mesmo termo em vez de traduzir: `Aplicado por atlas, in-game`. Quem lê o canal chama de in-game, não de "pelo jogo". O russo ficou com `из игры`.
+
 - **O `+HD` exibia a estrela errada, e ninguém tinha como saber.** [`mods.js`](src/mods.js)
   - O HD estava na lista de mods **cosméticos**, o que fazia o `getAdjustedStars` desistir de calcular e devolver a estrela que a API publica — que é sempre a **sem mods**. Isso era correto enquanto o HD não mexia em dificuldade nenhuma, e deixou de ser: o rework de 03/07/2026 trocou os bônus de AR e HD por uma skill de **reading**.
   - Medido no motor novo, que bate exato com o site: **7.806★ sem mods contra 8.239★ com HD** no mesmo mapa, +5,5%. O HD aparece em cerca de metade dos scores, então isto valia para metade da tela.
