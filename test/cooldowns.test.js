@@ -39,3 +39,12 @@ test('comando sem bucket declarado cai no default', () => {
   assert.equal(cooldowns.bucketOf('help'), 'default');
   assert.equal(cooldowns.bucketOf('comando-que-nao-existe'), 'default');
 });
+
+test('todo comando administrativo cai no bucket rígido', () => {
+  // O critério é "administrativo", e não a lista que existia no dia. O /wipe e
+  // o /staff nasceram depois e ficaram no bucket frouxo — a mesma omissão que
+  // já tinha pegado o /top e o /wi. Um comando de staff novo entra aqui.
+  for (const nome of ['nominate', 'moderate', 'wipe', 'staff']) {
+    assert.equal(cooldowns.bucketOf(nome), 'heavy', `/${nome} deveria estar no bucket "heavy"`);
+  }
+});

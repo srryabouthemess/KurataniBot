@@ -85,9 +85,26 @@ function setPreferredServer(discordId, server) {
   `).run(discordId, server);
 }
 
+/**
+ * O servidor preferido, ou null se ele não existir mais no registro.
+ *
+ * A conferência é o ponto todo. O valor foi gravado quando aquela chave era
+ * válida, e o registro muda por configuração de quem hospeda — tirar um servidor
+ * do `SERVERS`, ou desligar um embutido pelo `BUILTIN_SERVERS`, deixa para trás
+ * a preferência de quem o usava.
+ *
+ * Devolver a chave morta era pior do que parecia, porque o `servers.get` cai no
+ * padrão em silêncio para chave desconhecida: o comando lia o link do namespace
+ * ERRADO (o do servidor padrão) e respondia com o rótulo dele, sem nada na tela
+ * denunciando a troca. Os cinco pontos que leem daqui já tratam null como "não
+ * tem preferência" e caem no padrão explicitamente — que é a mesma resposta,
+ * agora dita em voz alta.
+ */
 function getPreferredServer(discordId) {
-  return db.prepare('SELECT preferred_server FROM users WHERE discord_id = ?')
+  const salvo = db.prepare('SELECT preferred_server FROM users WHERE discord_id = ?')
     .get(discordId)?.preferred_server ?? null;
+
+  return salvo && servers.has(salvo) ? salvo : null;
 }
 
 // ─── Idioma do usuário ────────────────────────────────────────────────────────

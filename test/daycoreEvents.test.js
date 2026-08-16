@@ -45,6 +45,15 @@ test('o autor é opcional', () => {
   const comAutor = parseEvent(payload({ author_id: 3, author_name: 'nunca' }));
   assert.equal(comAutor.authorId, 3);
   assert.equal(comAutor.authorName, 'nunca');
+
+  // Ausente e explicitamente nulo precisam dar no mesmo. `Number(null)` é 0 e
+  // `Number.isFinite(0)` é verdadeiro, então o campo opcional vinha como o
+  // jogador 0 — e "não sei quem foi" virava um id de jogador válido.
+  assert.equal(parseEvent(payload({ author_id: null })).authorId, null);
+  assert.equal(parseEvent(payload({ author_id: '' })).authorId, null);
+  assert.equal(parseEvent(payload({ author_id: 0 })).authorId, null);
+  // Id vem como string em JSON de fork que serializa assim.
+  assert.equal(parseEvent(payload({ author_id: '42' })).authorId, 42);
 });
 
 test('payload quebrado não derruba nada', () => {

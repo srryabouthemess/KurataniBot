@@ -66,8 +66,16 @@ const COMMAND_BUCKET = {
   // depois relê cada uma até 3 vezes para confirmar — um set grande são
   // dezenas de chamadas. São comandos de staff, mas o custo justifica o
   // bucket mais rígido.
+  //
+  // Os quatro estão aqui porque "administrativo" é o critério, e os dois que
+  // chegaram depois ficaram de fora quando nasceram — a mesma omissão que já
+  // tinha deixado o /top e o /wi no bucket frouxo. O /wipe relê as estatísticas
+  // até 3 vezes para confirmar, e o /staff confirm baixa a página de perfil
+  // INTEIRA (30-70KB) a cada tentativa, que é o mais caro da lista.
   nominate: 'heavy',
   moderate: 'heavy',
+  wipe:     'heavy',
+  staff:    'heavy',
 };
 
 // Map<bucketName, Map<userId, { lastUse, windowStart, tickets }>>

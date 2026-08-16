@@ -78,12 +78,18 @@ function parseEvent(raw) {
     .filter(id => Number.isInteger(id) && id > 0);
   if (mapIds.length === 0) return null;
 
+  // Mesma exigência dos `map_ids` logo acima, e pelo mesmo motivo: `Number(null)`
+  // é 0, e `Number.isFinite(0)` é verdadeiro. O campo é OPCIONAL — o fork que
+  // não o preenche manda `author_id: null` —, então este é o caso comum, não a
+  // borda: quem lesse o resultado receberia o jogador 0 no lugar de "não sei".
+  const authorId = Number(data?.author_id);
+
   return {
     mapIds,
     status: STATUS_BY_TYPE[type],
     type,
     scope: String(data?.ranktype ?? 'map'),
-    authorId: Number.isFinite(Number(data?.author_id)) ? Number(data.author_id) : null,
+    authorId: Number.isInteger(authorId) && authorId > 0 ? authorId : null,
     authorName: data?.author_name ? String(data.author_name) : null,
   };
 }
