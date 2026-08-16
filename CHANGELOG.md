@@ -17,6 +17,11 @@ Estrelas e PP saíam do `rosu-pp`, que é uma reimplementação em Rust do algor
 
 ## 🐛 Correções
 
+- **O escape de ontem imprimiu contrabarra no nome do mapa.** [`markdown.js`](src/markdown.js)
+  - O canal de anúncios publicou `Lady Gaga - Judas \(Jugghouse\)`. O `md()` de ontem tratava parêntese como escapável, e ele não é: o Discord só come a contrabarra diante de um caractere com significado, e parêntese sozinho não tem nenhum — só como destino **depois** de um `]`.
+  - Tirar os dois da lista não afrouxa nada. Quem impede o par `](` de se formar é o escape do **colchete**, que continua no lugar; sem poder fechar o rótulo, o atacante não abre destino nenhum. Os dois testes de link forjado seguem passando.
+  - Eles estavam verdes por acidente: comparavam a string crua, onde `\](` não casa com o literal `](` procurado. Agora removem os pares escapados antes de olhar — que é como o Discord lê a linha — e passariam a falhar se o colchete saísse.
+
 - **O `+HD` exibia a estrela errada, e ninguém tinha como saber.** [`mods.js`](src/mods.js)
   - O HD estava na lista de mods **cosméticos**, o que fazia o `getAdjustedStars` desistir de calcular e devolver a estrela que a API publica — que é sempre a **sem mods**. Isso era correto enquanto o HD não mexia em dificuldade nenhuma, e deixou de ser: o rework de 03/07/2026 trocou os bônus de AR e HD por uma skill de **reading**.
   - Medido no motor novo, que bate exato com o site: **7.806★ sem mods contra 8.239★ com HD** no mesmo mapa, +5,5%. O HD aparece em cerca de metade dos scores, então isto valia para metade da tela.

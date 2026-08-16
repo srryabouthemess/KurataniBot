@@ -216,8 +216,12 @@ test('título de mapa hostil não forja um link no item de lista', async () => {
     { mode: 'official', index: 1, mapUrl: 'https://osu.ppy.sh/b/1' },
   );
 
-  assert.ok(!item.includes('](https://sitefalso.example'), 'o link forjado sobreviveu ao escape');
-  assert.equal((item.match(/(?<!\\)\]\(/g) ?? []).length, 1, 'sobrou um `](` sem escape na primeira linha');
+  // Olhar a linha crua confundiria `\](` com `](`: o que o Discord lê é a linha
+  // sem os pares escapados, porque caractere escapado deixa de ser sintaxe.
+  const comoLido = item.replace(/\\./g, '');
+
+  assert.ok(!comoLido.includes('](https://sitefalso.example'), 'o link forjado sobreviveu ao escape');
+  assert.equal((comoLido.match(/\]\(/g) ?? []).length, 1, 'sobrou um `](` sem escape na primeira linha');
 });
 
 test('sem estrelas conhecidas o item não escreve "?★"', async () => {

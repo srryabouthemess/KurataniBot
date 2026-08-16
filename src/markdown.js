@@ -27,6 +27,12 @@
  * antes de qualquer outro, a contrabarra aparece na tela. Por isso a lista abaixo
  * é exatamente o conjunto escapável, e não "todo símbolo por precaução".
  *
+ * Parêntese é o caso que provou isso na prática: ele não significa nada sozinho,
+ * só como destino DEPOIS de um `]`. Escapá-lo publicou
+ * `Lady Gaga - Judas \(Jugghouse\)` no canal de anúncios. Escapar o `]` já
+ * impede o par `](` de se formar, então o parêntese fica de fora — o colchete
+ * continua na lista porque é ele que abre e fecha rótulo de link.
+ *
  * Construções de início de linha (`# `, `- `, `> `) não entram na lista: elas só
  * valem no começo de uma linha, e o texto externo é interpolado no meio de uma —
  * a menos que ele traga a própria quebra de linha, que é o que a limpeza de
@@ -44,7 +50,7 @@
 const CONTROLE = /[\u0000-\u001F\u007F]+/g;
 
 /** Exatamente os caracteres que o Discord aceita escapar com `\`. */
-const ESCAPAVEIS = /([\\`*_~|[\]()])/g;
+const ESCAPAVEIS = /([\\`*_~|[\]])/g;
 
 /**
  * Texto externo pronto para entrar numa descrição de embed.
