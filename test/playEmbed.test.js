@@ -2,12 +2,15 @@
  * O desenho de uma play na tela.
  *
  * O que este arquivo trava não é gosto de layout — é o que o layout AFIRMA. As
- * mesmas três armadilhas voltavam a cada comando que exibia um score:
+ * mesmas armadilhas voltavam a cada comando que exibia um score:
  *
- *   1. um número calculado aqui passar por número oficial do servidor (o `~`);
- *   2. um dado que não existe virar "0", "undefined" ou "NaN" na tela, que o
+ *   1. um dado que não existe virar "0", "undefined" ou "NaN" na tela, que o
  *      leitor não tem como distinguir de resultado;
- *   3. o pp do FC aparecer em play que já era FC — ou sumir em play que não era.
+ *   2. o pp do FC aparecer em play que já era FC — ou sumir em play que não era.
+ *
+ * O til que marcava "calculado aqui" saiu quando o motor passou a bater exato
+ * com o osu! (ver ppText em embeds/play.js): ele era uma ressalva de precisão, e
+ * a imprecisão que ele ressalvava deixou de existir.
  *
  * O osuClient é trocado por um mock porque aqui nada disso depende de rede: o
  * que se testa é a forma, e a forma é função dos dados que chegam.
@@ -68,7 +71,7 @@ test('a play e o FC dela ficam na mesma fração', async () => {
   setup({ fcPP: 457.95 });
   const bloco = await playEmbed.single(jogada(), { mode: 'official', s });
 
-  assert.match(bloco.description, /\*\*121\.21\*\*\/~457\.95pp/);
+  assert.match(bloco.description, /\*\*121\.21\*\*\/457\.95pp/);
 });
 
 test('play que já era FC não ganha segundo número', async () => {
@@ -80,21 +83,27 @@ test('play que já era FC não ganha segundo número', async () => {
   } }), { mode: 'official', s });
 
   assert.match(bloco.description, /\*\*121\.21\*\*pp/);
-  assert.doesNotMatch(bloco.description, /\/~/);
+  // A fração é o que diz "houve choke"; sem segundo número não há barra.
+  assert.doesNotMatch(bloco.description, /\d\/\d/);
 });
 
-test('pp calculado aqui leva o til; o do servidor não', async () => {
+test('pp calculado aqui sai igual ao do servidor, sem ressalva', async () => {
+  // O til que marcava "este veio de cá" saiu com a troca de motor: ele
+  // prometia menos precisão do que o número tem. Um til reaparecendo aqui é
+  // sinal de que a convenção antiga voltou sem querer.
   setup({ localPP: 99 });
   const bloco = await playEmbed.single(jogada({ pp: null }), { mode: 'official', s });
 
-  assert.match(bloco.description, /\*\*~99\.00\*\*pp/);
+  assert.match(bloco.description, /\*\*99\.00\*\*pp/);
+  assert.doesNotMatch(bloco.description, /~/);
 });
 
 test('FC que daria MENOS que a play não vira promessa ao contrário', async () => {
-  // Choke de um combo só: o rosu-pp está dois reworks atrás do osu!, e o valor
-  // que ele calcula para o FC sai abaixo do pp oficial da play. Exibir os dois
-  // diria "se tivesse acertado tudo, teria ganhado menos" — que não é o que a
-  // linha significa.
+  // Exibir os dois diria "se tivesse acertado tudo, teria ganhado menos", que
+  // não é o que a linha significa. No vanilla isso praticamente não acontece
+  // mais desde que o motor passou a bater exato com o oficial; a guarda fica
+  // pelo Relax, onde quem calcula é outro motor (o akatsuki-pp) e um choke de um
+  // combo só pode divergir nas casas decimais.
   setup({ fcPP: 118.4 });
   const bloco = await playEmbed.single(jogada({ pp: 121.21 }), { mode: 'official', s });
 

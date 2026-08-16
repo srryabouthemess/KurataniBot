@@ -112,14 +112,22 @@ function combo(play) {
 const misses = (play) => (missCount(play) > 0 ? `❌ ${missCount(play)}` : null);
 
 /**
- * `121.21/~457.95pp` (o primeiro em negrito) — o que a play pagou e, quando ela
+ * `121.21/457.95pp` (o primeiro em negrito) — o que a play pagou e, quando ela
  * foi choke, o que um FC teria pago.
  *
- * O `~` diz que o número foi calculado aqui, e não veio pontuado pelo servidor.
- * O do FC é sempre hipotético; o da play passa a ser quando a API devolve pp
- * nulo — play interrompida, mapa que não paga pp, ou score de lazer que ela não
- * pontuou. A ressalva escrita ("(FC: ~457.95pp)") virou a fração, mas a
- * convenção do til é a mesma que o bot já usava.
+ * ── O til saiu ────────────────────────────────────────────────────────────────
+ * O `~` marcava "este número foi calculado aqui, não veio pontuado pelo
+ * servidor" — uma ressalva de PRECISÃO, de quando o motor local era o rosu-pp e
+ * ficava reworks atrás do osu!. Ela deixou de descrever a realidade: o
+ * lazer-calculator compila o C# do próprio osu!, e medido contra a API oficial
+ * em 12 top plays reais o erro é de 0,00%. No Relax quem calcula é o
+ * akatsuki-pp, que é o mesmo motor dos servidores de RX — ou seja, a mesma
+ * conta que pontuou o score.
+ *
+ * O que continua sendo verdade é que o número do FC é HIPOTÉTICO, e isso a
+ * fração já diz sozinha: dois valores separados por barra, com o real em
+ * negrito. O til não acrescentava nada a isso, e sugeria uma imprecisão que não
+ * existe mais.
  *
  * O `getFCpp` devolve null para play que já é FC, então o segundo número
  * aparecer é, por si só, o sinal de que houve choke.
@@ -134,18 +142,17 @@ async function ppText(play, mode) {
     osu.getFCpp(play, mode),
   ]);
 
-  const valor = Number.isFinite(proprio)
-    ? `${doServidor ? '' : '~'}${proprio.toFixed(2)}`
-    : '?';
+  const valor = Number.isFinite(proprio) ? proprio.toFixed(2) : '?';
 
   // O número do FC só entra quando é MAIOR do que o que a play pagou. "Se
-  // tivesse sido FC, teria dado menos" não é informação: é o rosu-pp — que está
-  // dois reworks atrás do osu! — discordando do valor oficial do servidor, e na
-  // tela isso vira uma promessa ao contrário. Acontece em choke de um combo só,
-  // onde os dois números deveriam ser praticamente o mesmo.
+  // tivesse sido FC, teria dado menos" não é informação, é ruído — e agora que
+  // o motor bate exato com o oficial, ver isso acontecer no vanilla é sinal de
+  // que alguma coisa está errada, não de desatualização. A guarda fica pelo
+  // Relax, onde o motor é outro e a divergência de casas decimais é possível
+  // num choke de um combo só.
   const mostraFC = Number.isFinite(fc) && (!Number.isFinite(proprio) || fc > proprio);
 
-  return `**${valor}**${mostraFC ? `/~${fc.toFixed(2)}` : ''}pp`;
+  return `**${valor}**${mostraFC ? `/${fc.toFixed(2)}` : ''}pp`;
 }
 
 /**
@@ -284,7 +291,7 @@ function author(user, mode, s) {
  * linhas falam só do que aconteceu nele.
  *
  *   {grade} @47% +NM • 1,234,567 • 81.48% • há 2 horas
- *   121.21/~457.95pp • 55x/284x • ❌ 23
+ *   121.21/457.95pp • 55x/284x • ❌ 23
  *   { 148 / 18 / 0 / 23 }
  *   `02:00` • `CS 4 AR 9.4 OD 9.6 HP 5` • `128 BPM`
  *
@@ -338,7 +345,7 @@ async function single(play, { mode, s }) {
  * Uma play como item de lista (/topplays, /score).
  *
  *   **#1** [Artista - Título [Dif]](url) **+HDDT** [8.31★]
- *   {grade} • 727.27/~800.00pp • 98.44% • 1234x/1500x • ❌ 1 • há 2 dias
+ *   {grade} • 727.27/800.00pp • 98.44% • 1234x/1500x • ❌ 1 • há 2 dias
  *   { 1000 / 20 / 0 / 1 }
  *
  * Sem `mapUrl` (o /score, onde as cinco linhas são do mesmo mapa) o título sai
