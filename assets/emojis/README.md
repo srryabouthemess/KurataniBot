@@ -50,3 +50,16 @@ play não completada continua em texto até você pôr um.
 > Se você usa um aplicativo separado para testes, os emojis são **por
 > aplicativo**: o bot de teste envia para o app dele e o de produção para o
 > dele, cada um no primeiro boot.
+
+## De onde vêm estes arquivos
+
+Os oito PNGs aqui são da **skin oficial do osu!**, de ppy Pty Ltd. O código do
+osu! é MIT, mas os **recursos do jogo não são**: eles saem sob
+[CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/), que pede
+atribuição e **proíbe uso comercial**. A atribuição está no
+[THIRD-PARTY-NOTICES.md](../../THIRD-PARTY-NOTICES.md), e é lá que ela precisa
+continuar se você trocar estes arquivos por outros.
+
+Isso limita o bot enquanto eles estiverem aqui — bot pago não pode usá-los. A
+pasta é opcional de propósito: sem os arquivos a grade volta a ser texto, e nada
+mais muda.

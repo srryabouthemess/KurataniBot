@@ -9,8 +9,9 @@ copyright e o texto da licença viajem junto com o software. Este arquivo é ess
 cumprimento.
 
 Cobre as **63 dependências de produção** do lock — as transitivas
-inclusive, que são a maioria. Dependências de desenvolvimento (`eslint`) ficam de
-fora: elas não são redistribuídas com o bot.
+inclusive, que são a maioria — e mais duas que o npm não enxerga: a lib Python do
+PP do Relax e os ícones de grade, que vieram do jogo. Estas últimas estão em
+[O que não vem do npm](#o-que-não-vem-do-npm), no fim.
 
 ## O que há aqui
 
@@ -2410,16 +2411,61 @@ calculador, cuja LGPL-3.0 acompanha as outras duas variantes.
 | `https-proxy-agent` | 5.0.1 | MIT |
 | `redis` | 6.2.0 | MIT |
 
-## Fora desta lista
+## O que não vem do npm
 
-Um aviso de terceiros cobre o que é **redistribuído junto**. Duas coisas que o bot
-usa ficam de fora por não serem:
+O lock só conhece o que o `npm install` baixa, e o bot usa duas coisas de terceiro
+fora disso. Elas entram aqui à mão, pela mesma razão que o resto do arquivo existe.
 
-- **`akatsuki-pp-py`** (Python), que calcula o PP do Relax. Ela é opcional e quem
-  opera o bot a instala na própria máquina — o repositório não a carrega, só
-  documenta como instalar em [`docs/OPCIONAIS.md`](docs/OPCIONAIS.md).
-- **Dependências de desenvolvimento** (`eslint` e o que ela puxa), que não sobem
-  para a VPS nem entram em execução do bot.
+### akatsuki-pp-py — MIT
 
-Já os arquivos de [`assets/`](assets) **não** são dependência de npm e portanto não
-aparecem aqui: a origem de cada um responde por si.
+Calcula o PP das plays de **Relax**, que usa outro sistema de PP. É opcional e
+quem opera o bot instala na própria máquina (veja [`docs/OPCIONAIS.md`](docs/OPCIONAIS.md)),
+então o repositório não a redistribui — mas ela é dependência do código do mesmo
+jeito: [`src/pp_calc.py`](src/pp_calc.py) a importa, e sem ela o PP do RX sai como `?pp`.
+
+De Max Ohn e tsunyoku — <https://github.com/osuAkatsuki/akatsuki-pp-py>.
+
+```text
+MIT License
+
+Copyright (c) 2021 Max
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
+
+### Ícones de grade em `assets/emojis/` — osu!, CC BY-NC 4.0
+
+Os oito PNGs (`ranking-A.png` … `ranking-XH.png`) são da **skin oficial do osu!**,
+de ppy Pty Ltd. Eles viram os emojis de grade das plays — o bot não os desenhou.
+
+O código do osu! é MIT, **os recursos do jogo não**: eles saem sob
+[CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/), conforme
+[ppy/osu-resources](https://github.com/ppy/osu-resources). O que essa licença pede,
+e este arquivo cumpre, é **atribuição**; o que ela proíbe é **uso comercial**.
+
+> Enquanto o bot for gratuito, como é hoje, os ícones podem ficar. Se um dia ele
+> cobrar por qualquer coisa, eles são a primeira peça a sair — e o bot sobrevive
+> à saída deles: sem os arquivos, a grade volta a ser texto (`**A**`), que é como
+> era antes.
+
+A marca "osu!" e a marca "ppy" são de ppy Pty Ltd e não são licenciadas por nada
+disto. Este é um projeto de fã, sem vínculo com a ppy.
+
+Ficam de fora, essas sim: as **dependências de desenvolvimento** (`eslint` e o que
+ela puxa), que não sobem para a VPS nem entram em execução do bot.
