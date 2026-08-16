@@ -20,9 +20,15 @@
  *   node test/postEmbeds.js <canalId> --enviar     → envia
  *   node test/postEmbeds.js <canalId> --enviar --so=topplays,recent
  *   node test/postEmbeds.js <canalId> --enviar --dono=<seuDiscordId>
+ *   node test/postEmbeds.js <canalId> --enviar --top=20
  *
  * O `--enviar` é obrigatório de propósito: sem ele o script não escreve nada.
  * Mandar duas dezenas de mensagens no canal errado é fácil e chato de desfazer.
+ *
+ * O `--top=N` troca o catálogo fixo por um `/recent` de cada um dos N primeiros
+ * do ranking do Bancho. Serve para julgar os números em plays REAIS e variadas —
+ * o catálogo fixo mostra o layout de cada comando, mas sempre com os mesmos três
+ * jogadores, então mods raros, choke e play interrompida quase nunca aparecem.
  *
  * O `--dono` faz os botões ◀️ ▶️ funcionarem para aquele Discord: a paginação só
  * aceita clique de quem "rodou" o comando. Sem ele os botões aparecem, e
@@ -37,6 +43,7 @@ const path = require('path');
 const { Client, Collection, GatewayIntentBits, PermissionFlagsBits } = require('discord.js');
 
 const servers = require('../src/servers');
+const osu = require('../src/osuClient');
 const pp = require('../src/pp');
 const db = require('../src/db');
 
@@ -44,6 +51,7 @@ const [canalId, ...flags] = process.argv.slice(2);
 const ENVIAR = flags.includes('--enviar');
 const DONO   = (flags.find(f => f.startsWith('--dono=')) ?? '').split('=')[1] || null;
 const FILTRO = (flags.find(f => f.startsWith('--so=')) ?? '').split('=')[1]?.split(',') ?? null;
+const TOP    = Number((flags.find(f => f.startsWith('--top=')) ?? '').split('=')[1]) || 0;
 
 if (!canalId) {
   console.error('uso: node test/postEmbeds.js <canalId> [--enviar] [--dono=<id>] [--so=a,b]');
@@ -161,6 +169,31 @@ client.once('clientReady', async () => {
     console.log(`permissão: escrever=${perms.has(PermissionFlagsBits.SendMessages)} embed=${perms.has(PermissionFlagsBits.EmbedLinks)}`);
   }
 
+  // O --top troca o catálogo inteiro: ali a pergunta não é "como cada comando
+  // fica", é "os números batem em play de verdade". Os casos fixos usam sempre
+  // os mesmos três jogadores, então mods raros, choke e play interrompida quase
+  // nunca aparecem — e é justamente neles que o cálculo de PP erra feio quando
+  // erra.
+  if (TOP > 0) {
+    casos.length = 0;
+    let ranking;
+    try {
+      ranking = await osu.getLeaderboard('official', { limit: TOP });
+    } catch (e) {
+      console.error(`não consegui ler o ranking do Bancho: ${e.message}`);
+      return encerrar(1);
+    }
+
+    ranking.slice(0, TOP).forEach((entrada, i) => {
+      // Pelo ID, e não pelo nome: os dois resolvem, mas o nome de quem trocou de
+      // nick recentemente pode não resolver, e aí a linha some do teste sem que
+      // isso tenha a ver com o que se quer olhar.
+      const alvo = String(entrada.user_id ?? entrada.id ?? entrada.username);
+      caso(`recent #${i + 1} ${entrada.username ?? alvo}`, 'recent.js',
+        { player: alvo, server: 'official' });
+    });
+  }
+
   const lista = FILTRO ? casos.filter(c => FILTRO.some(f => c.nome.startsWith(f))) : casos;
 
   if (!ENVIAR) {
@@ -207,6 +240,9 @@ async function encerrar(codigo) {
   await client.destroy();
   pp.closePythonWorker();
   pp.closeRosuWorker();
+  // O do lazer-calculator entra aqui pela mesma razão dos outros dois, e a
+  // ordem é a do index.js: fechar os motores antes do banco.
+  pp.closeLazerWorker();
   db.close();
   process.exit(codigo);
 }
