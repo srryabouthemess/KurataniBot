@@ -82,19 +82,26 @@ function stripClassic(mods) {
 }
 
 /**
- * Mods que mudam COMO se joga, mas não o que o mapa é.
+ * Mods que não mexem na dificuldade do mapa.
  *
  * A distinção importa por causa de quem pergunta: o `getAdjustedStars` usa a
- * estrela publicada pela API quando não há mod de dificuldade, porque ela é mais
- * exata que a nossa (o rosu-pp está dois reworks atrás do osu!). Com o HD
- * contando como mod, um `+HD` de mapa ranqueado saía calculado aqui — 8.09★
- * onde o site mostra 8.31★, numa combinação que é das mais comuns que existem.
+ * estrela publicada pela API quando não há mod de dificuldade, porque ali ela é
+ * o mesmo número — e sai de graça, sem baixar o .osu nem calcular nada.
  *
- * O CL entra pelo mesmo motivo do `stripClassic`: ele diz a mecânica da play.
- * Fora daqui ficam EZ, HR, DT, NC, HT e FL, que mexem no mapa de verdade — e o
- * RX, que muda o motor de cálculo inteiro.
+ * ── O HD saiu desta lista ─────────────────────────────────────────────────────
+ * Ele estava aqui porque não mudava estrela nenhuma, e isso deixou de ser
+ * verdade: o rework de 03/07/2026 trocou os bônus de AR e HD por uma skill de
+ * READING, e agora o HD mexe no número. Medido no lazer-calculator, que bate
+ * exato com o site: 7.806★ sem mods contra 8.239★ com HD no mesmo mapa, +5,5%.
+ * Com ele aqui, todo `+HD` — que é das combinações mais comuns que existem —
+ * exibiria a estrela SEM mods, que é o único valor que a API publica.
+ *
+ * O CL fica pelo motivo do `stripClassic`: ele diz a mecânica da play, e foi
+ * conferido que não move a estrela (7.8058★ com e sem). Fora daqui ficam EZ, HR,
+ * DT, NC, HT e FL, que mexem no mapa de verdade — e o RX, que muda o motor de
+ * cálculo inteiro.
  */
-const COSMETIC_MODS = new Set(['HD', 'NF', 'SO', 'SD', 'PF', 'CL']);
+const COSMETIC_MODS = new Set(['NF', 'SO', 'SD', 'PF', 'CL']);
 
 /**
  * Só os mods que alteram a dificuldade. Pode ser vazio, e aí quem chama decide
@@ -102,6 +109,26 @@ const COSMETIC_MODS = new Set(['HD', 'NF', 'SO', 'SD', 'PF', 'CL']);
  */
 function difficultyMods(mods) {
   return (mods ?? []).filter(mod => !COSMETIC_MODS.has(mod));
+}
+
+/**
+ * A forma canônica dos mods para servir de CHAVE de cache.
+ *
+ * Ordenada e sem repetição, porque `['DT','HD']` e `['HD','DT']` são o mesmo
+ * conjunto e precisam cair na mesma linha do cache — a ordem em que os mods
+ * chegam da API não é garantida, e sem isto o mesmo cálculo ocuparia duas
+ * entradas e nenhuma das duas acertaria de forma confiável.
+ *
+ * Substituiu o bitmask nesse papel quando o cálculo passou para o
+ * lazer-calculator. O bitmask não servia mais por duas razões: o CL não tem bit
+ * (era uma coluna `lazer` à parte, ao lado da coluna de mods, para guardar um
+ * mod que já é um mod), e nenhum bit tem onde guardar AJUSTE de mod — um DT a
+ * 1,3x e um a 1,5x colidiam na mesma chave, com números diferentes.
+ *
+ * @returns {string} ex.: 'CL,DT,HD'; string vazia quando não há mod nenhum
+ */
+function canonicalMods(mods) {
+  return [...new Set(mods ?? [])].sort().join(',');
 }
 
 /**
@@ -121,4 +148,5 @@ function formatMods(mods) {
 module.exports = {
   MOD_BITS, KNOWN_MOD_TOKENS,
   decodeMods, parseModsString, modsToBits, stripClassic, difficultyMods, formatMods,
+  canonicalMods,
 };

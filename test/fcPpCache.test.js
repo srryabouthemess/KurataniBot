@@ -41,8 +41,7 @@ test.after(() => {
 
 const base = {
   beatmapId: 123456,
-  modsBits: 64,          // DT
-  useLazer: true,
+  mods: ['DT'],
   relax: false,
   n300: 900, n100: 50, n50: 10, misses: 0,
 };
@@ -63,20 +62,32 @@ test('mapa, mods e motor separam entradas', () => {
   const referencia = pp.fcCacheKey(base);
 
   const outroMapa  = pp.fcCacheKey({ ...base, beatmapId: 999999 });
-  const outrosMods = pp.fcCacheKey({ ...base, modsBits: 16 });   // HR
-  const stable     = pp.fcCacheKey({ ...base, useLazer: false });
+  const outrosMods = pp.fcCacheKey({ ...base, mods: ['HR'] });
+  // A mecânica clássica deixou de ser uma dimensão própria da chave e virou o
+  // mod CL dentro de `mods` — é o mesmo que o osu! faz, e é o que permite a
+  // tabela ter uma coluna a menos.
+  const classico   = pp.fcCacheKey({ ...base, mods: ['DT', 'CL'] });
   const akatsuki   = pp.fcCacheKey({ ...base, relax: true });
 
-  assert.equal(referencia.engine, 'rosu-lazer');
-  assert.equal(stable.engine,     'rosu-stable');
+  assert.equal(referencia.engine, 'lazer');
+  assert.equal(classico.engine,   'lazer');
   assert.equal(akatsuki.engine,   'akatsuki');
 
-  // O Relax ignora a mecânica: quem calcula é outro motor inteiro.
-  assert.equal(pp.fcCacheKey({ ...base, relax: true, useLazer: false }).engine, 'akatsuki');
+  assert.equal(referencia.mods, 'DT');
+  assert.equal(classico.mods,   'CL,DT');
 
-  const chaves = [referencia, outroMapa, outrosMods, stable, akatsuki]
+  const chaves = [referencia, outroMapa, outrosMods, classico, akatsuki]
     .map(k => JSON.stringify(k));
   assert.equal(new Set(chaves).size, chaves.length, 'duas chaves distintas colidiram');
+});
+
+test('a ordem em que os mods chegam não muda a chave', () => {
+  // A API não garante ordem, e sem forma canônica o mesmo cálculo ocuparia duas
+  // linhas — nenhuma das duas acertando de forma confiável.
+  assert.equal(
+    pp.fcCacheKey({ ...base, mods: ['HD', 'DT', 'CL'] }).mods,
+    pp.fcCacheKey({ ...base, mods: ['CL', 'HD', 'DT'] }).mods,
+  );
 });
 
 test('sem os três hits não há chave', () => {
@@ -106,17 +117,17 @@ test('a separação da chave vale também na tabela', () => {
   // O teste de chave acima compara objetos; este confere que a PRIMARY KEY
   // cobre as mesmas dimensões — um índice mais estreito colidiria em silêncio.
   const lazer    = pp.fcCacheKey({ ...base, beatmapId: 222222 });
-  const stable   = pp.fcCacheKey({ ...base, beatmapId: 222222, useLazer: false });
+  const classico = pp.fcCacheKey({ ...base, beatmapId: 222222, mods: ['DT', 'CL'] });
   const akatsuki = pp.fcCacheKey({ ...base, beatmapId: 222222, relax: true });
   const outroHit = pp.fcCacheKey({ ...base, beatmapId: 222222, n100: 51 });
 
   db.setCachedFCpp(lazer,    100);
-  db.setCachedFCpp(stable,   200);
+  db.setCachedFCpp(classico, 200);
   db.setCachedFCpp(akatsuki, 300);
   db.setCachedFCpp(outroHit, 400);
 
   assert.equal(db.getCachedFCpp(lazer),    100);
-  assert.equal(db.getCachedFCpp(stable),   200);
+  assert.equal(db.getCachedFCpp(classico), 200);
   assert.equal(db.getCachedFCpp(akatsuki), 300);
   assert.equal(db.getCachedFCpp(outroHit), 400);
 });

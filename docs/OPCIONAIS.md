@@ -8,6 +8,7 @@ Cada seção é independente — ligue só o que você quer.
 - [Comandos por texto (`k!`)](#comandos-por-texto-k)
 - [Emojis de rank](#emojis-de-rank)
 - [Usando em DM](#usando-em-dm)
+- [O cálculo de PP](#o-cálculo-de-pp)
 - [PP no Relax](#pp-no-relax)
 - [Administração do servidor](#administração-do-servidor)
 - [Outras variáveis](#outras-variáveis)
@@ -110,6 +111,32 @@ São *application emojis*: funcionam em qualquer servidor e em DM, sem "servidor
 
 1. No Developer Portal, em **Installation**, marque **User Install**.
 2. Cada pessoa clica em **"Add App"** no perfil do bot (diferente de "Add to Server").
+
+---
+
+## O cálculo de PP
+
+Estrelas e PP saem do [`@tosuapp/lazer-calculator`](https://github.com/tosuapp/lazer-calculator), que compila o C# do próprio osu!lazer. Conferido contra a API oficial, ele reproduz o número publicado **exatamente**: erro de 0,00% em 12 top plays reais, choke incluído.
+
+Ele se instala junto com o resto (`npm install`) e **não precisa de nada** — nem .NET, nem compilador: o binário já vem pronto.
+
+### Se ele não estiver disponível
+
+A lib só tem binário para **Windows x64** e **Linux x64**. Em qualquer outra plataforma (VPS ARM, macOS) o `npm install` a pula sem falhar, e o bot continua respondendo normalmente — só sem os números calculados localmente:
+
+| O que some | O que continua |
+|---|---|
+| `(FC: ~Xpp)` na linha da play | o PP real do score, que vem da API |
+| estrela ajustada por mod | a estrela sem mods, publicada pela API |
+| `/simulate` e `/whatif` | todo o resto dos comandos |
+
+A causa vai para o log **uma vez só**, e o `/diag` mostra a linha `lazer-calc` como fora do ar.
+
+### Por que ele roda em processo separado
+
+O runtime .NET da lib não descarrega: o simples `require()` dela, sem calcular nada, termina o processo em segfault. Num worker thread isso derrubaria o bot inteiro — e no meio do encerramento, antes de o banco fechar. Como processo-filho, o estrago fica todo do lado de lá, e o `/diag` conta quantos cálculos ele serviu.
+
+> O `rosu-pp-js` continua no projeto, mas só para CS/AR/OD/HP ajustados por mod, BPM e contagem de objetos — a linha de informação do mapa. Ele é a única fonte desses valores, e eles não mudam entre reworks.
 
 ---
 

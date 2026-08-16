@@ -14,44 +14,65 @@
 require('dotenv').config({ quiet: true });
 const db = require('./db');
 const servers = require('./servers');
-const { modsToBits, stripClassic, difficultyMods } = require('./mods');
+const { modsToBits, stripClassic, difficultyMods, canonicalMods } = require('./mods');
 const { logErrorOnce } = require('./logger');
 const { getBeatmapFile } = require('./beatmapFile');
 const { TtlCache } = require('./ttlCache');
 const pythonWorker = require('./pythonWorker');
 const rosuWorker = require('./rosuWorker');
+const lazerWorker = require('./lazerWorker');
 
 const DEFAULT_MODE = servers.defaultKey();
 
-// ─── rosu-pp ──────────────────────────────────────────────────────────────────
-// A lib é nativa (Wasm), síncrona e opcional. Ela roda num worker thread, e não
-// aqui: o cálculo parava o event loop, e uma página de mapas inéditos são vinte
-// paradas dessas seguidas — inclusive para o heartbeat do gateway. O
-// rosuWorker.js explica o desenho; o que sobra neste arquivo é decidir O QUE
-// calcular, e onde guardar o resultado.
+// ─── Os dois motores de PP vanilla ────────────────────────────────────────────
+// Estrelas e PP saem do @tosuapp/lazer-calculator, que compila o C# do próprio
+// osu!lazer: conferido contra a API oficial, ele reproduz o número publicado com
+// erro 0,00% — em 3 mapas de star rating e nos 12 top plays reais que testamos,
+// choke incluído. O rosu-pp que fazia isso antes ficava 3,9% fora em média (até
+// 10% em casos isolados), porque está um rework atrás.
 //
-// Sem a lib instalada, o worker relata uma vez e passa a devolver null: o bot
-// continua respondendo, só sem os valores calculados localmente.
+// O rosu-pp CONTINUA no projeto, para uma coisa só: CS/AR/OD/HP ajustados por
+// mod, BPM e contagem de objetos (ver getMapAttrs). O lazer-calculator não expõe
+// BPM nem clock rate, e essa linha do embed é informação de mapa, não de PP —
+// não vale um segundo motor exato para ela.
+//
+// Cada um roda fora do processo principal, e por razões diferentes: o rosu-pp é
+// Wasm síncrono e paralisava o event loop; o lazer-calculator, além de lento, TEM
+// de ser processo separado porque o runtime .NET dele termina em segfault (ver
+// lazerWorkerChild.js). As duas libs são opcionais — sem elas o bot continua
+// respondendo, só sem os valores calculados localmente.
 
 /**
- * Decide se o cálculo deve usar a mecânica lazer (sliders novos) ou
- * stable/classic (sliders antigos).
+ * Os mods como o motor de cálculo precisa vê-los.
  *
- * - bancho.py: nenhum servidor desses roda lazer, então sempre stable.
- * - Oficial: lazer por padrão, EXCETO se o mod CL (Classic) estiver presente —
- *   nesse caso o score foi jogado com mecânica stable.
+ * O que era um booleano `lazer` virou um mod de verdade. A mecânica de slider
+ * agora se diz com o CL (Classic) na lista, que é como o próprio osu! a
+ * representa — e é o que permite o cache ter uma chave só, em vez de uma coluna
+ * de mods mais uma coluna `lazer` ao lado.
+ *
+ * A regra é a mesma de sempre, só escrita do outro lado:
+ *  - bancho.py: nenhum servidor desses roda lazer, então o CL entra sempre.
+ *  - Oficial: o score já chega com CL quando foi jogado na mecânica antiga, e
+ *    quase todo score ranqueado é assim. Sem CL, é lazer de verdade.
+ *
+ * @returns {string[]} novo array; o de quem chamou não é tocado
  */
-function shouldUseLazer(mode, mods) {
-  if (!servers.isOfficial(mode)) return false;
-  return !(mods ?? []).includes('CL');
+function engineMods(mode, mods) {
+  const lista = mods ?? [];
+  if (servers.isOfficial(mode) || lista.includes('CL')) return [...lista];
+  return [...lista, 'CL'];
 }
 
 /**
- * Manda uma operação para a thread do rosu-pp.
+ * Manda uma operação para o processo do lazer-calculator.
  *
- * Os bytes do mapa só são buscados se a thread não tiver aquele mapa parseado —
- * ela pede, e só então o download/cache é consultado (ver rosuWorker.js).
+ * Os bytes do mapa só são buscados se o processo não tiver aquele mapa parseado —
+ * ele pede, e só então o download/cache é consultado (ver lazerWorker.js).
  */
+const noLazer = (op, mapId, args) =>
+  lazerWorker.calcular(op, mapId, args, () => getBeatmapFile(mapId));
+
+/** O mesmo, para a thread do rosu-pp (hoje só os atributos de mapa). */
 const noRosu = (op, mapId, args) =>
   rosuWorker.calcular(op, mapId, args, () => getBeatmapFile(mapId));
 
@@ -66,22 +87,26 @@ const noRosu = (op, mapId, args) =>
  *
  * @returns {Promise<{stars: number, maxCombo: number|null}|null>}
  */
-async function getDifficultyAttrs(mapId, modsBits, lazer) {
-  const cached = db.getMapDifficulty(mapId, modsBits, lazer);
+async function getDifficultyAttrs(mapId, mods) {
+  const chaveMods = canonicalMods(mods);
+
+  const cached = db.getMapDifficulty(mapId, chaveMods);
   if (cached) return cached;
 
-  const attrs = await noRosu('difficulty', mapId, { mods: modsBits, lazer });
+  const attrs = await noLazer('difficulty', mapId, { mods });
   if (!attrs || !Number.isFinite(attrs.stars)) return null;
 
   // Combo zero quer dizer "mapa sem objeto nenhum", que não existe de verdade.
-  // O rosu-pp NÃO recusa um .osu corrompido: ele parseia o que der e devolve um
-  // mapa degenerado — medido com lixo puro na entrada, 0.14★ e combo 0, sem
-  // erro nenhum. Sem esta guarda, um download truncado virava estrela sem
-  // sentido E ficava gravado no cache, onde não vence nunca (a map_difficulty
-  // não tem TTL, porque o resultado deveria ser função pura do arquivo).
+  // A guarda nasceu com o rosu-pp, que NÃO recusa um .osu corrompido: ele
+  // parseia o que der e devolve um mapa degenerado — medido com lixo puro na
+  // entrada, 0.14★ e combo 0, sem erro nenhum. Fica valendo com o motor novo
+  // porque o risco é o mesmo, e a consequência também: sem ela, um download
+  // truncado virava estrela sem sentido E ficava gravado no cache, onde não
+  // vence nunca (a map_difficulty não tem TTL, porque o resultado deveria ser
+  // função pura do arquivo).
   if (!attrs.maxCombo) return null;
 
-  db.setMapDifficulty(mapId, modsBits, lazer, attrs.stars, attrs.maxCombo);
+  db.setMapDifficulty(mapId, chaveMods, attrs.stars, attrs.maxCombo);
   return attrs;
 }
 
@@ -190,13 +215,16 @@ async function calcPPPython(beatmapId, modsBits, n300, n100, n50, nmiss, combo =
  * servidor não informou os acertos, que é justamente o caso em que o resultado
  * também é o menos confiável — melhor recalcular do que guardar.
  */
-function fcCacheKey({ beatmapId, modsBits, useLazer, relax, n300, n100, n50, misses }) {
+function fcCacheKey({ beatmapId, mods, relax, n300, n100, n50, misses }) {
   if (n300 === null || n100 === null || n50 === null) return null;
 
   return {
     mapId:  beatmapId,
-    modsBits,
-    engine: relax ? 'akatsuki' : (useLazer ? 'rosu-lazer' : 'rosu-stable'),
+    // O CL mora AQUI dentro desde a troca de motor, e é por isso que a chave
+    // deixou de ter uma dimensão `lazer` própria: a mecânica é um mod como os
+    // outros, e dois cálculos que diferem só nela já diferem nos mods.
+    mods:   canonicalMods(mods),
+    engine: relax ? 'akatsuki' : 'lazer',
     n300:   n300 + misses,
     n100,
     n50,
@@ -253,12 +281,10 @@ async function getFCpp(score, mode = DEFAULT_MODE) {
   const n100 = stats.count_100 ?? stats.ok    ?? null;
   const n50  = stats.count_50  ?? stats.meh   ?? null;
 
-  // Bitmask de mods — ambas as libs usam o mesmo formato
-  const modsBits = modsToBits(score.mods);
-  const useLazer = shouldUseLazer(mode, score.mods);
-  const relax    = servers.get(mode).relax;
+  const mods  = engineMods(mode, score.mods);
+  const relax = servers.get(mode).relax;
 
-  const cacheKey = fcCacheKey({ beatmapId, modsBits, useLazer, relax, n300, n100, n50, misses });
+  const cacheKey = fcCacheKey({ beatmapId, mods, relax, n300, n100, n50, misses });
   if (cacheKey) {
     const cached = db.getCachedFCpp(cacheKey);
     // Só número entra na tabela, então um acerto é sempre um valor válido —
@@ -273,20 +299,24 @@ async function getFCpp(score, mode = DEFAULT_MODE) {
     // valem para os dois, e os bytes vão para o script por stdin. (O script
     // já baixou por conta própria, o que escapava de ambos.)
     if (relax) {
-      const result = await calcPPPython(beatmapId, modsBits, n300, n100, n50, misses);
+      // O akatsuki-pp continua em bitmask: é outro motor, com outra API, e ele
+      // não conhece nada que não caiba num bit.
+      const result = await calcPPPython(beatmapId, modsToBits(score.mods), n300, n100, n50, misses);
       return rememberFCpp(cacheKey, result?.pp);
     }
 
-    // ── Oficial / bancho.py vanilla: rosu-pp-js (algoritmo oficial) ───────────
+    // ── Oficial / bancho.py vanilla: lazer-calculator (o C# do próprio osu!) ──
     // O arquivo .osu (público no Bancho, mesmo para mapa exclusivo de servidor
-    // privado) vem do cache em disco quando a thread pedir por ele.
-    const resultado = await noRosu('fc', beatmapId, {
-      mods: modsBits,
-      lazer: useLazer,
+    // privado) vem do cache em disco quando o processo pedir por ele.
+    //
+    // Sem `accuracy`: o motor calcula a dele a partir dos acertos (ver
+    // montarScore no lazerWorkerChild). Quando os acertos reais não vieram, os
+    // 300 são deduzidos da contagem de objetos, o que descreve o FC do mesmo
+    // jeito — e a accuracy bruta do score, que o rosu-pp usava nesse ramo, seria
+    // justamente a do score COM choke, não a do FC que se quer estimar.
+    const resultado = await noLazer('fc', beatmapId, {
+      mods,
       n300, n100, n50, misses,
-      // Só usado quando os hits reais não vieram. `score.accuracy` ausente vira
-      // NaN, que o rosu aceita sem reclamar — o rememberFCpp faz a guarda.
-      accuracy: score.accuracy * 100,
     });
 
     return rememberFCpp(cacheKey, resultado?.pp);
@@ -301,7 +331,7 @@ async function getFCpp(score, mode = DEFAULT_MODE) {
 /**
  * Simula o PP de um score hipotético em um mapa específico, dado mods e hits.
  *
- * - servidor vanilla → rosu-pp-js (algoritmo oficial osu!lazer, via Wasm)
+ * - servidor vanilla → lazer-calculator (o C# do próprio osu!lazer)
  * - servidor com RX  → akatsuki-pp-py via Python (oppai-2019, o mesmo do Daycore)
  *
  * @param {number} beatmapId
@@ -322,16 +352,22 @@ async function getFCpp(score, mode = DEFAULT_MODE) {
  *   desistência aos 120 de 1833 objetos era avaliada contra o mapa completo e o
  *   `combo` não fazia diferença nenhuma no resultado — medido: 332.6pp contra os
  *   101.3pp corretos.
+ * @param {number} [hits.legacyTotalScore] score total NO PLACAR ANTIGO, para
+ *   play de mecânica clássica que realmente aconteceu. É o que alimenta a
+ *   estimativa de miss por score, que o osu! usa junto da estimativa por combo
+ *   ficando com a MAIOR das duas — sem ele, um choke sai bem abaixo do valor
+ *   oficial (medido num top play do mrekk: 1052.16pp contra os 1781.65pp
+ *   corretos). Não informe em play hipotética: ali não existe placar, e só a
+ *   estimativa por combo deve operar.
  * @param {string} mode
  * @param {object} [opts]
- * @param {boolean} [opts.lazer] força a mecânica em vez de deduzi-la dos mods.
- *   Existe para o /simulate: uma play hipotética não tem mod CL para consultar,
- *   e sem CL o `shouldUseLazer` conclui "lazer" — modo em que o rosu-pp ignora
- *   o combo, deixando a opção `combo` do comando sem efeito nenhum.
+ * @param {boolean} [opts.classic] força a mecânica clássica em vez de deduzi-la
+ *   dos mods. Existe para o /simulate: uma play hipotética não tem mod CL para
+ *   consultar, e sem CL o cálculo assume lazer — modo em que o combo pesa
+ *   diferente, deixando a opção `combo` do comando quase sem efeito.
  * @returns {Promise<{pp: number, stars: number, maxCombo: number}|null>}
  */
-async function simulatePP(beatmapId, mods, hits, mode = DEFAULT_MODE, { lazer } = {}) {
-  const modsBits = modsToBits(mods);
+async function simulatePP(beatmapId, mods, hits, mode = DEFAULT_MODE, { classic } = {}) {
   const n300     = hits.n300   ?? null;
   const n100     = hits.n100   ?? 0;
   const n50      = hits.n50    ?? 0;
@@ -348,17 +384,20 @@ async function simulatePP(beatmapId, mods, hits, mode = DEFAULT_MODE, { lazer } 
       // interrompida seria inventar; melhor admitir que não sabe.
       if (passed !== null) return null;
       // -1 é o "não sei" que o pp_calc.py entende (ver src/pp_calc.py).
-      return await calcPPPython(beatmapId, modsBits, n300 ?? -1, n100, n50, misses, combo);
+      return await calcPPPython(beatmapId, modsToBits(mods), n300 ?? -1, n100, n50, misses, combo);
     }
 
-    const useLazer = lazer ?? shouldUseLazer(mode, mods);
+    // `classic` força o CL na lista; sem ele, vale a regra normal do servidor.
+    const modsMotor = classic
+      ? engineMods(mode, [...(mods ?? []), 'CL'])
+      : engineMods(mode, mods);
 
-    const resultado = await noRosu('simulate', beatmapId, {
-      mods: modsBits,
-      lazer: useLazer,
+    const resultado = await noLazer('simulate', beatmapId, {
+      mods: modsMotor,
       n300, n100, n50, misses, combo,
       // Play interrompida: a dificuldade passa a ser a do trecho jogado.
       passedObjects: passed,
+      legacyTotalScore: hits.legacyTotalScore ?? null,
     });
 
     if (!resultado || !Number.isFinite(resultado.pp)) return null;
@@ -372,33 +411,31 @@ async function simulatePP(beatmapId, mods, hits, mode = DEFAULT_MODE, { lazer } 
 }
 
 async function getAdjustedStars(beatmapId, mods, mode = DEFAULT_MODE) {
-  // Sem mod de dificuldade, quem manda é a API: o `difficulty_rating` que o
-  // enrichBeatmapData já trouxe é o mesmo número que o site mostra, e é mais
-  // exato que o nosso — o rosu-pp está dois reworks atrás do osu! (medido: 6%
-  // de diferença no DT, 0,7% sem mods).
+  // Sem mod de dificuldade, quem manda é a API. O motivo mudou com a troca de
+  // motor: antes o `difficulty_rating` era usado por ser MAIS EXATO que o nosso
+  // (o rosu-pp estava reworks atrás — 6% de diferença no DT); agora é o mesmo
+  // número, e continua valendo porque sai de graça. O enrichBeatmapData já o
+  // trouxe, enquanto calcular aqui custaria baixar o .osu e ~33ms de cálculo
+  // para chegar ao mesmo lugar.
   //
   // O filtro aqui não é cosmético, e já custou dois números errados na tela.
   // Todo score de stable chega com o mod CL desde que passamos a pedir o
   // formato novo à API, e um `mods.length === 0` deixou de ser verdade para
   // score sem mod nenhum: de um dia para o outro o bot passou a calcular o que
-  // antes vinha pronto (7.08★ contra os 7.13★ do site). O mesmo valia para o
-  // HD, que não muda dificuldade nenhuma e aparece em metade dos scores — daí a
-  // lista ser de mods que MEXEM no mapa, e não só do CL (ver mods.js).
+  // antes vinha pronto (7.08★ contra os 7.13★ do site). O HD, que também estava
+  // na lista de cosméticos, SAIU dela quando o rework de reading passou a mexer
+  // na estrela — ver mods.js.
   if (difficultyMods(mods).length === 0) return null;
 
   // Com mods a API não ajuda: ela só publica o valor sem mods. Aí é cálculo
-  // local, na mesma mecânica que o PP exibido ao lado usa (shouldUseLazer),
-  // para os dois números não saírem de bases diferentes.
-  const attrs = await getDifficultyAttrs(
-    beatmapId,
-    modsToBits(mods),
-    shouldUseLazer(mode, mods)
-  );
+  // local, com os mesmos mods que o PP exibido ao lado usa (engineMods), para os
+  // dois números não saírem de bases diferentes.
+  const attrs = await getDifficultyAttrs(beatmapId, engineMods(mode, mods));
   return attrs ? attrs.stars.toFixed(2) : null;
 }
 
 module.exports = {
-  shouldUseLazer,
+  engineMods,
   getBeatmapFile,
   // Mora no pythonWorker desde que o cálculo do Relax virou processo de vida
   // longa, mas continua saindo daqui: é a porta de PP do bot, e o teste que
@@ -406,6 +443,7 @@ module.exports = {
   reportPythonFailure: pythonWorker.reportPythonFailure,
   closePythonWorker:   pythonWorker.close,
   closeRosuWorker:     rosuWorker.close,
+  closeLazerWorker:    lazerWorker.close,
   getDifficultyAttrs,
   getMapAttrs,
   getAdjustedStars,

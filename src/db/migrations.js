@@ -29,7 +29,7 @@ const path = require('path');
 const servers = require('../servers');
 const { DATA_DIR } = require('../paths');
 
-const VERSAO_ATUAL = 1;
+const VERSAO_ATUAL = 2;
 
 // Dados de versões antigas do bot, que viviam como JSON na raiz.
 const OLD_LINKS_PATH = path.join(DATA_DIR, 'links.json');
@@ -281,6 +281,83 @@ function migrarDoJson(db) {
   console.log(`[db] Migração concluída: ${discordIds.size} usuário(s), ${Object.keys(langs.servers ?? {}).length} servidor(es).`);
 }
 
+// ─── 1 → 2: os caches de cálculo, quando o motor de PP mudou ──────────────────
+
+/**
+ * map_difficulty e fc_pp passam a ter os mods por acrônimo, e são ESVAZIADAS.
+ *
+ * Duas mudanças de uma vez, e a segunda é a que obriga a jogar fora:
+ *
+ *   1. A chave era (mapa, bitmask, lazer) e virou (mapa, mods canônicos). O CL
+ *      deixou de ser uma coluna booleana ao lado dos mods para ser um mod dentro
+ *      deles, que é como o osu! o representa (ver canonicalMods em mods.js).
+ *   2. Quem calcula deixou de ser o rosu-pp e passou a ser o lazer-calculator,
+ *      que reproduz o número oficial exatamente. TODO valor guardado veio do
+ *      motor antigo, e está entre 2% e 15% fora.
+ *
+ * Por isso é DROP e não conversão: converter a chave preservaria justamente os
+ * números que a troca de motor veio corrigir, e eles não têm TTL para vencer —
+ * as duas tabelas são "função pura do arquivo .osu", premissa que vale para o
+ * arquivo mas não para o motor. Ficariam errados para sempre.
+ *
+ * O que se perde é cache, não dado: a primeira exibição de cada (mapa, mods)
+ * recalcula e guarda de novo. O .osu em si continua no beatmap_files, então nem
+ * download novo acontece.
+ *
+ * Detecção pelo próprio schema, e não por flag no `meta`: se a coluna
+ * `mods_bits` ainda existe, a tabela é a antiga. Isso é idempotente por
+ * construção e não depende de nenhum registro ter sobrevivido.
+ */
+function migrarCachesDeCalculoParaMods(db) {
+  const temColuna = (tabela, coluna) => db
+    .prepare(`PRAGMA cache.table_info(${tabela})`).all()
+    .some(c => c.name === coluna);
+
+  let refeitas = 0;
+
+  if (temColuna('map_difficulty', 'mods_bits')) {
+    db.exec(`
+      DROP TABLE cache.map_difficulty;
+      CREATE TABLE cache.map_difficulty (
+        map_id    INTEGER NOT NULL,
+        mods      TEXT    NOT NULL,
+        stars     REAL    NOT NULL,
+        max_combo INTEGER,
+        PRIMARY KEY (map_id, mods)
+      );
+    `);
+    refeitas++;
+  }
+
+  if (temColuna('fc_pp', 'mods_bits')) {
+    db.exec(`
+      DROP TABLE cache.fc_pp;
+      CREATE TABLE cache.fc_pp (
+        map_id    INTEGER NOT NULL,
+        mods      TEXT    NOT NULL,
+        engine    TEXT    NOT NULL,
+        n300      INTEGER NOT NULL,
+        n100      INTEGER NOT NULL,
+        n50       INTEGER NOT NULL,
+        pp        REAL    NOT NULL,
+        cached_at INTEGER NOT NULL,
+        PRIMARY KEY (map_id, mods, engine, n300, n100, n50)
+      );
+      CREATE INDEX IF NOT EXISTS cache.idx_fc_pp_age ON fc_pp (cached_at);
+    `);
+    refeitas++;
+  }
+
+  if (refeitas > 0) {
+    // Mesma razão do VACUUM da migração anterior: DROP TABLE não devolve o
+    // espaço ao sistema de arquivos, e estas duas são as que mais crescem
+    // depois dos próprios .osu.
+    db.exec('PRAGMA cache.wal_checkpoint(TRUNCATE)');
+    db.exec('VACUUM cache');
+    console.log(`[db] Caches de cálculo recriados para o motor novo (${refeitas} tabela(s)); serão repovoados sob demanda.`);
+  }
+}
+
 // ─── Execução ─────────────────────────────────────────────────────────────────
 
 function run(db) {
@@ -296,6 +373,10 @@ function run(db) {
     migrarChavesDeServidor(db);
     migrarNomeacoesParaPorConta(db);
     migrarDoJson(db);
+  }
+
+  if (versao < 2) {
+    migrarCachesDeCalculoParaMods(db);
   }
 
   // Interpolado porque PRAGMA não aceita parâmetro; o valor é uma constante do

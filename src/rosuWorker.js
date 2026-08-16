@@ -160,7 +160,7 @@ function enviar(worker, pedido) {
 /**
  * Executa uma operação do rosu-pp na thread.
  *
- * @param {'difficulty'|'fc'|'simulate'} op
+ * @param {'attributes'} op
  * @param {number} mapId
  * @param {object} args parâmetros da operação (ver rosuWorkerThread.js)
  * @param {() => Promise<Uint8Array>} obterBytes chamado só quando a thread não

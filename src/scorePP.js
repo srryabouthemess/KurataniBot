@@ -52,7 +52,20 @@ async function localScorePP(score, mode, { partial = false } = {}) {
   const result = await osu.simulatePP(
     beatmapId,
     score.mods ?? [],
-    { ...parcial, n100, n50, misses, combo: score.max_combo ?? undefined },
+    {
+      ...parcial, n100, n50, misses, combo: score.max_combo ?? undefined,
+      // Aqui o score ACONTECEU, então há placar para informar — e ele é o que
+      // separa um choke bem avaliado de um mal avaliado. Numa play de mecânica
+      // clássica o osu! estima os misses por combo E por score, ficando com a
+      // maior das duas: sem este campo só a primeira opera, e um choke sai bem
+      // abaixo do oficial (medido num top play: 1052.16pp contra 1781.65pp).
+      //
+      // O `score` normalizado já é o valor certo nos dois casos, porque o
+      // normalizeScore prefere o legacy_total_score quando ele existe: em play
+      // clássica ele vira LegacyTotalScore lá dentro, e em play de lazer o
+      // total_score entra como TotalScore mesmo (ver lazerWorkerChild.js).
+      legacyTotalScore: score.score ?? null,
+    },
     mode,
   );
 

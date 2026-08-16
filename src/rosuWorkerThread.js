@@ -1,24 +1,28 @@
 /**
  * rosuWorkerThread.js
- * O corpo do worker thread que calcula PP pelo rosu-pp. **Não importe este
- * arquivo do processo principal** — ele só faz sentido dentro de um Worker.
+ * O corpo do worker thread que lê os atributos de mapa pelo rosu-pp. **Não
+ * importe este arquivo do processo principal** — ele só faz sentido dentro de um
+ * Worker.
+ *
+ * ── O que sobrou aqui ─────────────────────────────────────────────────────────
+ * Estrelas e PP saíram deste arquivo quando o cálculo passou para o
+ * lazer-calculator, que reproduz o número oficial exatamente (ver pp.js). O que
+ * ficou é a única coisa que o motor novo NÃO expõe: CS/AR/OD/HP ajustados por
+ * mod, o BPM na velocidade do clock e a contagem de objetos. É informação de
+ * mapa, não de PP — a linha que o embed imprime ao lado do título —, e para ela
+ * o rosu-pp serve inteiro: essas contas não mudam entre reworks.
  *
  * ── Por que uma thread ────────────────────────────────────────────────────────
- * O rosu-pp é Wasm síncrono: enquanto ele calcula, o event loop não anda.
- * Medido nos 12 maiores .osu do cache: 1,54ms de parse + 4,28ms de dificuldade
- * por play. Com os caches em disco à frente (map_difficulty e fc_pp), isso deixou
- * de ser custo constante — mas continua sendo um pico a cada combinação
- * (mapa, mods) inédita, e quem abre o top 100 de um jogador novo encontra vinte
- * páginas delas. Nessa janela, o bot parava de responder a todo mundo e de
- * mandar heartbeat para o gateway.
+ * O rosu-pp é Wasm síncrono: enquanto ele calcula, o event loop não anda. O
+ * cálculo que sobrou é o barato dos dois, mas o parse (1,54ms nos 12 maiores
+ * .osu do cache) continua acontecendo aqui, e uma página de mapas inéditos são
+ * cinco deles seguidos — com o bot sem responder a ninguém e sem mandar
+ * heartbeat para o gateway no meio.
  *
  * ── Por que o LRU de mapa mora AQUI ───────────────────────────────────────────
- * Duas razões, e as duas dependem de ele estar deste lado:
- *
- *   1. O mesmo .osu era parseado duas vezes por play com mods — uma no caminho
- *      das estrelas e outra no do FC pp, cada um construindo o seu Beatmap.
- *   2. Guardar o mapa parseado aqui é o que permite o processo principal mandar
- *      os bytes UMA vez por mapa, em vez de 50–300KB por cálculo.
+ * Guardar o mapa parseado deste lado é o que permite o processo principal mandar
+ * os bytes UMA vez por mapa, em vez de 50–300KB por cálculo — e o que evita
+ * reparsear o mesmo .osu a cada virada de página.
  *
  * A memória de um Beatmap é do Wasm, e o coletor do JS não a recolhe: cada um
  * precisa de `free()` explícito, inclusive ao ser descartado pelo teto.
@@ -86,11 +90,6 @@ function guardarMapa(mapId, beatmap) {
 // Todas recebem um Beatmap já parseado e devolvem valores simples — o que
 // atravessa a fronteira da thread precisa ser serializável.
 
-function difficulty(beatmap, { mods, lazer }) {
-  const attrs = new rosu.Difficulty({ mods, lazer }).calculate(beatmap);
-  return { stars: attrs.stars, maxCombo: attrs.maxCombo ?? null };
-}
-
 /**
  * Os números do mapa como quem jogou os sentiu: CS/AR/OD/HP já ajustados pelos
  * mods, o BPM na velocidade do clock, e quantos objetos o mapa tem.
@@ -123,54 +122,7 @@ function attributes(beatmap, { mods }) {
   };
 }
 
-/**
- * PP de um FC hipotético.
- *
- * Os misses viram 300 (é o que "se tivesse sido FC" quer dizer). Sem os hits
- * reais o cálculo cai na accuracy bruta, que é menos fiel — uma play
- * interrompida no meio tem accuracy baixa por motivo que não é erro.
- */
-function fc(beatmap, { mods, lazer, n300, n100, n50, misses, accuracy }) {
-  const diffAttrs = new rosu.Difficulty({ mods, lazer }).calculate(beatmap);
-
-  const params = { mods, misses: 0, lazer };
-  if (n300 !== null && n100 !== null && n50 !== null) {
-    params.n300 = n300 + misses;
-    params.n100 = n100;
-    params.n50  = n50;
-  } else {
-    params.accuracy = accuracy;
-  }
-
-  const resultado = new rosu.Performance(params).calculate(diffAttrs);
-  return { pp: resultado.pp };
-}
-
-/**
- * PP de um score hipotético.
- *
- * `passedObjects` é o que torna honesta uma play interrompida: a dificuldade
- * passa a ser a do TRECHO jogado. Sem ele a conta assume o mapa inteiro, inventa
- * um 300 para cada objeto que a pessoa nunca viu, e o combo deixa de importar —
- * medido: 332.6pp contra os 101.3pp corretos.
- */
-function simulate(beatmap, { mods, lazer, n300, n100, n50, misses, combo, passedObjects }) {
-  const diffArgs = { mods, lazer };
-  if (passedObjects !== null) diffArgs.passedObjects = passedObjects;
-
-  const diffAttrs = new rosu.Difficulty(diffArgs).calculate(beatmap);
-
-  const params = { mods, n100, n50, misses, lazer };
-  if (combo >= 0) params.combo = combo;
-  // Só quando quem chamou soube dizer: sem isto a lib deduz, e a dedução é
-  // justamente o que estraga o número de uma play interrompida.
-  if (n300 !== null) params.n300 = n300;
-
-  const resultado = new rosu.Performance(params).calculate(diffAttrs);
-  return { pp: resultado.pp, stars: diffAttrs.stars, maxCombo: diffAttrs.maxCombo };
-}
-
-const OPERACOES = { difficulty, attributes, fc, simulate };
+const OPERACOES = { attributes };
 
 // ─── Protocolo ────────────────────────────────────────────────────────────────
 // Pedido:  { id, op, mapId, args, bytes? }

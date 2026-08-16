@@ -244,10 +244,18 @@ async function shutdown(signal) {
     await client.destroy();
     await daycoreEvents.close().catch(() => {});
     await daycoreAdmin.closeRedis().catch(() => {});
-    // Os dois motores de PP são recursos de vida longa — um processo Python e
-    // um worker thread. Sem fechá-los aqui, ficariam órfãos a cada restart.
+    // Os três motores de cálculo são recursos de vida longa — dois processos
+    // (Python e lazer-calculator) e um worker thread (rosu-pp). Sem fechá-los
+    // aqui, ficariam órfãos a cada restart.
+    //
+    // O do lazer-calculator termina em segfault por dentro, sempre: é o runtime
+    // .NET dele que não descarrega, e foi por isso que ele virou processo em vez
+    // de thread (ver lazerWorkerChild.js). Como filho, ele leva o próprio
+    // estrago — o `db.close()` logo abaixo continua acontecendo, que era
+    // exatamente o que a versão em thread impedia.
     pp.closePythonWorker();
     pp.closeRosuWorker();
+    pp.closeLazerWorker();
     db.close();
     console.log('[shutdown] Concluído.');
   } catch (error) {

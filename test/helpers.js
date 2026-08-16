@@ -104,4 +104,31 @@ function dbWorkspace(t) {
 /** Atalho para quem só precisa de um banco limpo, carregado uma vez. */
 const freshDb = (t) => dbWorkspace(t).load();
 
-module.exports = { ROOT, fakeMessage, firstReply, drain, dbWorkspace, freshDb };
+/**
+ * Um `.osu` válido e mínimo, com `n` círculos.
+ *
+ * Sintético de propósito: os testes dos dois motores de cálculo rodam contra as
+ * libs de verdade, e um mapa inventado aqui não depende do cache da máquina nem
+ * da rede. Mora nos helpers porque o rosuWorker e o lazerWorker precisam do
+ * MESMO mapa — é o que torna os números dos dois comparáveis.
+ */
+function mapaSintetico(n) {
+  const objetos = [];
+  for (let i = 0; i < n; i++) {
+    objetos.push(`${100 + (i % 300)},${100 + (i % 200)},${500 + i * 300},1,0`);
+  }
+
+  return Buffer.from([
+    'osu file format v14', '',
+    '[General]', 'Mode: 0', '',
+    '[Difficulty]',
+    'HPDrainRate:5', 'CircleSize:4', 'OverallDifficulty:7', 'ApproachRate:9',
+    'SliderMultiplier:1.4', 'SliderTickRate:1', '',
+    '[TimingPoints]', '0,500,4,2,0,100,1,0', '',
+    '[HitObjects]', ...objetos,
+  ].join('\n'));
+}
+
+module.exports = {
+  ROOT, fakeMessage, firstReply, drain, dbWorkspace, freshDb, mapaSintetico,
+};

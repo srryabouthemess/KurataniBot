@@ -104,18 +104,19 @@ module.exports = {
       //
       //  1. É o que praticamente todo mundo joga. Um score de stable chega da
       //     API marcado com CL, e hoje quase todo score ranqueado é assim.
-      //  2. Em modo lazer o rosu-pp IGNORA o combo, e este comando oferece uma
+      //  2. Em modo lazer o combo pesa muito menos, e este comando oferece uma
       //     opção `combo`. Assumir lazer aqui seria manter na tela um campo que
-      //     não muda o resultado — medido: 1407.59pp para qualquer valor.
+      //     quase não muda o resultado — medido no motor antigo: 1407.59pp para
+      //     qualquer valor.
       //
-      // No bancho.py isto já era o comportamento (ver shouldUseLazer), então a
+      // No bancho.py isto já era o comportamento (ver engineMods), então a
       // mudança vale só para o Bancho.
       const result = await osu.simulatePP(
         beatmapId,
         mods,
         { n100, n50, misses: miss, combo: comboOpt ?? undefined },
         mode,
-        { lazer: false },
+        { classic: true },
       );
 
       if (!result || !Number.isFinite(result.pp)) {

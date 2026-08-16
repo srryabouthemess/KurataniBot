@@ -123,21 +123,21 @@ function setBeatmapMeta(mapId, data) {
 // ─── Atributos de dificuldade ─────────────────────────────────────────────────
 
 /** @returns {{stars: number, maxCombo: number|null}|null} */
-function getMapDifficulty(mapId, modsBits, lazer) {
+function getMapDifficulty(mapId, mods) {
   const row = db
-    .prepare('SELECT stars, max_combo FROM cache.map_difficulty WHERE map_id = ? AND mods_bits = ? AND lazer = ?')
-    .get(mapId, modsBits, lazer ? 1 : 0);
+    .prepare('SELECT stars, max_combo FROM cache.map_difficulty WHERE map_id = ? AND mods = ?')
+    .get(mapId, mods);
 
   metrics.cache('mapDifficulty', Boolean(row));
   return row ? { stars: row.stars, maxCombo: row.max_combo ?? null } : null;
 }
 
-function setMapDifficulty(mapId, modsBits, lazer, stars, maxCombo) {
+function setMapDifficulty(mapId, mods, stars, maxCombo) {
   db.prepare(`
-    INSERT INTO cache.map_difficulty (map_id, mods_bits, lazer, stars, max_combo) VALUES (?, ?, ?, ?, ?)
-    ON CONFLICT(map_id, mods_bits, lazer) DO UPDATE SET
+    INSERT INTO cache.map_difficulty (map_id, mods, stars, max_combo) VALUES (?, ?, ?, ?)
+    ON CONFLICT(map_id, mods) DO UPDATE SET
       stars = excluded.stars, max_combo = excluded.max_combo
-  `).run(mapId, modsBits, lazer ? 1 : 0, stars, maxCombo ?? null);
+  `).run(mapId, mods, stars, maxCombo ?? null);
 }
 
 // ─── PP de FC ─────────────────────────────────────────────────────────────────
@@ -156,27 +156,27 @@ function setMapDifficulty(mapId, modsBits, lazer, stars, maxCombo) {
 const FC_PP_MAX_ROWS = Number(process.env.FC_PP_CACHE_MAX || 20000);
 
 /**
- * @param {{mapId: number, modsBits: number, engine: string,
+ * @param {{mapId: number, mods: string, engine: string,
  *          n300: number, n100: number, n50: number}} key
  * @returns {number|null}
  */
-function getCachedFCpp({ mapId, modsBits, engine, n300, n100, n50 }) {
+function getCachedFCpp({ mapId, mods, engine, n300, n100, n50 }) {
   const row = db.prepare(`
     SELECT pp FROM cache.fc_pp
-    WHERE map_id = ? AND mods_bits = ? AND engine = ? AND n300 = ? AND n100 = ? AND n50 = ?
-  `).get(mapId, modsBits, engine, n300, n100, n50);
+    WHERE map_id = ? AND mods = ? AND engine = ? AND n300 = ? AND n100 = ? AND n50 = ?
+  `).get(mapId, mods, engine, n300, n100, n50);
 
   metrics.cache('fcPP', Boolean(row));
   return row ? row.pp : null;
 }
 
-function setCachedFCpp({ mapId, modsBits, engine, n300, n100, n50 }, pp) {
+function setCachedFCpp({ mapId, mods, engine, n300, n100, n50 }, pp) {
   db.prepare(`
-    INSERT INTO cache.fc_pp (map_id, mods_bits, engine, n300, n100, n50, pp, cached_at)
+    INSERT INTO cache.fc_pp (map_id, mods, engine, n300, n100, n50, pp, cached_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    ON CONFLICT(map_id, mods_bits, engine, n300, n100, n50) DO UPDATE SET
+    ON CONFLICT(map_id, mods, engine, n300, n100, n50) DO UPDATE SET
       pp = excluded.pp, cached_at = excluded.cached_at
-  `).run(mapId, modsBits, engine, n300, n100, n50, pp, Date.now());
+  `).run(mapId, mods, engine, n300, n100, n50, pp, Date.now());
 
   evictFCppIfNeeded();
 }

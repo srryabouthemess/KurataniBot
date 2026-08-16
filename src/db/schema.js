@@ -188,13 +188,18 @@ function apply(db) {
     -- Espelha a osu_map_difficulty do BathBot (PRIMARY KEY (map_id, mods)) e
     -- elimina o POST em /beatmaps/{id}/attributes que o getAdjustedStars fazia
     -- a cada exibição.
+    --
+    -- A chave é a lista de mods em forma canônica ('CL,DT,HD'), e não mais o
+    -- bitmask com uma coluna "lazer" ao lado. Os dois motivos estão no
+    -- canonicalMods (mods.js): o CL não tem bit, e bit nenhum guarda ajuste de
+    -- mod — um DT a 1,3x e um a 1,5x colidiam na mesma linha com números
+    -- diferentes.
     CREATE TABLE IF NOT EXISTS cache.map_difficulty (
       map_id    INTEGER NOT NULL,
-      mods_bits INTEGER NOT NULL,
-      lazer     INTEGER NOT NULL,
+      mods      TEXT    NOT NULL,
       stars     REAL    NOT NULL,
       max_combo INTEGER,
-      PRIMARY KEY (map_id, mods_bits, lazer)
+      PRIMARY KEY (map_id, mods)
     );
 
     -- PP que o score teria rendido em FC.
@@ -208,9 +213,9 @@ function apply(db) {
     -- num mapa já calculado mil vezes antes.
     --
     -- A coluna "engine" está na chave porque os dois motores dão números
-    -- diferentes de propósito (rosu-pp para o algoritmo oficial, akatsuki-pp para
-    -- o Relax), e a mecânica lazer/stable separa o rosu em dois — é a mesma
-    -- dimensão que a map_difficulty guarda na coluna "lazer".
+    -- diferentes de propósito: o lazer-calculator para o algoritmo oficial, o
+    -- akatsuki-pp para o Relax. A mecânica lazer/stable NÃO é mais uma dimensão
+    -- separada — ela virou o mod CL dentro de "mods", como no osu! de verdade.
     --
     -- SEM TTL, como a map_difficulty: o resultado é função pura do arquivo .osu,
     -- que para mapa ranqueado não muda. O caso não coberto é o mesmo das duas
@@ -218,14 +223,14 @@ function apply(db) {
     -- entrada ser descartada pelo teto.
     CREATE TABLE IF NOT EXISTS cache.fc_pp (
       map_id    INTEGER NOT NULL,
-      mods_bits INTEGER NOT NULL,
-      engine    TEXT    NOT NULL,  -- 'rosu-lazer' | 'rosu-stable' | 'akatsuki'
+      mods      TEXT    NOT NULL,  -- forma canônica, ex.: 'CL,DT,HD'
+      engine    TEXT    NOT NULL,  -- 'lazer' | 'akatsuki'
       n300      INTEGER NOT NULL,  -- já com os misses somados (ver pp.js)
       n100      INTEGER NOT NULL,
       n50       INTEGER NOT NULL,
       pp        REAL    NOT NULL,
       cached_at INTEGER NOT NULL,
-      PRIMARY KEY (map_id, mods_bits, engine, n300, n100, n50)
+      PRIMARY KEY (map_id, mods, engine, n300, n100, n50)
     );
 
     -- Mesma razão do índice de LRU dos arquivos: sem ele a evicção ordena

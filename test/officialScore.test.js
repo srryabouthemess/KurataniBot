@@ -19,7 +19,7 @@ const assert = require('node:assert');
 const officialApi = require('../src/osu/officialApi');
 const { normalizeScore } = officialApi;
 const { stripClassic, difficultyMods, modsToBits } = require('../src/mods');
-const { shouldUseLazer } = require('../src/pp');
+const { engineMods } = require('../src/pp');
 
 /** Score como a API responde com x-api-version: um FC de stable, com CL. */
 const FC_STABLE = {
@@ -54,14 +54,20 @@ test('CL é exibido, mas não conta como mod de dificuldade', () => {
 });
 
 test('só o mod que mexe no mapa tira a estrela das mãos da API', () => {
-  // O CL não é o único que aparece sem mudar dificuldade nenhuma: o HD está em
-  // metade dos scores, e enquanto ele contava, um `+HD` de mapa ranqueado saía
-  // com a estrela calculada aqui — 8.09★ onde o site publica 8.31★.
-  assert.deepEqual(difficultyMods(['HD', 'CL']), []);
+  // O CL aparece em quase todo score sem mudar dificuldade nenhuma: enquanto
+  // ele contava, um score SEM mod nenhum saía com a estrela calculada aqui —
+  // 7.08★ onde o site publica 7.13★.
+  assert.deepEqual(difficultyMods(['CL']), []);
   assert.deepEqual(difficultyMods(['NF', 'SO', 'SD', 'PF']), []);
 
+  // O HD saiu da lista de cosméticos: desde o rework de 03/07/2026 ele mexe na
+  // estrela (a skill de reading), e a API só publica o valor SEM mods — deixá-lo
+  // aqui faria todo `+HD` exibir a estrela errada. Ver lazerWorker.test.js, que
+  // cobre o outro lado disto no motor.
+  assert.deepEqual(difficultyMods(['HD', 'CL']), ['HD']);
+
   // Os que mudam continuam mudando — inclusive o RX, que troca o motor inteiro.
-  assert.deepEqual(difficultyMods(['DT', 'HD', 'CL']), ['DT']);
+  assert.deepEqual(difficultyMods(['DT', 'HD', 'CL']), ['DT', 'HD']);
   assert.deepEqual(difficultyMods(['HR']), ['HR']);
   assert.deepEqual(difficultyMods(['RX']), ['RX']);
 });
@@ -86,16 +92,20 @@ test('campos renomeados continuam legíveis pelos nomes antigos', () => {
 
 test('a presença do CL é o que separa stable de lazer', () => {
   // O `legacy_score_id` também diria isso, mas o bot não o consome: o mod é o
-  // sinal onde a pergunta é feita (shouldUseLazer), e um score de lazer COM o
-  // CL usa mecânica clássica de qualquer forma — o id seria redundante e
-  // discordaria justamente nesse caso.
+  // sinal onde a pergunta é feita (engineMods), e um score de lazer COM o CL usa
+  // mecânica clássica de qualquer forma — o id seria redundante e discordaria
+  // justamente nesse caso.
+  //
+  // No Bancho o CL vem do próprio score; num bancho.py, onde ninguém roda lazer,
+  // o engineMods o acrescenta. Nos dois casos o que chega ao motor é a lista de
+  // mods que descreve a play, sem booleano separado ao lado.
   const stable = normalizeScore(FC_STABLE);
   assert.ok(stable.mods.includes('CL'), 'score de stable precisa trazer o CL');
-  assert.equal(shouldUseLazer('official', stable.mods), false);
+  assert.deepEqual(engineMods('official', stable.mods), stable.mods);
 
   const lazer = normalizeScore({ ...FC_STABLE, legacy_score_id: null, mods: [{ acronym: 'DT' }] });
   assert.ok(!lazer.mods.includes('CL'));
-  assert.equal(shouldUseLazer('official', lazer.mods), true);
+  assert.deepEqual(engineMods('official', lazer.mods), ['DT']);
 });
 
 test('formato antigo continua atravessando sem estrago', () => {

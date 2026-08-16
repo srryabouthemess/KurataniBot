@@ -2,6 +2,64 @@
 
 ---
 
+# Sessão de 2026-08-16 (o PP passou a bater com o osu!)
+
+Estrelas e PP saíam do `rosu-pp`, que é uma reimplementação em Rust do algoritmo do osu! — e estava **dois reworks atrás** dele. O código já admitia isso em comentário, e o `getAdjustedStars` chegava a desviar para o `difficulty_rating` da API porque o número de casa era pior. Agora quem calcula é o [`@tosuapp/lazer-calculator`](https://github.com/tosuapp/lazer-calculator), que compila o C# do **próprio osu!lazer**: medido contra a API oficial, ele reproduz o número publicado com **erro 0,00%**.
+
+## ✨ Novos recursos
+
+- **O motor de PP passou a ser o lazer-calculator.** [`lazerWorker.js`](src/lazerWorker.js), [`lazerWorkerChild.js`](src/lazerWorkerChild.js), [`pp.js`](src/pp.js)
+  - Medido ponta a ponta pelo caminho real do bot (`normalizeScore` → `localScorePP` → `simulatePP` → processo filho), contra o pp que a API publica, em 12 top plays de quatro jogadores: **erro médio 0,000%, pior caso 0,003%**. O `rosu-pp` errava 3,88% em média, com picos de ~10%. No star rating a diferença era de −4,90%, −2,67% e +15,01% em três mapas onde o motor novo acerta na terceira casa.
+  - A versão da lib carrega a data do calculador que ela embute (`0.6.1-20260729-main.0` = osu! main de 29/07/2026), o que torna verificável a que geração do algoritmo o bot responde — coisa que "rosu-pp 3.1.0" não dizia.
+  - **Ele é opcional e só tem binário para Windows x64 e Linux x64.** Em qualquer outra plataforma o `npm install` o pula, o bot continua respondendo e só os números locais somem — o `(FC: ~Xpp)`, a estrela ajustada por mod e o `/simulate`. Conferido de verdade, removendo a lib: as chamadas devolvem `null`, a causa vai ao log **uma vez só** (sem o despejo de stack de vinte linhas do `MODULE_NOT_FOUND`), o backoff impede um segundo spawn e o processo principal fica intacto.
+
+- **O `/diag` mostra o motor novo**, na primeira linha dos workers — é o que responde pelos números que as pessoas veem. [`diag.js`](src/commands/diag.js)
+
+## 🐛 Correções
+
+- **O `+HD` exibia a estrela errada, e ninguém tinha como saber.** [`mods.js`](src/mods.js)
+  - O HD estava na lista de mods **cosméticos**, o que fazia o `getAdjustedStars` desistir de calcular e devolver a estrela que a API publica — que é sempre a **sem mods**. Isso era correto enquanto o HD não mexia em dificuldade nenhuma, e deixou de ser: o rework de 03/07/2026 trocou os bônus de AR e HD por uma skill de **reading**.
+  - Medido no motor novo, que bate exato com o site: **7.806★ sem mods contra 8.239★ com HD** no mesmo mapa, +5,5%. O HD aparece em cerca de metade dos scores, então isto valia para metade da tela.
+  - O CL fica na lista, e foi conferido em vez de suposto: 7.8058★ com e sem ele. Ele diz a mecânica da play, não a dificuldade do mapa.
+
+- **Choke de score clássico saía muito abaixo do oficial.** [`scorePP.js`](src/scorePP.js), [`lazerWorkerChild.js`](src/lazerWorkerChild.js)
+  - Numa play de mecânica clássica o osu! estima os misses de duas formas — por combo e **por score** — e fica com a maior das duas. A segunda depende do total no placar antigo, e sem ela um choke era subavaliado: medido num top play do mrekk, **1052.16pp contra os 1781.65pp corretos**, −41%.
+  - O `normalizeScore` já guardava o valor certo (ele prefere o `legacy_total_score` ao `total_score`), e agora ele chega ao cálculo. Em play de lazer o mesmo campo entra como `TotalScore` mesmo, então o caminho é um só.
+  - Play **hipotética** (o FC pp e o `/simulate`) manda zero de propósito: ali não existe placar, e só a estimativa por combo deve operar.
+
+## 🔧 Arquitetura
+
+- **O motor de PP roda em PROCESSO, e não em worker thread.** [`lazerWorkerChild.js`](src/lazerWorkerChild.js)
+  - A lib é uma binding NAPI para C# compilado em NativeAOT, e o runtime .NET dela **não descarrega**: o simples `require()`, sem calcular nada, termina o processo em segfault. Medido nas quatro formas — `require` e sai, thread com saída natural, thread com `terminate()`, e processo-filho. Só a última sai limpa.
+  - A da thread com `terminate()` é a que decide: ela crashava **antes do `db.close()`** do encerramento gracioso, ou seja, o banco ficaria sem fechar a cada restart. Como processo-filho, o `close()` derruba só o filho e o `shutdown` segue até o fim. Há um teste dedicado a isso (`fixtures/lazerTeardown.js`), porque é o tipo de coisa em que os números podem estar todos certos e o desenho ainda estar errado.
+  - É o mesmo desenho que o `pythonWorker` já usava, pelo mesmo motivo, e o protocolo é idêntico ao do `rosuWorker` — inclusive o `needBytes`, que evita mandar 50–300KB de `.osu` a cada cálculo. Aqui isso pesa mais: o parse custa ~18ms contra 1,5ms do `rosu-pp`.
+
+- **O `rosu-pp` continua no projeto, com uma função só.** [`rosuWorkerThread.js`](src/rosuWorkerThread.js)
+  - CS/AR/OD/HP ajustados por mod, BPM e contagem de objetos — a linha de informação do mapa. O lazer-calculator não expõe BPM nem clock rate, e isso é informação de mapa, não de PP: não vale um segundo motor exato para ela, e essas contas não mudam entre reworks. As operações `difficulty`, `fc` e `simulate` saíram do arquivo.
+  - Subiu de `^3.1.0` para `^4.0.1` de passagem. Os cinco call sites do bot foram conferidos contra a versão nova antes da troca: nenhum precisou mudar (as renomeações `*WithMods` → `fixed*` não são usadas aqui).
+
+- **A mecânica lazer/stable deixou de ser um booleano e virou o mod que ela é.** [`mods.js`](src/mods.js), [`pp.js`](src/pp.js), [`schema.js`](src/db/schema.js)
+  - `shouldUseLazer` virou `engineMods`, que devolve a lista de mods como o motor precisa vê-la — acrescentando o `CL` nos servidores bancho.py, onde ninguém roda lazer. É como o próprio osu! representa isso.
+  - As chaves de cache passaram de `(mapa, bitmask, lazer)` para `(mapa, mods canônicos)`. O bitmask não servia mais por duas razões: o `CL` não tem bit (daí a coluna `lazer` avulsa, guardando um mod ao lado dos mods), e bit nenhum guarda **ajuste** de mod — um DT a 1,3x e um a 1,5x colidiam na mesma linha com números diferentes. A forma canônica é ordenada, então a ordem em que a API manda os mods deixou de poder duplicar entrada.
+
+- **Migração 2: `map_difficulty` e `fc_pp` são recriadas e esvaziadas.** [`migrations.js`](src/db/migrations.js)
+  - Não é só a chave que mudou de forma — **todo valor guardado veio do motor antigo**, e está entre 2% e 15% fora. Converter a chave preservaria justamente os números que a troca veio corrigir, e as duas tabelas não têm TTL para vencer (são "função pura do arquivo `.osu`", premissa que vale para o arquivo mas não para o motor). Ficariam errados para sempre.
+  - O que se perde é cache, não dado: a primeira exibição de cada (mapa, mods) recalcula. O `.osu` continua no `beatmap_files`, então nem download novo acontece. Detecção pela presença da coluna `mods_bits`, e não por flag no `meta` — idempotente por construção.
+
+## 🧪 Testes
+
+- `test/lazerWorker.test.js` (novo) cobre o motor contra a lib de verdade: estrelas e combo, o `CL` **não** movendo a estrela e o `HD` movendo, o FC rendendo mais que o choke, a play interrompida usando só o trecho jogado, o mapa viajando uma vez só, e mapa corrompido e operação desconhecida não derrubando o processo.
+- O último teste do arquivo é o que justifica o desenho: sobe um processo que usa o worker, fecha e faz o trabalho que viria depois — o equivalente ao `db.close()`. Se o segfault do .NET escapasse do filho, a linha final nunca sairia.
+- `test/rosuWorker.test.js` foi reduzido ao que sobrou no rosu-pp, e o `.osu` sintético saiu dele para os `helpers` — os dois motores precisam do **mesmo** mapa para que os números sejam comparáveis.
+- `test/fcPpCache.test.js` e `test/officialScore.test.js` acompanharam a chave nova e a saída do HD dos cosméticos. Ganharam um caso novo: a ordem em que os mods chegam não pode mudar a chave.
+- 457 testes passando.
+
+## 📝 Documentação
+
+- [`docs/OPCIONAIS.md`](docs/OPCIONAIS.md) ganhou a seção **O cálculo de PP**: o que a lib é, que não precisa de .NET nem compilador, a tabela do que some em plataforma sem binário (e o que continua funcionando), e por que ela roda em processo separado.
+
+---
+
 # Sessão de 2026-08-15 (EZPP Farm)
 
 O bot atende mais um servidor: o **[EZPP Farm](https://ez-pp.farm/)**, com as chaves `ezpp` e `ezpp_rx`. Ele é bancho.py, mas foi o primeiro a chegar **sem a Shiina-Web** — e era exatamente disso que o registro avisava desde que virou configuração: "um servidor com outro front-end responde o resto e falha nesses dois". O aviso deixou de ser uma nota e virou um caminho de código.

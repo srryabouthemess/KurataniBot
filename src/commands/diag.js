@@ -9,6 +9,7 @@ const metrics = require('../metrics');
 // caminho de PP para montar um embed de contadores.
 const pythonWorker = require('../pythonWorker');
 const rosuWorker = require('../rosuWorker');
+const lazerWorker = require('../lazerWorker');
 const { t } = require('../i18n');
 
 /**
@@ -17,7 +18,7 @@ const { t } = require('../i18n');
  * Todo ajuste de desempenho até aqui foi medido com script de bancada, o que
  * serve para DECIDIR uma mudança e não serve para nada depois dela: em produção
  * não havia como saber se o cache está acertando, se algum balde do rate limiter
- * virou fila, ou se a thread do rosu está mesmo de pé.
+ * virou fila, ou se os motores de cálculo estão mesmo de pé.
  *
  * Os números são do processo, e zeram no restart — é diagnóstico do "agora", não
  * histórico.
@@ -82,7 +83,11 @@ module.exports = {
   async execute(interaction) {
     const s = t(interaction);
     const { uptimeMs, contadores, caches } = metrics.snapshot();
-    const workers = { rosu: rosuWorker.stats(), python: pythonWorker.stats() };
+    const workers = {
+      lazer:  lazerWorker.stats(),
+      rosu:   rosuWorker.stats(),
+      python: pythonWorker.stats(),
+    };
 
     const embed = new EmbedBuilder()
       .setColor(0x99ccff)
@@ -106,6 +111,9 @@ module.exports = {
     embed.addFields({
       name: s.diag_workers,
       value: [
+        // O de PP vem primeiro: é o que responde pelos números que as pessoas
+        // veem. O rosu-pp ficou só com os atributos de mapa (ver pp.js).
+        s.diag_worker_line('lazer-calc', workers.lazer.vivo, workers.lazer.served, workers.lazer.failed),
         s.diag_worker_line('rosu-pp', workers.rosu.vivo, workers.rosu.served, workers.rosu.failed),
         s.diag_worker_line('akatsuki-pp', workers.python.vivo, workers.python.served, workers.python.failed),
       ].join('\n'),
