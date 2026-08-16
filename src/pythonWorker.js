@@ -267,8 +267,20 @@ function calcular(mapBytes, { mapId, mods, n300, n100, n50, nmiss, combo }) {
 
     // Cabeçalho e corpo em escritas separadas, mas na ordem: o Python lê uma
     // linha e depois exatamente `bytes` bytes.
-    worker.child.stdin.write(`${cabecalho}\n`);
-    worker.child.stdin.write(Buffer.from(mapBytes));
+    //
+    // Sob try/catch pelo mesmo motivo do `child.send` do lazerWorker: um filho
+    // que morreu entre o `garantir()` e aqui faz a escrita falhar. Sem isto o
+    // pedido não falhava — ficava pendurado até o timeout de 12s para dar o
+    // mesmo `null` que se pode dar agora, e a causa real se perdia.
+    try {
+      worker.child.stdin.write(`${cabecalho}\n`);
+      worker.child.stdin.write(Buffer.from(mapBytes));
+    } catch (error) {
+      worker.pending.delete(id);
+      clearTimeout(timer);
+      derrubar(worker, `não deu para falar com o Python: ${error.message}`);
+      resolve(null);
+    }
   });
 }
 

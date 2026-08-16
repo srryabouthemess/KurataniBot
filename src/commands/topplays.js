@@ -91,7 +91,12 @@ module.exports = {
     // por `-reverse` e por `reverse` solto (ver parseArgs), que é como se liga um
     // booleano ali — nunca por posição.
     guards: {
-      mods:    value => topFilter.parseModFilter(value) !== null,
+      // `pareceMods` e não `parseModFilter`: a guarda pergunta se o token IA ser
+      // um filtro de mods, e quem julga a validade é o execute — que já
+      // responde `topplays_bad_mods`. Com a validade aqui, `k!top mrekk XYHD`
+      // escaparia da guarda e viraria "argumentos demais" em vez de dizer que
+      // XY não é mod.
+      mods:    value => topFilter.pareceMods(value),
       reverse: () => false,
     },
   },

@@ -27,10 +27,22 @@ const osu = require('../src/osuClient');
  * inversão desse índice passar sem ninguém notar — que é exatamente o tipo de
  * erro que o adaptador precisou acertar quando foi escrito.
  */
+/**
+ * O `default` é o jogador do Daycore, e ele só serve para os servidores do
+ * .env — um embutido novo não tem por que conhecer aquele nick. Enquanto o EZPP
+ * ficou de fora desta lista, toda rodada do smoke terminava com dois FALHA que
+ * não eram defeito nenhum do bot, e um smoke que sempre reclama é um smoke que
+ * ninguém lê.
+ *
+ * Por ID, e não por nome: nome de conta muda, e aí o smoke volta a acusar uma
+ * falha que não existe. É a mesma razão do Akatsuki logo acima.
+ */
 const PLAYERS = {
   official:    'kuratani',
   akatsuki:    '47379',
   akatsuki_rx: '47379',
+  ezpp:        '17854',
+  ezpp_rx:     '17854',
   default:     'pudim2',
 };
 

@@ -22,7 +22,7 @@
  * plays empatadas em 0, na ordem em que já estavam.
  */
 
-const { decodeMods, stripClassic, parseModsString } = require('./mods');
+const { decodeMods, stripClassic, parseModTokens } = require('./mods');
 
 /** Os critérios de ordenação, na ordem em que aparecem para quem escolhe. */
 const SORTS = ['pp', 'acc', 'combo', 'date', 'misses'];
@@ -104,6 +104,13 @@ const KEYS = { pp: ppOf, acc: accOf, combo: comboOf, date: dateOf, misses: misse
  * vazia, a lista sairia inteira, e quem pediu leria isso como "nenhuma play
  * minha tem XY" — quando o certo é dizer que XY não é mod nenhum.
  *
+ * Por isso é o `parseModTokens` que responde aqui, e não o `parseModsString`:
+ * a rejeição precisa valer para a mistura também. Com o descarte silencioso,
+ * `mods:XYHD` filtrava por HD e devolvia uma lista plausível — a resposta
+ * parecia ser da pergunta feita, e nada na tela dizia que metade do que a
+ * pessoa digitou tinha sido jogada fora. Um token estranho invalida o pedido
+ * inteiro, que é o que "não entendi" quer dizer.
+ *
  * @returns {{nomod: true}|{mods: string[]}|null}
  */
 function parseModFilter(input) {
@@ -114,8 +121,26 @@ function parseModFilter(input) {
   // lista vazia — a mesma coisa que "não filtre nada".
   if (/^(nm|nomod|no.?mod|none|nenhum)$/i.test(text)) return { nomod: true };
 
-  const mods = parseModsString(text);
-  return mods.length > 0 ? { mods } : null;
+  const { mods, unknown } = parseModTokens(text);
+  if (unknown.length > 0 || mods.length === 0) return null;
+  return { mods };
+}
+
+/**
+ * Se o token PARECE um pedido de mods, mesmo que inválido.
+ *
+ * Existe para a guarda do modo texto, que decide se um posicional é o `mods` ou
+ * o nick de alguém. As duas perguntas são diferentes: a guarda quer saber a
+ * INTENÇÃO ("isto ia ser um filtro de mods"), e o `parseModFilter` quer saber a
+ * validade. Fossem a mesma, um `k!top mrekk XYHD` deixaria de ser reclamado
+ * como mod inválido e viraria "argumentos demais" — que é a resposta certa para
+ * outra pergunta.
+ */
+function pareceMods(input) {
+  const text = String(input ?? '').trim();
+  if (!text) return false;
+  if (/^(nm|nomod|no.?mod|none|nenhum)$/i.test(text)) return true;
+  return parseModTokens(text).mods.length > 0;
 }
 
 /**
@@ -197,6 +222,7 @@ module.exports = {
   SORTS,
   arrange,
   parseModFilter,
+  pareceMods,
   // Exportados para o teste: são as leituras que precisam valer para as duas
   // formas de score, e é onde uma diferença de escala passa despercebida.
   accOf, dateOf, modsOf, matchesMods,

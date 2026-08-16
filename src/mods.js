@@ -13,10 +13,22 @@
 
 // Bitmask do osu! stable. Serve para decodificar score e para alimentar as
 // libs de cálculo, que usam o mesmo formato.
+//
+// O TD e o AP faltavam, e o efeito era mudo: bit que não está aqui some na
+// decodificação, então um score de touch aparecia como `+NM` — o mod que mais
+// explica um pp baixo era justamente o invisível. Nenhum dos dois quebra o
+// motor: medido no lazer-calculator com um mapa sintético, ele aceita os dois
+// acrônimos (e ignora em silêncio o que não conhece).
+//
+// O SV2 (536870912) ficou DE FORA, e não por esquecimento: o
+// `parseModsString` corta dígitos e lê de dois em dois caracteres, então
+// "SV2" é intocável por quem digita, e não há evidência de que os servidores
+// que o bot consulta liguem esse bit. Entra no dia em que aparecer num score
+// de verdade, junto do teste que o comprove.
 const MOD_BITS = {
-  NF: 1, EZ: 2, HD: 8, HR: 16, SD: 32,
+  NF: 1, EZ: 2, TD: 4, HD: 8, HR: 16, SD: 32,
   DT: 64, RX: 128, HT: 256, NC: 512, FL: 1024,
-  SO: 4096, PF: 16384,
+  SO: 4096, AP: 8192, PF: 16384,
 };
 
 const MOD_MAP = Object.fromEntries(
@@ -36,22 +48,38 @@ function decodeMods(bits) {
 }
 
 /**
- * Texto digitado → acrônimos válidos. Aceita "DT HR", "dthr", "hd,dt".
- * Token desconhecido é ignorado em silêncio: o comando não deve falhar porque
- * alguém escreveu um mod que não existe junto de outros que existem.
+ * Texto digitado → os mods reconhecidos E os que não foram.
+ *
+ * A lista de descartados existe porque "ignorar em silêncio" é a resposta certa
+ * para UM dos dois usos e a errada para o outro. Ao ler um score, um token
+ * estranho não pode fazer a play inteira falhar. Ao FILTRAR, ele muda o que a
+ * pessoa pediu: `mods:XYHD` casava só o HD e devolvia uma lista que parecia
+ * responder à pergunta feita (ver parseModFilter em topFilter.js).
+ *
+ * @returns {{mods: string[], unknown: string[]}}
  */
-function parseModsString(input) {
-  if (!input) return [];
-
-  const clean = input.toUpperCase().replace(/[^A-Z]/g, '');
-  const found = [];
+function parseModTokens(input) {
+  const clean = String(input ?? '').toUpperCase().replace(/[^A-Z]/g, '');
+  const mods = [];
+  const unknown = [];
 
   for (let i = 0; i < clean.length; i += 2) {
     const token = clean.slice(i, i + 2);
-    if (KNOWN_MOD_TOKENS.has(token) && !found.includes(token)) found.push(token);
+    if (!KNOWN_MOD_TOKENS.has(token)) unknown.push(token);
+    else if (!mods.includes(token)) mods.push(token);
   }
 
-  return found;
+  return { mods, unknown };
+}
+
+/**
+ * Texto digitado → acrônimos válidos. Aceita "DT HR", "dthr", "hd,dt".
+ * Token desconhecido é ignorado em silêncio: o comando não deve falhar porque
+ * alguém escreveu um mod que não existe junto de outros que existem. Quem
+ * precisa saber dos descartados chama o `parseModTokens`.
+ */
+function parseModsString(input) {
+  return parseModTokens(input).mods;
 }
 
 /** Acrônimos → bitmask. */
@@ -100,8 +128,15 @@ function stripClassic(mods) {
  * conferido que não move a estrela (7.8058★ com e sem). Fora daqui ficam EZ, HR,
  * DT, NC, HT e FL, que mexem no mapa de verdade — e o RX, que muda o motor de
  * cálculo inteiro.
+ *
+ * O TD entra aqui, e o AP não: medido no lazer-calculator sobre o mesmo mapa,
+ * TD dá 1.3952★ (idêntico a sem mods) e AP dá 0.9866★. O TD penaliza o pp sem
+ * tocar na dificuldade; o AP tira uma dimensão do jogo inteira, como o RX.
+ * Errar o lado é barato numa direção e caro na outra: um cosmético de fora só
+ * gasta um cálculo para chegar ao mesmo número, mas um mod de dificuldade aqui
+ * dentro faz o bot exibir a estrela SEM mods como se fosse a da play.
  */
-const COSMETIC_MODS = new Set(['NF', 'SO', 'SD', 'PF', 'CL']);
+const COSMETIC_MODS = new Set(['NF', 'SO', 'SD', 'PF', 'CL', 'TD']);
 
 /**
  * Só os mods que alteram a dificuldade. Pode ser vazio, e aí quem chama decide
@@ -147,6 +182,6 @@ function formatMods(mods) {
 
 module.exports = {
   MOD_BITS, KNOWN_MOD_TOKENS,
-  decodeMods, parseModsString, modsToBits, stripClassic, difficultyMods, formatMods,
-  canonicalMods,
+  decodeMods, parseModsString, parseModTokens, modsToBits, stripClassic,
+  difficultyMods, formatMods, canonicalMods,
 };

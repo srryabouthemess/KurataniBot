@@ -238,31 +238,45 @@ async function shutdown(signal) {
   shuttingDown = true;
   console.log(`\n[shutdown] ${signal} recebido, encerrando...`);
 
-  try {
-    // Desconecta do gateway antes de fechar o banco, para não atender uma
-    // interação com o db já fechado.
-    await client.destroy();
-    await daycoreEvents.close().catch(() => {});
-    await daycoreAdmin.closeRedis().catch(() => {});
-    // Os três motores de cálculo são recursos de vida longa — dois processos
-    // (Python e lazer-calculator) e um worker thread (rosu-pp). Sem fechá-los
-    // aqui, ficariam órfãos a cada restart.
-    //
-    // O do lazer-calculator termina em segfault por dentro, sempre: é o runtime
-    // .NET dele que não descarrega, e foi por isso que ele virou processo em vez
-    // de thread (ver lazerWorkerChild.js). Como filho, ele leva o próprio
-    // estrago — o `db.close()` logo abaixo continua acontecendo, que era
-    // exatamente o que a versão em thread impedia.
-    pp.closePythonWorker();
-    pp.closeRosuWorker();
-    pp.closeLazerWorker();
-    db.close();
-    console.log('[shutdown] Concluído.');
-  } catch (error) {
-    logError('shutdown', error);
-  } finally {
-    process.exit(0);
+  // Cada peça é fechada por conta própria, e a falha de uma NÃO cancela as
+  // seguintes. Num try só, uma exceção no `client.destroy()` pulava tudo que
+  // vinha depois — os três motores ficavam órfãos e o banco fechava só pelo
+  // `process.exit`, sem checkpoint. Justamente no caminho em que algo já deu
+  // errado é que o resto mais precisa acontecer.
+  //
+  // A ORDEM continua importando, e é por isso que são etapas em sequência e não
+  // um Promise.all: o gateway sai primeiro, para não atender uma interação com o
+  // banco já fechado, e o banco fecha por último.
+  //
+  // Os três motores de cálculo são recursos de vida longa — dois processos
+  // (Python e lazer-calculator) e um worker thread (rosu-pp). Sem fechá-los
+  // aqui, ficariam órfãos a cada restart.
+  //
+  // O do lazer-calculator termina em segfault por dentro, sempre: é o runtime
+  // .NET dele que não descarrega, e foi por isso que ele virou processo em vez
+  // de thread (ver lazerWorkerChild.js). Como filho, ele leva o próprio
+  // estrago — o `db.close()` do fim continua acontecendo, que era exatamente o
+  // que a versão em thread impedia.
+  const etapas = [
+    ['gateway',      () => client.destroy()],
+    ['eventos',      () => daycoreEvents.close()],
+    ['redis',        () => daycoreAdmin.closeRedis()],
+    ['python',       () => pp.closePythonWorker()],
+    ['rosu',         () => pp.closeRosuWorker()],
+    ['lazer',        () => pp.closeLazerWorker()],
+    ['banco',        () => db.close()],
+  ];
+
+  for (const [nome, fechar] of etapas) {
+    try {
+      await fechar();
+    } catch (error) {
+      logError(`shutdown:${nome}`, error);
+    }
   }
+
+  console.log('[shutdown] Concluído.');
+  process.exit(0);
 }
 
 for (const signal of ['SIGINT', 'SIGTERM']) {

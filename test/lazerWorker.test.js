@@ -47,6 +47,28 @@ test('mod de dificuldade move a estrela, e o CL não', async () => {
   assert.equal(cl.stars, nm.stars, 'o CL não deveria mexer na estrela');
 });
 
+test('o motor conhece TD e AP, e só um deles mexe na estrela', async () => {
+  // Os dois faltavam no MOD_BITS, e o efeito era mudo: bit ausente some na
+  // decodificação, então um score de touch aparecia como `+NM`. Antes de
+  // acrescentá-los foi preciso responder duas coisas aqui, contra a lib de
+  // verdade — se o motor aceita os acrônimos, e de que lado do difficultyMods
+  // cada um cai.
+  const nm = await lazerWorker.calcular('difficulty', 8001, { mods: [] }, bytesDe);
+  const td = await lazerWorker.calcular('difficulty', 8001, { mods: ['TD'] }, bytesDe);
+  const ap = await lazerWorker.calcular('difficulty', 8001, { mods: ['AP'] }, bytesDe);
+
+  assert.ok(td && ap, 'o motor deveria aceitar os dois acrônimos');
+
+  // TD penaliza o pp sem tocar na dificuldade — daí ele estar em COSMETIC_MODS,
+  // onde o bot confia na estrela publicada pela API em vez de calcular.
+  assert.equal(td.stars, nm.stars, 'o TD não deveria mexer na estrela');
+
+  // O AP tira uma dimensão inteira do jogo, como o RX. Se ele empatar com o NM,
+  // é sinal de que o motor deixou de aplicá-lo — e o bot passaria a exibir a
+  // estrela sem mods como se fosse a da play.
+  assert.ok(ap.stars < nm.stars, `AP (${ap.stars}) deveria ficar abaixo de NM (${nm.stars})`);
+});
+
 test('o HD mexe na estrela — foi o rework de reading', async () => {
   // Este teste existe por causa de uma regressão de valor, não de código: até o
   // rework de 03/07/2026 o HD não movia estrela nenhuma, e por isso ele estava

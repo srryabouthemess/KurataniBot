@@ -84,6 +84,27 @@ test('texto sem mod reconhecível não vira filtro vazio', () => {
   assert.deepStrictEqual(topFilter.parseModFilter('nomod'), { nomod: true });
 });
 
+test('token estranho invalida o filtro inteiro, e não só a si mesmo', () => {
+  // O descarte silencioso do parseModsString é certo ao LER um score e errado
+  // ao filtrar: `mods:XYHD` casava só o HD e devolvia uma lista plausível, como
+  // se respondesse a pergunta que foi feita.
+  assert.strictEqual(topFilter.parseModFilter('XYHD'), null);
+  assert.strictEqual(topFilter.parseModFilter('hdxy'), null);
+  // O válido puro continua valendo, em qualquer ordem e caixa.
+  assert.deepStrictEqual(topFilter.parseModFilter('dthd'), { mods: ['DT', 'HD'] });
+});
+
+test('a guarda do modo texto pergunta a intenção, não a validade', () => {
+  // Se ela usasse o parseModFilter, `k!top mrekk XYHD` escaparia da opção
+  // `mods` e viraria "argumentos demais" — resposta certa para outra pergunta.
+  assert.equal(topFilter.pareceMods('XYHD'), true, 'ia ser um filtro de mods');
+  assert.equal(topFilter.pareceMods('HD'), true);
+  assert.equal(topFilter.pareceMods('nomod'), true);
+  // Nick não pode ser confundido com mods, senão a guarda come o nome.
+  assert.equal(topFilter.pareceMods('mrekk'), false);
+  assert.equal(topFilter.pareceMods(''), false);
+});
+
 test('pedir um mod traz quem o tem, com ou sem outros junto', () => {
   const filtro = topFilter.parseModFilter('HD');
 
