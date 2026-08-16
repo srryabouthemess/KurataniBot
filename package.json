@@ -10,7 +10,8 @@
     "smoke": "node test/smoke.js",
     "deploy": "node src/deploy-commands.js",
     "smoke:commands": "node test/smokeCommands.js",
-    "post": "node test/postEmbeds.js"
+    "post": "node test/postEmbeds.js",
+    "notices": "node src/gerar-notices.js"
   },
   "keywords": [],
   "author": "",

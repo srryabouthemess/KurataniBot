@@ -77,4 +77,6 @@ Como ligar cada um: **[docs/OPCIONAIS.md](docs/OPCIONAIS.md)**.
 
 Testes: `npm test`. Desenvolvimento e detalhes internos: [docs/OPCIONAIS.md](docs/OPCIONAIS.md) e [CHANGELOG.md](CHANGELOG.md).
 
-MIT.
+MIT — veja [LICENSE](LICENSE). As dependências são de outras pessoas e têm as
+licenças delas: [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md), gerado por
+`npm run notices` e que precisa ser regerado quando alguma dependência mudar.

@@ -65,6 +65,12 @@ Estrelas e PP saíam do `rosu-pp`, que é uma reimplementação em Rust do algor
 
 ## 📝 Documentação
 
+- **O projeto passou a cumprir as licenças que usa.** [`THIRD-PARTY-NOTICES.md`](THIRD-PARTY-NOTICES.md) (novo), [`gerar-notices.js`](src/gerar-notices.js) (novo), `npm run notices`
+  - MIT, BSD e Apache pedem a mesma coisa de quem redistribui: o aviso de copyright e o texto da licença de cada peça de terceiro viajam junto. Faltava — e são **63 dependências de produção**, quase todas transitivas.
+  - **É gerado, não escrito à mão**: um arquivo manual cumpre no dia em que foi escrito e mente no primeiro `npm install` seguinte. `npm run notices` depois de mexer em dependência, e o diff mostra o que entrou.
+  - A lista sai do **`package-lock.json`**, não do `node_modules`: o lock traz o binário do calculador das **duas** plataformas (win32 aqui, linux na VPS), então o arquivo é o mesmo em qualquer máquina em vez de depender de onde foi gerado. O texto da licença, esse só existe no pacote instalado — quem não publica um vai para uma seção própria com o identificador declarado, porque dizer "não acompanha o texto" é honesto e inventar um copyright que ninguém escreveu não é.
+  - **A única não permissiva é o `@tosuapp/lazer-calculator`, que é LGPL-3.0-only** — o resto é MIT/BSD/Apache/0BSD. O desenho já satisfaz a exigência da LGPL sem esforço: o calculador é binário separado, carregado em processo filho e vindo do npm, então quem recebe troca a versão pelo `package.json`.
+
 - [`docs/OPCIONAIS.md`](docs/OPCIONAIS.md) ganhou a seção **O cálculo de PP**: o que a lib é, que não precisa de .NET nem compilador, a tabela do que some em plataforma sem binário (e o que continua funcionando), e por que ela roda em processo separado.
 
 ---
