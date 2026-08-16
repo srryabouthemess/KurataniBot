@@ -69,6 +69,28 @@ test('o motor conhece TD e AP, e só um deles mexe na estrela', async () => {
   assert.ok(ap.stars < nm.stars, `AP (${ap.stars}) deveria ficar abaixo de NM (${nm.stars})`);
 });
 
+test('DT junto de NC acelera duas vezes — daí o lazerMods', async () => {
+  // Este é o comportamento do MOTOR, e ele é a razão de o pp.js colapsar o par
+  // antes de chamar. No bitmask do stable o NC vem sempre acompanhado do DT, e
+  // o `decodeMods` é fiel a isso — então todo score de nightcore de servidor
+  // bancho.py chegava aqui como ['DT','NC'].
+  const nm = await lazerWorker.calcular('difficulty', 8001, { mods: [] }, bytesDe);
+  const dt = await lazerWorker.calcular('difficulty', 8001, { mods: ['DT'] }, bytesDe);
+  const nc = await lazerWorker.calcular('difficulty', 8001, { mods: ['NC'] }, bytesDe);
+  const ambos = await lazerWorker.calcular('difficulty', 8001, { mods: ['DT', 'NC'] }, bytesDe);
+
+  // Sozinho, cada um vale um aumento de velocidade — e o mesmo aumento.
+  assert.equal(nc.stars, dt.stars, 'NC e DT deveriam dar a mesma estrela');
+  assert.ok(dt.stars > nm.stars);
+
+  // Juntos, dois. Se um dia o motor passar a tratar isto como um só, este teste
+  // cai e o colapso do pp.js vira peso morto — que é o que se quer saber.
+  assert.ok(
+    ambos.stars > dt.stars,
+    `o motor deveria dobrar o rate com os dois (${ambos.stars} vs ${dt.stars})`,
+  );
+});
+
 test('o HD mexe na estrela — foi o rework de reading', async () => {
   // Este teste existe por causa de uma regressão de valor, não de código: até o
   // rework de 03/07/2026 o HD não movia estrela nenhuma, e por isso ele estava

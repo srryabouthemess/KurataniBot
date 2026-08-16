@@ -40,6 +40,34 @@ test('TD é cosmético e AP não é', () => {
   assert.deepStrictEqual(mods.difficultyMods(['TD', 'DT']), ['DT']);
 });
 
+test('o DT que o NC arrasta sai da tela e da conta', () => {
+  // No bitmask do stable o NC acompanha o DT em vez de substituí-lo, então um
+  // score de nightcore chega como 576.
+  assert.deepStrictEqual(mods.decodeMods(576), ['DT', 'NC']);
+
+  // Fiel ao bitmask, e é assim que tem de continuar: o akatsuki-pp lê a
+  // velocidade do BIT do DT, e tirá-lo de lá apagaria o mod inteiro (medido:
+  // 39.21pp contra os 96.99 corretos). Quem corta é a borda do lazer.
+  assert.deepStrictEqual(mods.stripImpliedDT(['DT', 'NC']), ['NC']);
+  assert.deepStrictEqual(mods.stripImpliedDT(['DT', 'NC', 'HD']), ['NC', 'HD']);
+
+  // DT sem NC é DT de verdade e não pode sumir.
+  assert.deepStrictEqual(mods.stripImpliedDT(['DT']), ['DT']);
+  assert.deepStrictEqual(mods.stripImpliedDT(['HD', 'HR']), ['HD', 'HR']);
+
+  // E a tela: `+DTNC` é o bitmask vazando para o embed.
+  assert.equal(mods.formatMods(mods.decodeMods(576)), '+NC');
+  // A ordem é a dos bits, então o HD (8) vem antes do NC (512).
+  assert.equal(mods.formatMods(mods.decodeMods(576 | 8)), '+HDNC');
+  assert.equal(mods.formatMods(mods.decodeMods(64)), '+DT');
+
+  // A lista de quem chamou não é tocada — o formatMods roda dentro de um map
+  // sobre os mods do score.
+  const original = ['DT', 'NC'];
+  mods.stripImpliedDT(original);
+  assert.deepStrictEqual(original, ['DT', 'NC']);
+});
+
 test('o texto digitado separa o que foi entendido do que não foi', () => {
   assert.deepStrictEqual(mods.parseModTokens('hddt'), { mods: ['HD', 'DT'], unknown: [] });
   assert.deepStrictEqual(mods.parseModTokens('xyhd'), { mods: ['HD'], unknown: ['XY'] });

@@ -110,6 +110,35 @@ function stripClassic(mods) {
 }
 
 /**
+ * A lista sem o DT que o NC arrasta junto.
+ *
+ * No bitmask do stable o Nightcore NÃO substitui o Double Time: ele o
+ * acompanha, então um score de NC chega com os dois bits (64|512 = 576) e o
+ * `decodeMods` devolve `['DT','NC']` — fiel ao que o servidor gravou.
+ *
+ * Só que "fiel ao bitmask" e "o que o motor espera" deixaram de ser a mesma
+ * coisa, e os dois motores querem coisas OPOSTAS. Medido sobre o mesmo mapa:
+ *
+ *   mods          lazer      akatsuki-pp
+ *   DT            2.0619★    2.1217★
+ *   NC            2.0619★    1.4613★   ← ignora o NC sozinho
+ *   DT + NC       3.6362★    2.1217★   ← o lazer acelera DUAS vezes
+ *
+ * No lazer cada mod carrega o próprio ajuste de rate, então mandar os dois é
+ * pedir dois aumentos. O akatsuki-pp é bitmask e lê a velocidade do bit do DT,
+ * então tirar o DT ali apagaria o mod inteiro. Por isso o corte NÃO mora no
+ * `decodeMods`: ele é aplicado na borda do motor que precisa dele (ver
+ * `lazerMods` em pp.js), e o caminho do Relax continua recebendo os dois bits.
+ *
+ * O `formatMods` usa a mesma peça pelo motivo mais simples: `+DTNC` não é como
+ * ninguém escreve nightcore.
+ */
+function stripImpliedDT(mods) {
+  const list = mods ?? [];
+  return list.includes('NC') ? list.filter(mod => mod !== 'DT') : [...list];
+}
+
+/**
  * Mods que não mexem na dificuldade do mapa.
  *
  * A distinção importa por causa de quem pergunta: o `getAdjustedStars` usa a
@@ -176,12 +205,14 @@ function canonicalMods(mods) {
  * mostrava nada.
  */
 function formatMods(mods) {
-  const list = mods ?? [];
+  // `+DTNC` é o bitmask do stable vazando para a tela: o NC sempre traz o DT
+  // junto, e o osu! escreve isso como `+NC`.
+  const list = stripImpliedDT(mods);
   return list.length > 0 ? `+${list.join('')}` : '+NM';
 }
 
 module.exports = {
   MOD_BITS, KNOWN_MOD_TOKENS,
   decodeMods, parseModsString, parseModTokens, modsToBits, stripClassic,
-  difficultyMods, formatMods, canonicalMods,
+  stripImpliedDT, difficultyMods, formatMods, canonicalMods,
 };

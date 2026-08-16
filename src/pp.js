@@ -14,7 +14,7 @@
 require('dotenv').config({ quiet: true });
 const db = require('./db');
 const servers = require('./servers');
-const { modsToBits, stripClassic, difficultyMods, canonicalMods } = require('./mods');
+const { modsToBits, stripClassic, stripImpliedDT, difficultyMods, canonicalMods } = require('./mods');
 const { logErrorOnce } = require('./logger');
 const { getBeatmapFile } = require('./beatmapFile');
 const { TtlCache } = require('./ttlCache');
@@ -64,6 +64,21 @@ function engineMods(mode, mods) {
 }
 
 /**
+ * Os mods como o LAZER precisa vê-los, que não é como o bitmask os guarda.
+ *
+ * Lá cada mod carrega o próprio ajuste de velocidade, então o `['DT','NC']` que
+ * um score de nightcore de bancho.py produz pede DOIS aumentos: medido, 3.6362★
+ * contra os 2.0619★ corretos, e o pp sai junto. O `stripImpliedDT` explica o
+ * resto, inclusive por que o caminho do Relax NÃO passa por aqui.
+ *
+ * Ele entra antes da chave de cache, e não só antes da chamada, de propósito: a
+ * `map_difficulty` não tem TTL, e uma estrela errada gravada com a chave antiga
+ * valeria para sempre. Com a chave mudando junto, as linhas erradas que já
+ * existem simplesmente deixam de ser encontradas.
+ */
+const lazerMods = (mods) => stripImpliedDT(mods);
+
+/**
  * Manda uma operação para o processo do lazer-calculator.
  *
  * Os bytes do mapa só são buscados se o processo não tiver aquele mapa parseado —
@@ -88,12 +103,14 @@ const noRosu = (op, mapId, args) =>
  * @returns {Promise<{stars: number, maxCombo: number|null}|null>}
  */
 async function getDifficultyAttrs(mapId, mods) {
-  const chaveMods = canonicalMods(mods);
+  // Colapsado ANTES da chave: ver lazerMods. Este caminho é sempre o do lazer.
+  const modsMotor = lazerMods(mods);
+  const chaveMods = canonicalMods(modsMotor);
 
   const cached = db.getMapDifficulty(mapId, chaveMods);
   if (cached) return cached;
 
-  const attrs = await noLazer('difficulty', mapId, { mods });
+  const attrs = await noLazer('difficulty', mapId, { mods: modsMotor });
   if (!attrs || !Number.isFinite(attrs.stars)) return null;
 
   // Combo zero quer dizer "mapa sem objeto nenhum", que não existe de verdade.
@@ -284,7 +301,14 @@ async function getFCpp(score, mode = DEFAULT_MODE) {
   const mods  = engineMods(mode, score.mods);
   const relax = servers.get(mode).relax;
 
-  const cacheKey = fcCacheKey({ beatmapId, mods, relax, n300, n100, n50, misses });
+  // A chave descreve o que o MOTOR vai receber, e os dois recebem coisas
+  // diferentes: o akatsuki-pp leva o bitmask cru (com o DT que o NC arrasta), e
+  // o lazer leva a lista colapsada. Guardar os dois sob a mesma chave faria
+  // `['DT','NC']` e `['NC']` colidirem no lado do Relax, onde eles dão 96.99pp
+  // e 39.21pp — o mesmo mapa com dois números legítimos e uma linha só.
+  const modsMotor = relax ? mods : lazerMods(mods);
+
+  const cacheKey = fcCacheKey({ beatmapId, mods: modsMotor, relax, n300, n100, n50, misses });
   if (cacheKey) {
     const cached = db.getCachedFCpp(cacheKey);
     // Só número entra na tabela, então um acerto é sempre um valor válido —
@@ -315,7 +339,7 @@ async function getFCpp(score, mode = DEFAULT_MODE) {
     // jeito — e a accuracy bruta do score, que o rosu-pp usava nesse ramo, seria
     // justamente a do score COM choke, não a do FC que se quer estimar.
     const resultado = await noLazer('fc', beatmapId, {
-      mods,
+      mods: modsMotor,
       n300, n100, n50, misses,
     });
 
@@ -388,9 +412,12 @@ async function simulatePP(beatmapId, mods, hits, mode = DEFAULT_MODE, { classic 
     }
 
     // `classic` força o CL na lista; sem ele, vale a regra normal do servidor.
-    const modsMotor = classic
+    // O lazerMods fecha o caminho do /simulate e do /score pelo mesmo motivo do
+    // getFCpp: `-nc` digitado junto de `-dt`, ou um score de nightcore relido
+    // daqui, chegaria com os dois e o motor aceleraria duas vezes.
+    const modsMotor = lazerMods(classic
       ? engineMods(mode, [...(mods ?? []), 'CL'])
-      : engineMods(mode, mods);
+      : engineMods(mode, mods));
 
     const resultado = await noLazer('simulate', beatmapId, {
       mods: modsMotor,
