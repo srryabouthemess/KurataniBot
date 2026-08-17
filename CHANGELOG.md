@@ -2,6 +2,38 @@
 
 ---
 
+# Sessão de 2026-08-16 (o /map e o /simulate discordavam)
+
+Os dois comandos respondem a mesma pergunta — quanto paga um FC de 98% neste mapa — e vinham respondendo números diferentes. A causa é de uma linha, e ela é do tipo que nenhuma tela denuncia: uma **opção renomeada que o chamador não acompanhou**.
+
+Quando a mecânica lazer/stable virou o mod CL, o `simulatePP` trocou `{ lazer: false }` por `{ classic: true }`. O `/simulate` foi atualizado no mesmo commit; o `/map`, escrito antes, ficou com o nome velho. Uma chave que ninguém desestrutura não reclama — ela é ignorada, e o `classic` chegava `undefined`. No servidor oficial isso significa calcular a tabela inteira em mecânica de lazer.
+
+O mesmo mapa, mods e acertos, pelo caminho real dos dois comandos (FREEDOM DiVE [FOUR DIMENSIONS], +HR):
+
+| acc | `/map` (antes) | `/simulate` | diferença |
+|---|---|---|---|
+| 100% | 849.80pp | 846.17pp | −0.43% |
+| 99% | 802.72pp | 792.36pp | −1.29% |
+| 98% | 765.23pp | 751.58pp | −1.78% |
+| 97% | 732.91pp | 717.99pp | −2.04% |
+| 95% | 682.24pp | 668.16pp | −2.06% |
+
+## 🐛 Correções
+
+- **A tabela do `/map` era calculada em mecânica de lazer.** [`map.js`](src/commands/map.js)
+  - O comentário ao lado da chamada já dizia a intenção certa ("`lazer: false` pelo mesmo motivo do /simulate"), e era o comentário que estava certo — o código é que não fazia aquilo desde a troca de motor. Agora passa `{ classic: true }`, que é o nome que o `simulatePP` lê.
+  - **Só o Bancho estava errado.** Em bancho.py o `engineMods` põe o CL de qualquer jeito, então a opção não fazia falta e os dois comandos concordavam. Medido: no oficial o `/map` dava 527.38pp onde o servidor privado dava 521.58pp para o mesmo mapa a 98% — e 521.58pp é exatamente o que o `/simulate` respondia nos dois.
+  - A diferença é maior em proporção nos mapas pequenos (até **−9,1%** num mapa de 2007 a 95%) e maior em pp absoluto nos grandes (**−14.92pp** no FREEDOM DiVE +HR a 97%). Estrela não muda: o CL não mexe na dificuldade, só no cálculo.
+  - De passagem, o comentário logo acima apontava para a thread do `rosu-pp` como quem parseia o mapa — quem faz isso é o processo do `lazer-calculator` desde a troca de motor.
+
+## ✅ Testes
+
+- O teste novo não crava o nome da opção, porque cravá-lo teria concordado com o defeito: repetir `classic: true` ao lado do comando é reafirmar a mesma suposição que já estava errada. Ele pega o objeto de opções que o comando montou, passa pelo `simulatePP` **de verdade** e olha se o CL chega ao motor — o efeito, e não a grafia. Conferido nos dois sentidos: falha com `{ lazer: false }`, passa com `{ classic: true }`.
+- Um segundo teste amarra o `/map` ao `/simulate`: os dois têm de chegar ao motor com os mesmos mods. É o que o comentário do `/map` promete, e é a promessa que o rename quebrou.
+- O terceiro guarda o ponto cego que deixou isso passar: no oficial, é a **opção** que põe o CL, não o servidor. Sem ele, uma suíte rodada contra bancho.py passaria com a opção quebrada. Suíte em 503 testes.
+
+---
+
 # Sessão de 2026-08-16 (DT com rate ajustado)
 
 No lazer o acrônimo deixou de descrever a play: o DT carrega um `speed_change` que quem joga escolhe, de 1,05x a 2,00x. A API oficial manda esse ajuste junto do mod, e o bot **jogava fora** na normalização — toda play de rate ajustado era exibida e calculada como se fosse 1,5x.

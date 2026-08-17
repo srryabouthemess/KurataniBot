@@ -135,19 +135,27 @@ module.exports = {
       // oficial conhece mas cujo arquivo não baixou.
       if (!attrs?.objects) return interaction.editReply(s.map_no_file);
 
-      // Em paralelo: são cinco chamadas ao mesmo mapa, que a thread do rosu já
-      // tem parseado depois da primeira (ver rosuWorkerThread.js).
+      // Em paralelo: são cinco chamadas ao mesmo mapa, que o processo do
+      // lazer-calculator só parseia na primeira (ver lazerWorker.js).
       //
-      // `lazer: false` pelo mesmo motivo do /simulate: é a mecânica que
+      // `classic: true` pelo mesmo motivo do /simulate: é a mecânica que
       // praticamente todo mundo joga, e é a que o resto do bot assume ao
       // calcular o pp de um FC.
+      //
+      // O NOME da opção é a parte que já custou caro. Ela era `lazer: false`
+      // até a mecânica virar o mod CL, quando o `simulatePP` passou a ler
+      // `classic` — e o nome antigo ficou aqui sem dar erro nenhum, porque uma
+      // chave que ninguém desestrutura é simplesmente ignorada. O resultado é
+      // que esta tabela saía em mecânica de lazer enquanto o /simulate
+      // respondia em clássica: no FREEDOM DiVE +HR a 98%, 765.23pp aqui contra
+      // 751.58pp lá, o mesmo mapa com dois números.
       const linhas = await Promise.all(ACCS.map(async acc => {
         const resultado = await osu.simulatePP(
           beatmapId,
           mods,
           { n100: cemPara(acc, attrs.objects) },
           mode,
-          { lazer: false },
+          { classic: true },
         );
         return { acc, resultado };
       }));
