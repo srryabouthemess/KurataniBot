@@ -35,10 +35,13 @@ const MOD_MAP = Object.fromEntries(
   Object.entries(MOD_BITS).map(([name, bit]) => [bit, name]),
 );
 
-// CL (Classic) não tem bit legado — é um mod só-lazer que sinaliza que o score
-// foi jogado com a mecânica antiga (stable) de sliders. Não entra no bitmask,
-// mas precisa ser reconhecido como token válido.
-const KNOWN_MOD_TOKENS = new Set([...Object.keys(MOD_BITS), 'CL']);
+// CL (Classic) e DC (Daycore) não têm bit legado — são mods só-lazer, e nenhum
+// dos dois entra no bitmask. O CL sinaliza que o score foi jogado com a mecânica
+// antiga (stable) de sliders; o DC é o HT que também baixa o tom. Os dois
+// precisam ser reconhecidos como token válido: o CL porque chega em quase todo
+// score da API oficial, e o DC porque, sem ele aqui, `dc0.8` no /simulate seria
+// recusado por um mod que o motor conhece e o bot exibe normalmente.
+const KNOWN_MOD_TOKENS = new Set([...Object.keys(MOD_BITS), 'CL', 'DC']);
 
 // ─── A quarta forma: o mod com AJUSTE ─────────────────────────────────────────
 //
@@ -55,13 +58,25 @@ const KNOWN_MOD_TOKENS = new Set([...Object.keys(MOD_BITS), 'CL']);
 // dos dois tem onde guardar ajuste.
 
 /**
- * Os mods que mexem na velocidade, e o rate de cada um sem ajuste nenhum.
+ * Os mods que mexem na velocidade: o rate de cada um sem ajuste, e até onde o
+ * ajuste vai.
  *
  * O DC (Daycore) está aqui mesmo sem bit legado, pelo mesmo motivo do CL: ele
  * chega em score da API oficial, e fora desta tabela uma play desacelerada
  * mostraria o BPM e o AR do mapa em velocidade normal.
+ *
+ * A FAIXA não é enfeite, e não foi copiada da wiki: foi medida contra o motor.
+ * Ele aceita qualquer número e **trunca em silêncio** para os limites do mod —
+ * um DT a 0,5x sai calculado a 1,01x, e um HT a 1,4x sai a 0,99x. Sem recusar
+ * antes, a tela diria `+DT (0.5x)` ao lado do pp de outra velocidade, que é o
+ * pior dos dois erros possíveis: o número parece responder ao que foi pedido.
  */
-const RATE_MODS = { DT: 1.5, NC: 1.5, HT: 0.75, DC: 0.75 };
+const RATE_MODS = {
+  DT: { padrao: 1.5,  min: 1.01, max: 2 },
+  NC: { padrao: 1.5,  min: 1.01, max: 2 },
+  HT: { padrao: 0.75, min: 0.5,  max: 0.99 },
+  DC: { padrao: 0.75, min: 0.5,  max: 0.99 },
+};
 
 /** O acrônimo, venha o mod como string ou como objeto com ajustes. */
 const modAcronym = (mod) => (typeof mod === 'string' ? mod : mod?.acronym ?? '');
@@ -78,10 +93,10 @@ const modAcronym = (mod) => (typeof mod === 'string' ? mod : mod?.acronym ?? '')
 function modSettings(mod) {
   if (typeof mod === 'string' || !mod?.settings) return null;
 
-  const padrao = RATE_MODS[modAcronym(mod)];
+  const faixa = RATE_MODS[modAcronym(mod)];
   const entradas = Object.entries(mod.settings).filter(([chave, valor]) => {
     if (valor === null || valor === undefined) return false;
-    if (chave === 'speed_change' && padrao !== undefined) return Number(valor) !== padrao;
+    if (chave === 'speed_change' && faixa) return Number(valor) !== faixa.padrao;
     return true;
   });
 
@@ -102,11 +117,11 @@ function modSettings(mod) {
  */
 function clockRate(mods) {
   for (const mod of mods ?? []) {
-    const padrao = RATE_MODS[modAcronym(mod)];
-    if (padrao === undefined) continue;
+    const faixa = RATE_MODS[modAcronym(mod)];
+    if (!faixa) continue;
 
     const ajuste = Number(mod?.settings?.speed_change);
-    return Number.isFinite(ajuste) ? ajuste : padrao;
+    return Number.isFinite(ajuste) ? ajuste : faixa.padrao;
   }
   return null;
 }
@@ -116,8 +131,8 @@ function customRate(mods) {
   const rate = clockRate(mods);
   if (rate === null) return null;
 
-  const mod = (mods ?? []).find(m => RATE_MODS[modAcronym(m)] !== undefined);
-  return rate === RATE_MODS[modAcronym(mod)] ? null : rate;
+  const mod = (mods ?? []).find(m => RATE_MODS[modAcronym(m)]);
+  return rate === RATE_MODS[modAcronym(mod)].padrao ? null : rate;
 }
 
 /** Bitmask → acrônimos. */
@@ -125,6 +140,73 @@ function decodeMods(bits) {
   return Object.entries(MOD_MAP)
     .filter(([bit]) => Number(bits) & Number(bit))
     .map(([, name]) => name);
+}
+
+/**
+ * O número solto do texto, separado das letras.
+ *
+ * Ele sai ANTES de as letras serem juntadas, e não depois, por causa do `x` que
+ * quase todo mundo escreve junto: `DT1.4X` filtrado por `[^A-Z]` viraria `DTX`,
+ * e o X passaria a ser meio token de mod. Sai também o `1.4` de `DT1.4`, que sem
+ * isto some inteiro — era assim que o rate digitado desaparecia sem deixar sinal.
+ *
+ * @returns {{letras: string, numeros: string[]}}
+ */
+function separarRate(texto) {
+  const numeros = [];
+  const letras = texto.replace(/\d+(?:\.\d+)?X?/g, (achado) => {
+    numeros.push(achado);
+    // Espaço, e não string vazia: `HD1.4DT` não pode virar o token `HDDT`, que
+    // seria dois mods que ninguém pediu. O `[^A-Z]` de quem chama tira o espaço.
+    return ' ';
+  });
+
+  return { letras, numeros };
+}
+
+/**
+ * Encaixa o rate digitado no mod de velocidade da lista.
+ *
+ * A posição do número no texto é ignorada de propósito: `DT1.4`, `HDDT 1.4x` e
+ * `DTHR (1.4)` dizem a mesma coisa, e só existe UM mod de velocidade por play —
+ * não há a quem mais o número poderia pertencer. É o que também deixa o
+ * `+HDDT (1.4x)` que o bot imprime voltar a ser digitável do jeito que foi lido.
+ *
+ * Rate fora da faixa do mod é recusado junto com o mod. O motor truncaria em
+ * silêncio (ver RATE_MODS), e um `+DT (0.5x)` na tela ao lado do pp de 1,01x é
+ * pior do que uma recusa: parece que a pergunta foi respondida.
+ *
+ * @returns {{mods: Array<string|object>, unknown: string[]}}
+ */
+function aplicarRate(mods, numeros) {
+  if (numeros.length === 0) return { mods, unknown: [] };
+
+  // Dois números não têm como ser desempatados — `DT1.4 HR1.2` não quer dizer
+  // nada, e escolher um deles seria adivinhar.
+  if (numeros.length > 1) return { mods, unknown: numeros };
+
+  const bruto = numeros[0];
+  const rate = Number(bruto.replace(/X$/, ''));
+  const alvo = mods.findIndex(mod => RATE_MODS[mod]);
+
+  // Número sem mod de velocidade a que se ligar: `HD1.4` não é pedido nenhum.
+  if (alvo === -1) return { mods, unknown: [bruto] };
+
+  const faixa = RATE_MODS[mods[alvo]];
+  if (!Number.isFinite(rate) || rate < faixa.min || rate > faixa.max) {
+    // O mod cai junto: deixá-lo em pé calcularia a 1,5x uma play que a pessoa
+    // pediu a outra velocidade, que é exatamente o defeito de origem.
+    return { mods: mods.filter((_, i) => i !== alvo), unknown: [`${mods[alvo]}${bruto}`] };
+  }
+
+  const ajustados = [...mods];
+  // Rate igual ao padrão continua sendo o mod puro: `dt1.5` é `DT`, e as duas
+  // formas precisam cair na mesma linha de cache (ver modSettings).
+  if (rate !== faixa.padrao) {
+    ajustados[alvo] = { acronym: mods[alvo], settings: { speed_change: rate } };
+  }
+
+  return { mods: ajustados, unknown: [] };
 }
 
 /**
@@ -136,10 +218,16 @@ function decodeMods(bits) {
  * pessoa pediu: `mods:XYHD` casava só o HD e devolvia uma lista que parecia
  * responder à pergunta feita (ver parseModFilter em topFilter.js).
  *
- * @returns {{mods: string[], unknown: string[]}}
+ * O rate entra por aqui: `DT1.4` devolve o mod com o ajuste dentro, e o que não
+ * dá para encaixar vira descarte em vez de sumir.
+ *
+ * @returns {{mods: Array<string|{acronym: string, settings: object}>,
+ *            unknown: string[]}}
  */
 function parseModTokens(input) {
-  const clean = String(input ?? '').toUpperCase().replace(/[^A-Z]/g, '');
+  const { letras, numeros } = separarRate(String(input ?? '').toUpperCase());
+  const clean = letras.replace(/[^A-Z]/g, '');
+
   const mods = [];
   const unknown = [];
 
@@ -149,11 +237,12 @@ function parseModTokens(input) {
     else if (!mods.includes(token)) mods.push(token);
   }
 
-  return { mods, unknown };
+  const comRate = aplicarRate(mods, numeros);
+  return { mods: comRate.mods, unknown: [...unknown, ...comRate.unknown] };
 }
 
 /**
- * Texto digitado → acrônimos válidos. Aceita "DT HR", "dthr", "hd,dt".
+ * Texto digitado → mods válidos. Aceita "DT HR", "dthr", "hd,dt" e "hddt 1.4x".
  * Token desconhecido é ignorado em silêncio: o comando não deve falhar porque
  * alguém escreveu um mod que não existe junto de outros que existem. Quem
  * precisa saber dos descartados chama o `parseModTokens`.

@@ -32,7 +32,7 @@ const officialApi = require('./osu/officialApi');
 const banchoPyApi = require('./osu/banchoPyApi');
 const rippleApi = require('./osu/rippleApi');
 const { dedupe } = require('./inflight');
-const { parseModsString } = require('./mods');
+const { parseModsString, parseModTokens } = require('./mods');
 const { idSegment } = require('./urlSafe');
 const { TtlCache } = require('./ttlCache');
 const { logErrorOnce } = require('./logger');
@@ -522,6 +522,9 @@ module.exports = {
   // De mods.js e pp.js: quem chama continua pedindo tudo aqui, em vez de
   // precisar saber em qual módulo cada peça foi parar.
   parseModsString,
+  // Quem CALCULA em cima dos mods digitados usa este, e não o tolerante: ver o
+  // /simulate e o /map.
+  parseModTokens,
   getAdjustedStars:   pp.getAdjustedStars,
   getFCpp:            pp.getFCpp,
   simulatePP:         pp.simulatePP,

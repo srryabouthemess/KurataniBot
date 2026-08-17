@@ -185,6 +185,11 @@ module.exports = ({ ADMIN }) => ({
   lang_current_server:     (lang) => `🌐 Idioma do servidor: **${lang}**`,
   lang_current_none:       '🌐 Nenhum idioma definido (usando padrão: Português).',
 
+  // Compartilhada pelo /simulate e pelo /map: os dois recebem mods digitados e
+  // calculam em cima deles. Um token descartado em silêncio aqui vira um pp que
+  // parece responder ao que foi pedido, mas é de outra play.
+  mods_bad:                (input) => `❌ Não entendi \`${input}\` nos mods. Use os acrônimos (\`HDDT\`) e, para mudar a velocidade, o rate junto: \`DT1.4\` (DT e NC de 1.01x a 2x, HT e DC de 0.5x a 0.99x).`,
+
   simulate_invalid_map:    '❌ Não consegui identificar o mapa. Use o ID do beatmap ou um link (ex: `https://osu.ppy.sh/beatmapsets/123#osu/456`).',
   simulate_map_not_found:  '❌ Mapa não encontrado.',
   simulate_calc_error:     '❌ Não consegui calcular o PP para essa simulação. Verifique se os valores fazem sentido para o mapa.',

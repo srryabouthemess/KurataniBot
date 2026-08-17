@@ -101,7 +101,13 @@ module.exports = {
       });
     }
 
-    const mods = osu.parseModsString(modsInput);
+    // Pelo mesmo motivo do /simulate: a linha de atributos e a tabela de pp são
+    // calculadas em cima destes mods, então um token descartado em silêncio vira
+    // um mapa que não é o que foi pedido.
+    const { mods, unknown } = osu.parseModTokens(modsInput);
+    if (unknown.length > 0) {
+      return interaction.reply({ content: s.mods_bad(modsInput), flags: MessageFlags.Ephemeral });
+    }
 
     await interaction.deferReply();
 

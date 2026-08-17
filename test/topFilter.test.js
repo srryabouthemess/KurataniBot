@@ -132,6 +132,36 @@ test('o mod com rate ajustado continua sendo o mod dele', () => {
   assert.ok(!topFilter.matchesMods(dt14, topFilter.parseModFilter('NM')));
 });
 
+test('pedir o rate filtra por ele; não pedir traz todas', () => {
+  const dt14 = normalizado({ mods: [{ acronym: 'DT', settings: { speed_change: 1.4 } }] });
+  const dt19 = normalizado({ mods: [{ acronym: 'DT', settings: { speed_change: 1.9 } }] });
+  const dtNormal = normalizado({ mods: ['DT'] });
+
+  // Com o rate no pedido, ele faz parte da pergunta. Ignorá-lo seria o descarte
+  // silencioso um degrau adiante: a lista sairia plausível e errada.
+  const filtro14 = topFilter.parseModFilter('dt1.4');
+  assert.ok(topFilter.matchesMods(dt14, filtro14));
+  assert.ok(!topFilter.matchesMods(dt19, filtro14));
+  assert.ok(!topFilter.matchesMods(dtNormal, filtro14));
+
+  // Sem rate, `mods:DT` continua sendo "toda play de DT" — que é o que a
+  // pergunta quer dizer.
+  const filtroDT = topFilter.parseModFilter('dt');
+  assert.ok(topFilter.matchesMods(dt14, filtroDT));
+  assert.ok(topFilter.matchesMods(dt19, filtroDT));
+  assert.ok(topFilter.matchesMods(dtNormal, filtroDT));
+});
+
+test('rate impossível invalida o filtro em vez de sumir', () => {
+  // O motor truncaria `dt0.5` para 1,01x. No filtro isso viraria "toda play de
+  // DT", e quem pediu leria a resposta como se fosse da pergunta que fez.
+  assert.equal(topFilter.parseModFilter('dt0.5'), null);
+  assert.equal(topFilter.parseModFilter('hd1.4'), null);
+  assert.deepStrictEqual(topFilter.parseModFilter('dt1.4'), {
+    mods: [{ acronym: 'DT', settings: { speed_change: 1.4 } }],
+  });
+});
+
 test('o CL não conta como mod no filtro', () => {
   // Quase todo score de stable chega com CL. Se ele contasse, `mods:NM` não
   // devolveria uma play sequer do Bancho.

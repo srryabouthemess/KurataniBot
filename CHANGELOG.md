@@ -40,11 +40,26 @@ Relatado por quem usa, com o print de uma play a 1,4x. A mesma play, antes e dep
 ## ✅ Testes
 
 - O que os motores fazem com o ajuste está medido contra eles, não suposto: o lazer aplica o `speed_change` (1.9129★ contra 2.0619★ no mapa sintético, e 12,4% de pp) e engole ajuste que não conhece; o `rosu-pp` com `clockRate` explícito bate casa a casa com o `rosu-pp` recebendo o mod como objeto. Se algum dos dois passar a ignorar o ajuste, o teste cai — nada mais no bot denunciaria.
-- 38 asserções novas entre `mods`, `officialScore`, `topFilter`, `lazerWorker` e `rosuWorker`. Suíte em 495 testes.
+- As faixas de rate saíram de medição, não da documentação: o teste que recusa `dt0.5` e o que aceita `dt1.01` valem porque o motor foi sondado ponta a ponta antes.
+- Asserções novas entre `mods`, `officialScore`, `topFilter`, `lazerWorker` e `rosuWorker`. Suíte em 500 testes.
+
+## ✨ Digitar o rate
+
+- **`/simulate mods:dt1.4`, `/map mods:hddt 1.4x`, `/top mods:dt1.4`.** [`mods.js`](src/mods.js), [`topFilter.js`](src/topFilter.js), [`simulate.js`](src/commands/simulate.js), [`map.js`](src/commands/map.js)
+  - O scanner de mods lia de dois em dois caracteres depois de cortar tudo que não fosse letra: `dt1.4` virava `DT` e o rate sumia sem deixar sinal. Agora o número sai antes das letras serem juntadas — o que também resolve o `x` colado, que filtrado por `[^A-Z]` viraria meio token de mod.
+  - A **posição do número não importa**: `DT1.4`, `HDDT 1.4x` e `DTHR (1.4)` dizem a mesma coisa, porque só existe um mod de velocidade por play. É o que faz o `+HDDT (1.4x)` que o bot imprime voltar a ser digitável do jeito que foi lido.
+  - No `/top` o rate faz parte da pergunta: `mods:DT1.4` traz só as plays naquela velocidade, e `mods:DT` continua trazendo todas. Ignorá-lo ali seria o descarte silencioso que o `parseModFilter` já existia para evitar, um degrau adiante.
+  - **O DC (Daycore) virou token digitável.** Ele não tem bit legado, e sem estar na lista `dc0.8` seria recusado por um mod que o motor conhece e o bot já exibia.
+
+- **Rate fora da faixa do mod é recusado, e leva o mod junto.** [`mods.js`](src/mods.js)
+  - Medido contra o motor: ele aceita qualquer número e **trunca em silêncio** para os limites do mod — `dt0.5` sai calculado a 1,01x, `ht1.4` a 0,99x. Sem recusar antes, a tela diria `+DT (0.5x)` ao lado do pp de outra velocidade, que é o pior dos dois erros possíveis: o número parece responder ao que foi pedido. As faixas ficaram na tabela do `RATE_MODS`, com o valor medido e não copiado da wiki: DT e NC de **1.01x a 2.00x**, HT e DC de **0.50x a 0.99x**.
+  - `dt1.5` continua sendo `DT` puro: 1,5x é o que o DT já é, e as duas formas precisam cair na mesma linha de cache.
+
+- **O `/simulate` e o `/map` pararam de engolir mod inválido.** [`simulate.js`](src/commands/simulate.js), [`map.js`](src/commands/map.js), i18n
+  - Os dois usavam o `parseModsString`, que descarta token desconhecido em silêncio — tolerância que é a resposta certa ao LER um score (uma play não pode sumir por causa de um mod que ninguém reconheceu) e a errada ao CALCULAR em cima do que foi digitado: `mods:xyz` simulava sem mod nenhum e devolvia um pp com cara de resposta. Agora respondem `mods_bad`, como o `/top` já fazia.
 
 ## ⚠️ O que ficou de fora
 
-- **Digitar o rate ainda não dá.** O `/simulate`, o `/map` e o filtro do `/top` leem mods como texto, e o scanner corta dígitos e lê de dois em dois caracteres — `dt1.4` vira `DT`. Simular uma play de rate ajustado continua fora de alcance; ler uma que aconteceu, não.
 - **Servidor de Relax não recebe o ajuste.** O `akatsuki-pp` é bitmask e não tem onde guardá-lo. Não é perda de verdade: Relax é bancho.py ou Ripple, e os dois guardam o score em bitmask, então um DT ajustado não tem por onde chegar.
 
 ---

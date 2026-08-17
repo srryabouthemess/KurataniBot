@@ -91,7 +91,15 @@ module.exports = {
       return interaction.reply({ content: s.simulate_invalid_map, flags: MessageFlags.Ephemeral });
     }
 
-    const mods = osu.parseModsString(modsInput);
+    // `parseModTokens` e não `parseModsString`: aqui o descarte silencioso é a
+    // resposta errada. O comando CALCULA em cima do que foi digitado, então um
+    // `dt1.4` que não coube (rate fora da faixa do mod, número sem mod de
+    // velocidade a que se ligar) viraria um pp de outra play — com a cara de
+    // resposta à pergunta feita. É o mesmo raciocínio do parseModFilter.
+    const { mods, unknown } = osu.parseModTokens(modsInput);
+    if (unknown.length > 0) {
+      return interaction.reply({ content: s.mods_bad(modsInput), flags: MessageFlags.Ephemeral });
+    }
 
     await interaction.deferReply();
 

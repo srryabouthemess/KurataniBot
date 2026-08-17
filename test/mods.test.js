@@ -154,6 +154,75 @@ test('o rate ajustado separa a chave de cache, e o padrão não', () => {
   );
 });
 
+test('o rate digitado encaixa no mod de velocidade', () => {
+  // Antes o scanner lia de dois em dois caracteres e cortava dígitos: `dt1.4`
+  // virava `DT` e o 1.4 sumia sem deixar sinal.
+  assert.deepStrictEqual(mods.parseModsString('dt1.4'), [dt(1.4)]);
+
+  // As três formas que as pessoas escrevem dizem a mesma coisa — inclusive a
+  // que o próprio bot imprime, `+HDDT (1.4x)`, que assim volta a ser digitável.
+  assert.deepStrictEqual(mods.parseModsString('hddt 1.4x'), ['HD', dt(1.4)]);
+  assert.deepStrictEqual(mods.parseModsString('hddt (1.4)'), ['HD', dt(1.4)]);
+
+  // A posição do número não importa: só existe um mod de velocidade por play,
+  // então não há a quem mais ele possa pertencer.
+  assert.deepStrictEqual(mods.parseModsString('dt1.4hr'), [dt(1.4), 'HR']);
+  assert.deepStrictEqual(mods.parseModsString('dthr 1.4'), [dt(1.4), 'HR']);
+
+  // O X colado no número não pode virar meio token de mod.
+  assert.deepStrictEqual(mods.parseModTokens('dt1.4x'), { mods: [dt(1.4)], unknown: [] });
+
+  // Nem o número pode colar dois acrônimos que estavam separados por ele.
+  assert.deepStrictEqual(mods.parseModTokens('hd1.4dt'), { mods: ['HD', dt(1.4)], unknown: [] });
+
+  // HT e DC andam para o outro lado, e o DC não tem bit legado — sem ele entre
+  // os tokens conhecidos, `dc0.8` seria recusado por um mod que o motor conhece.
+  assert.deepStrictEqual(
+    mods.parseModsString('ht0.9'), [{ acronym: 'HT', settings: { speed_change: 0.9 } }],
+  );
+  assert.deepStrictEqual(
+    mods.parseModsString('dc0.8'), [{ acronym: 'DC', settings: { speed_change: 0.8 } }],
+  );
+});
+
+test('rate que o motor truncaria é recusado, e leva o mod junto', () => {
+  // Medido: o motor aceita qualquer número e trunca em silêncio para a faixa do
+  // mod — DT a 0,5x sai calculado a 1,01x. Sem recusar, a tela diria
+  // "+DT (0.5x)" ao lado do pp de outra velocidade.
+  assert.deepStrictEqual(mods.parseModTokens('dt0.5'), { mods: [], unknown: ['DT0.5'] });
+  assert.deepStrictEqual(mods.parseModTokens('dt2.5'), { mods: [], unknown: ['DT2.5'] });
+  assert.deepStrictEqual(mods.parseModTokens('ht1.4'), { mods: [], unknown: ['HT1.4'] });
+
+  // As pontas da faixa valem: DT de 1.01 a 2, HT de 0.5 a 0.99.
+  assert.deepStrictEqual(mods.parseModsString('dt1.01'), [dt(1.01)]);
+  assert.deepStrictEqual(mods.parseModsString('dt2'), [dt(2)]);
+  assert.deepStrictEqual(
+    mods.parseModsString('ht0.5'), [{ acronym: 'HT', settings: { speed_change: 0.5 } }],
+  );
+
+  // Número sem mod de velocidade a que se ligar não é pedido nenhum, e dois
+  // números não têm desempate.
+  assert.deepStrictEqual(mods.parseModTokens('hd1.4'), { mods: ['HD'], unknown: ['1.4'] });
+  assert.deepStrictEqual(mods.parseModTokens('dt1.4hr1.2'), { mods: ['DT', 'HR'], unknown: ['1.4', '1.2'] });
+
+  // Rate igual ao padrão do mod é o mod puro: `dt1.5` e `dt` são a mesma play e
+  // precisam cair na mesma linha de cache.
+  assert.deepStrictEqual(mods.parseModsString('dt1.5'), ['DT']);
+});
+
+test('o texto sem rate continua sendo lido como sempre foi', () => {
+  // A leitura de dois em dois caracteres não mudou, e é dela que dependem os
+  // mods que já eram digitáveis.
+  assert.deepStrictEqual(mods.parseModsString('hddt'), ['HD', 'DT']);
+  assert.deepStrictEqual(mods.parseModTokens('xyhd'), { mods: ['HD'], unknown: ['XY'] });
+  assert.deepStrictEqual(mods.parseModsString('hd, hd dt'), ['HD', 'DT']);
+  assert.deepStrictEqual(mods.parseModsString(''), []);
+
+  // O SV2 continua intocável por quem digita: o `2` sai como número e o `SV`
+  // não é token conhecido (ver o comentário do MOD_BITS).
+  assert.deepStrictEqual(mods.parseModTokens('sv2'), { mods: [], unknown: ['SV', '2'] });
+});
+
 test('o clockRate é o que o bitmask não sabe dizer', () => {
   // É o número que vai para o rosu-pp ao lado dos bits. Ele precisa sair mesmo
   // quando o rate é o padrão do mod: o bit do DT o rosu deduz sozinho, mas o DC

@@ -22,7 +22,7 @@
  * plays empatadas em 0, na ordem em que já estavam.
  */
 
-const { decodeMods, stripClassic, parseModTokens, modAcronym } = require('./mods');
+const { decodeMods, stripClassic, parseModTokens, modAcronym, modSettings } = require('./mods');
 
 /** Os critérios de ordenação, na ordem em que aparecem para quem escolhe. */
 const SORTS = ['pp', 'acc', 'combo', 'date', 'misses'];
@@ -111,7 +111,7 @@ const KEYS = { pp: ppOf, acc: accOf, combo: comboOf, date: dateOf, misses: misse
  * pessoa digitou tinha sido jogada fora. Um token estranho invalida o pedido
  * inteiro, que é o que "não entendi" quer dizer.
  *
- * @returns {{nomod: true}|{mods: string[]}|null}
+ * @returns {{nomod: true}|{mods: Array<string|object>}|null}
  */
 function parseModFilter(input) {
   const text = String(input ?? '').trim();
@@ -153,17 +153,30 @@ function pareceMods(input) {
  * lazer clássico), não o que foi jogado, e vem em quase todo score de stable.
  * Sem tirá-lo, `mods:NM` não devolveria uma única play do Bancho.
  *
- * A comparação é por ACRÔNIMO, e não pelo mod inteiro: um DT a 1,4x chega como
- * objeto (ver mods.js), e `includes('DT')` nunca casaria com ele — quem pediu
- * `mods:DT` perderia justamente as plays de rate ajustado. Filtrar POR rate é
- * outra pergunta, que ninguém faz hoje: o campo aceita só acrônimos.
+ * ── Rate ajustado ─────────────────────────────────────────────────────────────
+ * `mods:DT` casa por ACRÔNIMO, e traz também as plays de DT a 1,4x — que chegam
+ * como objeto (ver mods.js). Comparando o mod inteiro elas ficariam de fora, e
+ * nada na tela diria isso: sai uma lista plausível e incompleta.
+ *
+ * `mods:DT1.4` é outra pergunta, e o filtro a responde: aí o rate faz parte do
+ * pedido, e só as plays naquela velocidade passam. Ignorá-lo seria o descarte
+ * silencioso que o parseModFilter existe para evitar, um degrau adiante.
  */
 function matchesMods(score, filtro) {
   if (!filtro) return true;
 
-  const mods = stripClassic(modsOf(score)).map(modAcronym);
-  if (filtro.nomod) return mods.length === 0;
-  return filtro.mods.every(mod => mods.includes(mod));
+  const doScore = stripClassic(modsOf(score));
+  if (filtro.nomod) return doScore.length === 0;
+
+  return filtro.mods.every((pedido) => {
+    const acronimo = modAcronym(pedido);
+    // O rate normalizado, e não o digitado: `dt1.5` é o mesmo pedido que `dt`,
+    // porque 1,5x é o que o DT já é (ver modSettings).
+    const rate = modSettings(pedido)?.speed_change;
+
+    return doScore.some(mod => modAcronym(mod) === acronimo
+      && (rate === undefined || modSettings(mod)?.speed_change === rate));
+  });
 }
 
 // ─── Ordenação ────────────────────────────────────────────────────────────────
@@ -189,7 +202,7 @@ const maiorPrimeiro = (a, b) => b - a;
  * @param {Array} scores lista crua, na ordem em que o servidor mandou
  * @param {object} [opts]
  * @param {string} [opts.sort='pp']
- * @param {{nomod: true}|{mods: string[]}|null} [opts.mods=null]
+ * @param {{nomod: true}|{mods: Array<string|object>}|null} [opts.mods=null]
  * @param {boolean} [opts.reverse=false]
  * @returns {Array<{score: object, posicao: number}>}
  */
