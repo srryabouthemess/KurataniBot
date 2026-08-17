@@ -69,6 +69,42 @@ test('os atributos do mapa saem já ajustados pelos mods', async () => {
   assert.equal(comDT.objects, 200);
 });
 
+test('o rate ajustado chega como número, porque no bit ele não cabe', async () => {
+  // Um DT a 1,4x é play diferente de um DT comum, e é aqui que a diferença
+  // aparece na tela: BPM e AR/OD. O bitmask não tem onde guardar o ajuste, então
+  // ele viaja ao lado — e o resultado tem de bater com o do rosu-pp recebendo os
+  // mods como objeto, que é o caminho que NÃO se usa (ver rosuWorkerThread.js).
+  const dtCheio    = await rosuWorker.calcular('attributes', 9005, { mods: 64 }, bytesDe);
+  const dtAjustado = await rosuWorker.calcular(
+    'attributes', 9005, { mods: 64, clockRate: 1.4 }, bytesDe,
+  );
+
+  const esperado = noProcesso(bm =>
+    new rosu.BeatmapAttributesBuilder({
+      map: bm, mods: [{ acronym: 'DT', settings: { speed_change: 1.4 } }],
+    }).build()
+  );
+
+  assert.equal(dtAjustado.clockRate, 1.4);
+  assert.equal(dtAjustado.ar, esperado.ar);
+  assert.equal(dtAjustado.od, esperado.od);
+  assert.equal(dtAjustado.bpm, 120 * 1.4);
+
+  // E não é o mesmo mapa que o DT sem ajuste: se empatar, o ajuste se perdeu no
+  // caminho e a linha do embed voltou a mentir em silêncio.
+  assert.ok(dtAjustado.ar < dtCheio.ar, `AR ${dtAjustado.ar} deveria ficar abaixo de ${dtCheio.ar}`);
+});
+
+test('sem rate informado, quem manda continua sendo o bitmask', async () => {
+  // O `clockRate` nulo é o "deduza dos mods" do rosu-pp. Se ele virasse 1 por
+  // engano, todo score de DT passaria a exibir o mapa em velocidade normal.
+  const semRate = await rosuWorker.calcular('attributes', 9006, { mods: 64 }, bytesDe);
+  const nulo    = await rosuWorker.calcular('attributes', 9006, { mods: 64, clockRate: null }, bytesDe);
+
+  assert.equal(semRate.clockRate, 1.5);
+  assert.equal(nulo.clockRate, 1.5);
+});
+
 test('o mapa viaja uma vez só, não a cada cálculo', async () => {
   // O .osu tem 50–300KB. Mandá-lo em todo cálculo trocaria o custo de CPU por
   // um de cópia — a thread guarda o mapa já parseado justamente para evitar

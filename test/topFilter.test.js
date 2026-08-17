@@ -120,6 +120,18 @@ test('pedir dois mods exige os dois', () => {
   assert.ok(!topFilter.matchesMods(normalizado({ mods: ['HD'] }), filtro));
 });
 
+test('o mod com rate ajustado continua sendo o mod dele', () => {
+  // Um DT a 1,4x chega como objeto, não como string. Comparando o mod inteiro,
+  // `mods:DT` deixaria de fora justamente as plays de rate ajustado — e nada na
+  // tela diria isso: sai uma lista plausível, só que incompleta.
+  const dt14 = normalizado({ mods: [{ acronym: 'DT', settings: { speed_change: 1.4 } }, 'CL'] });
+
+  assert.ok(topFilter.matchesMods(dt14, topFilter.parseModFilter('DT')));
+  assert.ok(!topFilter.matchesMods(dt14, topFilter.parseModFilter('HD')));
+  // E ele não é "sem mods", que é o outro lado do mesmo erro.
+  assert.ok(!topFilter.matchesMods(dt14, topFilter.parseModFilter('NM')));
+});
+
 test('o CL não conta como mod no filtro', () => {
   // Quase todo score de stable chega com CL. Se ele contasse, `mods:NM` não
   // devolveria uma play sequer do Bancho.

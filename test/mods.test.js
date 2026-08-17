@@ -90,3 +90,81 @@ test('a chave de cache não depende da ordem em que os mods chegaram', () => {
   assert.equal(mods.canonicalMods(['HD', 'HD']), 'HD');
   assert.equal(mods.canonicalMods([]), '');
 });
+
+// ─── Rate ajustado ────────────────────────────────────────────────────────────
+// O acrônimo deixou de descrever a play: no lazer o DT vem com um `speed_change`
+// escolhido por quem jogou. O quanto isso muda está medido contra os motores de
+// verdade (lazerWorker.test.js e rosuWorker.test.js); aqui ficam as
+// consequências — o que vai para a tela e o que separa uma chave de cache da
+// outra.
+
+const dt = (rate) => ({ acronym: 'DT', settings: { speed_change: rate } });
+
+test('o mod com ajuste atravessa as funções sem perder o ajuste', () => {
+  // O risco é silencioso: qualquer uma destas funções que trate o objeto como
+  // string devolve `undefined` no lugar do mod, ou o descarta, e o cálculo
+  // segue adiante com a play errada e sem erro nenhum.
+  assert.deepStrictEqual(mods.stripClassic([dt(1.4), 'CL']), [dt(1.4)]);
+  assert.deepStrictEqual(mods.difficultyMods([dt(1.4), 'NF']), [dt(1.4)]);
+  assert.deepStrictEqual(mods.stripImpliedDT([dt(1.4), 'HD']), [dt(1.4), 'HD']);
+
+  // O bit é o do acrônimo: o ajuste não cabe num bitmask, e é por isso que o
+  // rosu-pp recebe o rate como número à parte (ver getMapAttrs).
+  assert.equal(mods.modsToBits([dt(1.4), 'HD']), 64 | 8);
+});
+
+test('o NC ajustado engole o DT que o bitmask arrasta, e leva o ajuste', () => {
+  // O corte é por acrônimo; se ele olhasse o objeto inteiro, um score de
+  // nightcore ajustado sairia daqui com os dois mods e o lazer aceleraria duas
+  // vezes — que é o defeito que o stripImpliedDT existe para evitar.
+  const nc = { acronym: 'NC', settings: { speed_change: 1.3 } };
+  assert.deepStrictEqual(mods.stripImpliedDT(['DT', nc]), [nc]);
+  assert.equal(mods.formatMods(['DT', nc]), '+NC (1.3x)');
+});
+
+test('o rate ajustado aparece na tela, e o normal não', () => {
+  assert.equal(mods.formatMods([dt(1.4)]), '+DT (1.4x)');
+  assert.equal(mods.formatMods(['HD', dt(1.4)]), '+HDDT (1.4x)');
+
+  // Grudado no acrônimo, `+HDDT1.4` seria lido como um mod chamado DT1.
+  assert.equal(mods.formatMods([dt(1.9), 'HR']), '+DTHR (1.9x)');
+
+  // Um DT comum não ganha texto nenhum — nem quando o valor padrão vem escrito.
+  assert.equal(mods.formatMods(['DT']), '+DT');
+  assert.equal(mods.formatMods([dt(1.5)]), '+DT');
+  assert.equal(mods.formatMods([{ acronym: 'HT', settings: { speed_change: 0.75 } }]), '+HT');
+  assert.equal(mods.formatMods([{ acronym: 'HT', settings: { speed_change: 0.9 } }]), '+HT (0.9x)');
+});
+
+test('o rate ajustado separa a chave de cache, e o padrão não', () => {
+  // A `map_difficulty` não tem TTL: colidir aqui é gravar a estrela de 1,5x na
+  // linha que o 1,4x vai ler, para sempre.
+  assert.notEqual(mods.canonicalMods([dt(1.4)]), mods.canonicalMods(['DT']));
+  assert.notEqual(mods.canonicalMods([dt(1.4)]), mods.canonicalMods([dt(1.45)]));
+
+  // E o contrário também precisa valer, senão as linhas já gravadas — que estão
+  // certas, porque um DT sem ajuste é 1,5x — deixariam de ser encontradas.
+  assert.equal(mods.canonicalMods([dt(1.5)]), mods.canonicalMods(['DT']));
+
+  // A ordem dos ajustes dentro do mod não muda a chave, pelo mesmo motivo que a
+  // ordem dos mods não muda: o JSON da API não promete nenhuma das duas.
+  assert.equal(
+    mods.canonicalMods([{ acronym: 'DT', settings: { speed_change: 1.4, adjust_pitch: true } }]),
+    mods.canonicalMods([{ acronym: 'DT', settings: { adjust_pitch: true, speed_change: 1.4 } }]),
+  );
+});
+
+test('o clockRate é o que o bitmask não sabe dizer', () => {
+  // É o número que vai para o rosu-pp ao lado dos bits. Ele precisa sair mesmo
+  // quando o rate é o padrão do mod: o bit do DT o rosu deduz sozinho, mas o DC
+  // não tem bit nenhum, e sem isto uma play desacelerada mostraria o BPM cheio.
+  assert.equal(mods.clockRate([dt(1.4)]), 1.4);
+  assert.equal(mods.clockRate(['DT']), 1.5);
+  assert.equal(mods.clockRate(['DC']), 0.75);
+  assert.equal(mods.clockRate(['HD', 'HR']), null);
+  assert.equal(mods.clockRate([]), null);
+
+  // O NC do bitmask vem sempre acompanhado do DT, e os dois valem o mesmo rate —
+  // a velocidade não dobra por causa disso.
+  assert.equal(mods.clockRate(['DT', 'NC']), 1.5);
+});

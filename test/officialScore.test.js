@@ -18,7 +18,7 @@ const assert = require('node:assert');
 
 const officialApi = require('../src/osu/officialApi');
 const { normalizeScore } = officialApi;
-const { stripClassic, difficultyMods, modsToBits } = require('../src/mods');
+const { stripClassic, difficultyMods, modsToBits, formatMods, clockRate } = require('../src/mods');
 const { engineMods } = require('../src/pp');
 
 /** Score como a API responde com x-api-version: um FC de stable, com CL. */
@@ -106,6 +106,44 @@ test('a presença do CL é o que separa stable de lazer', () => {
   const lazer = normalizeScore({ ...FC_STABLE, legacy_score_id: null, mods: [{ acronym: 'DT' }] });
   assert.ok(!lazer.mods.includes('CL'));
   assert.deepEqual(engineMods('official', lazer.mods), ['DT']);
+});
+
+test('o ajuste de rate sobrevive à normalização', () => {
+  // Era aqui que ele morria: o `.map(m => m.acronym)` jogava fora o
+  // `settings`, e um DT a 1,4x virava um DT comum antes de chegar a qualquer
+  // cálculo. O bot exibia +DT e cobrava o pp de 1,5x — 12,4% a mais, medido no
+  // lazerWorker.test.js.
+  const s = normalizeScore({
+    ...FC_STABLE,
+    mods: [{ acronym: 'DT', settings: { speed_change: 1.4 } }, { acronym: 'CL' }],
+  });
+
+  assert.deepEqual(s.mods, [{ acronym: 'DT', settings: { speed_change: 1.4 } }, 'CL']);
+
+  // E o resto do bot continua lendo a lista: o CL é achado, o bit sai, a tela
+  // diz qual foi o rate.
+  assert.equal(modsToBits(s.mods), 64);
+  assert.deepEqual(stripClassic(s.mods), [{ acronym: 'DT', settings: { speed_change: 1.4 } }]);
+  assert.equal(formatMods(s.mods), '+DTCL (1.4x)');
+  assert.equal(clockRate(s.mods), 1.4);
+});
+
+test('mod sem ajuste continua sendo string, e o ajuste padrão não conta', () => {
+  // Objeto só onde ele muda alguma coisa. A string é a forma que o bitmask e o
+  // texto digitado produzem, e trocar todo mod por objeto obrigaria o resto do
+  // bot a lidar com duas formas onde hoje só chega uma.
+  assert.deepEqual(normalizeScore(FC_STABLE).mods, ['DT', 'CL']);
+
+  // `speed_change` igual ao padrão do mod é a mesma play que o mod sem ajuste —
+  // e precisa cair na mesma linha de cache, que não tem TTL.
+  const padrao = normalizeScore({
+    ...FC_STABLE, mods: [{ acronym: 'DT', settings: { speed_change: 1.5 } }],
+  });
+  assert.deepEqual(padrao.mods, ['DT']);
+
+  // Ajuste vazio também não vira objeto.
+  const vazio = normalizeScore({ ...FC_STABLE, mods: [{ acronym: 'HD', settings: {} }] });
+  assert.deepEqual(vazio.mods, ['HD']);
 });
 
 test('formato antigo continua atravessando sem estrago', () => {

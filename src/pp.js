@@ -14,7 +14,10 @@
 require('dotenv').config({ quiet: true });
 const db = require('./db');
 const servers = require('./servers');
-const { modsToBits, stripClassic, stripImpliedDT, difficultyMods, canonicalMods } = require('./mods');
+const {
+  modsToBits, stripClassic, stripImpliedDT, difficultyMods, canonicalMods,
+  clockRate, modAcronym,
+} = require('./mods');
 const { logErrorOnce } = require('./logger');
 const { getBeatmapFile } = require('./beatmapFile');
 const { TtlCache } = require('./ttlCache');
@@ -59,7 +62,10 @@ const DEFAULT_MODE = servers.defaultKey();
  */
 function engineMods(mode, mods) {
   const lista = mods ?? [];
-  if (servers.isOfficial(mode) || lista.includes('CL')) return [...lista];
+  // Por acrônimo, porque o CL também pode chegar como objeto com ajustes
+  // (`no_slider_head_accuracy` e afins): com `includes`, um CL desses não seria
+  // reconhecido e a lista sairia daqui com dois.
+  if (servers.isOfficial(mode) || lista.some(mod => modAcronym(mod) === 'CL')) return [...lista];
   return [...lista, 'CL'];
 }
 
@@ -138,7 +144,8 @@ async function getDifficultyAttrs(mapId, mods) {
  * mesmo mapa.
  *
  * @param {number} beatmapId
- * @param {string[]} mods acrônimos, como vêm do score
+ * @param {Array<string|{acronym: string, settings?: object}>} mods como vêm do
+ *   score: acrônimo puro, ou com os ajustes quando a play mudou algum
  * @returns {Promise<{cs: number, ar: number, od: number, hp: number,
  *                    clockRate: number, bpm: number, objects: number}|null>}
  */
@@ -151,13 +158,23 @@ async function getMapAttrs(beatmapId, mods) {
 
   // O CL não muda mapa nenhum (ver stripClassic em mods.js): mantê-lo na chave
   // só separaria em duas entradas o que é o mesmo cálculo.
-  const modsBits = modsToBits(stripClassic(mods));
-  const chave = `${beatmapId}:${modsBits}`;
+  const semCL = stripClassic(mods);
+
+  // A chave deixou de ser o bitmask porque ele não distingue um DT a 1,4x de um
+  // a 1,5x — e a linha do mapa é justamente onde a diferença aparece (168 BPM
+  // contra 180, AR 10.14 contra 10.33).
+  const chave = `${beatmapId}:${canonicalMods(semCL)}`;
 
   const cached = _mapAttrs.get(chave);
   if (cached) return cached;
 
-  const attrs = await noRosu('attributes', beatmapId, { mods: modsBits });
+  // O rate viaja como número ao lado do bitmask: é o que o bit não sabe dizer,
+  // e mandar os mods como objeto arriscaria o rosu-pp recusar a lista inteira
+  // por um acrônimo que ele não conhece (ver rosuWorkerThread.js).
+  const attrs = await noRosu('attributes', beatmapId, {
+    mods: modsToBits(semCL),
+    clockRate: clockRate(semCL),
+  });
   // Mapa que não deu para baixar volta null; o degenerado que o rosu-pp aceita
   // sem reclamar (ver getDifficultyAttrs) vem sem objeto nenhum.
   if (!Number.isFinite(attrs?.ar) || !attrs.objects) return null;
@@ -324,7 +341,10 @@ async function getFCpp(score, mode = DEFAULT_MODE) {
     // já baixou por conta própria, o que escapava de ambos.)
     if (relax) {
       // O akatsuki-pp continua em bitmask: é outro motor, com outra API, e ele
-      // não conhece nada que não caiba num bit.
+      // não conhece nada que não caiba num bit — inclusive o ajuste de rate do
+      // lazer, que some aqui. Não é perda de verdade: servidor de Relax é
+      // bancho.py ou Ripple, e os dois guardam o score em bitmask, então um DT
+      // ajustado não tem por onde chegar.
       const result = await calcPPPython(beatmapId, modsToBits(score.mods), n300, n100, n50, misses);
       return rememberFCpp(cacheKey, result?.pp);
     }

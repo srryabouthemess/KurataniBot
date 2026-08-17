@@ -22,7 +22,7 @@
  * plays empatadas em 0, na ordem em que já estavam.
  */
 
-const { decodeMods, stripClassic, parseModTokens } = require('./mods');
+const { decodeMods, stripClassic, parseModTokens, modAcronym } = require('./mods');
 
 /** Os critérios de ordenação, na ordem em que aparecem para quem escolhe. */
 const SORTS = ['pp', 'acc', 'combo', 'date', 'misses'];
@@ -152,11 +152,16 @@ function pareceMods(input) {
  * O CL sai da conta antes da comparação: ele marca a mecânica da play (stable ou
  * lazer clássico), não o que foi jogado, e vem em quase todo score de stable.
  * Sem tirá-lo, `mods:NM` não devolveria uma única play do Bancho.
+ *
+ * A comparação é por ACRÔNIMO, e não pelo mod inteiro: um DT a 1,4x chega como
+ * objeto (ver mods.js), e `includes('DT')` nunca casaria com ele — quem pediu
+ * `mods:DT` perderia justamente as plays de rate ajustado. Filtrar POR rate é
+ * outra pergunta, que ninguém faz hoje: o campo aceita só acrônimos.
  */
 function matchesMods(score, filtro) {
   if (!filtro) return true;
 
-  const mods = stripClassic(modsOf(score));
+  const mods = stripClassic(modsOf(score)).map(modAcronym);
   if (filtro.nomod) return mods.length === 0;
   return filtro.mods.every(mod => mods.includes(mod));
 }

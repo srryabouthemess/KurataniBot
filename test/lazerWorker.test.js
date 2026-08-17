@@ -91,6 +91,58 @@ test('DT junto de NC acelera duas vezes — daí o lazerMods', async () => {
   );
 });
 
+test('o ajuste de rate muda a play, e é o motor quem aplica', async () => {
+  // O bot passou a mandar o `speed_change` que a API informa, e este teste é o
+  // que garante que o motor o CONSOME — se ele passasse a ignorar o ajuste, o
+  // 1,4x empataria com o 1,5x e nada mais no bot denunciaria: sai um pp
+  // plausível, só que de outra play.
+  const dtCheio = await lazerWorker.calcular('difficulty', 8010, { mods: ['DT'] }, bytesDe);
+  const dt14 = await lazerWorker.calcular(
+    'difficulty', 8010, { mods: [{ acronym: 'DT', settings: { speed_change: 1.4 } }] }, bytesDe,
+  );
+  const nm = await lazerWorker.calcular('difficulty', 8010, { mods: [] }, bytesDe);
+
+  // 1.9129★ contra 2.0619★ no mapa sintético — 7,2% de estrela em cima de um
+  // acrônimo que é o mesmo dos dois lados.
+  assert.ok(
+    dt14.stars < dtCheio.stars && dt14.stars > nm.stars,
+    `1,4x (${dt14.stars}) deveria ficar entre NM (${nm.stars}) e DT (${dtCheio.stars})`,
+  );
+
+  // O pp é onde a diferença cobra caro: 83.15 contra 94.87, 12,4%.
+  const comum = { n300: null, n100: 0, n50: 0, misses: 0, combo: -1 };
+  const ppCheio = await lazerWorker.calcular('simulate', 8010, { mods: ['DT'], ...comum }, bytesDe);
+  const pp14 = await lazerWorker.calcular(
+    'simulate', 8010,
+    { mods: [{ acronym: 'DT', settings: { speed_change: 1.4 } }], ...comum },
+    bytesDe,
+  );
+
+  assert.ok(pp14.pp < ppCheio.pp, `1,4x (${pp14.pp}) deveria render menos que 1,5x (${ppCheio.pp})`);
+
+  // E o ajuste vale para os dois lados: acima do padrão, a play fica mais cara.
+  const dt19 = await lazerWorker.calcular(
+    'difficulty', 8010, { mods: [{ acronym: 'DT', settings: { speed_change: 1.9 } }] }, bytesDe,
+  );
+  assert.ok(dt19.stars > dtCheio.stars, `1,9x (${dt19.stars}) deveria passar de 1,5x (${dtCheio.stars})`);
+});
+
+test('o motor engole ajuste que não conhece em vez de recusar a play', async () => {
+  // Os mods vêm da API oficial, que ganha mod e ajuste novos sem avisar. O que
+  // não pode acontecer é a play inteira deixar de ser calculada por causa de um
+  // nome de ajuste que a lib não conhece — é justamente o que o rosu-pp faz, e o
+  // motivo de o rate ir até ele como número solto (ver rosuWorkerThread.js).
+  const conhecido = await lazerWorker.calcular('difficulty', 8011, { mods: ['DT'] }, bytesDe);
+  const estranho = await lazerWorker.calcular(
+    'difficulty', 8011,
+    { mods: [{ acronym: 'DT', settings: { ajuste_que_nao_existe: 3 } }] },
+    bytesDe,
+  );
+
+  assert.ok(estranho, 'o motor deveria ter respondido mesmo sem conhecer o ajuste');
+  assert.equal(estranho.stars, conhecido.stars);
+});
+
 test('o HD mexe na estrela — foi o rework de reading', async () => {
   // Este teste existe por causa de uma regressão de valor, não de código: até o
   // rework de 03/07/2026 o HD não movia estrela nenhuma, e por isso ele estava

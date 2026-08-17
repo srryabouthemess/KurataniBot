@@ -107,9 +107,27 @@ function guardarMapa(mapId, beatmap) {
  *
  * Sem `lazer` de propósito: CS/AR/OD/HP não dependem da mecânica de slider, e o
  * builder não aceita o campo — mandá-lo à toa arrisca uma recusa da lib.
+ *
+ * ── Por que o rate vem de fora, e não dos mods ────────────────────────────────
+ * O `clockRate` explícito é como o ajuste de velocidade do lazer (um DT a 1,4x)
+ * chega até aqui: o bitmask não tem onde guardá-lo, e o DC nem bit tem.
+ *
+ * O rosu-pp aceitaria os mods como OBJETO, com os ajustes dentro, e daria o
+ * mesmo número — conferido, AR 10.1429 e OD 8.8095 pelos dois caminhos. Mas ele
+ * recusa a lista INTEIRA quando encontra um acrônimo ou um nome de ajuste que
+ * não conhece (medido: `all modes failed to deserialize mods`), e aí o
+ * getMapAttrs volta null e a linha do mapa some do embed. Como os mods vêm da
+ * API oficial, que ganha mod novo sem avisar, o bitmask + um número é o caminho
+ * que não quebra por vocabulário.
  */
-function attributes(beatmap, { mods }) {
-  const attrs = new rosu.BeatmapAttributesBuilder({ map: beatmap, mods }).build();
+function attributes(beatmap, { mods, clockRate }) {
+  const attrs = new rosu.BeatmapAttributesBuilder({
+    map: beatmap,
+    mods,
+    // null é o "deduza dos mods" do próprio rosu-pp, e é o que vale para quem
+    // não tem mod de velocidade nenhum.
+    clockRate: Number.isFinite(clockRate) ? clockRate : null,
+  }).build();
 
   return {
     cs: attrs.cs,

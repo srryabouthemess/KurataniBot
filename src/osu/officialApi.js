@@ -9,6 +9,7 @@
 const axios = require('axios');
 const servers = require('../servers');
 const rateLimiter = require('../rateLimiter');
+const { modSettings } = require('../mods');
 const { urlSegment, idSegment } = require('../urlSafe');
 const { withRetry } = require('../retry');
 
@@ -92,6 +93,24 @@ async function officialGet(path, { params = {}, scoreFormat = false } = {}) {
 const scoreGet = (path, params = {}) => officialGet(path, { params, scoreFormat: true });
 
 /**
+ * Um mod do formato novo → string quando ele não tem ajuste, objeto quando tem.
+ *
+ * A string é o caso comum e o formato que o resto do bot já usava: manter o
+ * objeto sempre custaria pouco aqui e muito adiante, onde acrônimo puro é o que
+ * chega dos servidores bancho.py (bitmask) e do texto que a pessoa digita.
+ *
+ * O `modSettings` é quem decide o que é ajuste de verdade: ele descarta um
+ * `speed_change` igual ao padrão do mod, para `DT` e `DT a 1,5x` não virarem
+ * duas chaves de cache e dois textos na tela (ver mods.js).
+ */
+function normalizeMod(mod) {
+  if (typeof mod === 'string') return mod;
+
+  const settings = modSettings(mod);
+  return settings ? { acronym: mod.acronym, settings } : mod.acronym;
+}
+
+/**
  * Score do formato novo → a forma que o resto do bot já lê.
  *
  * Adaptar na borda, e não espalhar `?? great` por comando: é o mesmo desenho dos
@@ -110,7 +129,14 @@ function normalizeScore(raw) {
     ...raw,
     // O CL vem aqui e é o que decide a mecânica lá no cálculo de PP. Ele não
     // tem bit legado, então o modsToBits o ignora sozinho (ver mods.js).
-    mods: (raw.mods ?? []).map(m => (typeof m === 'string' ? m : m.acronym)),
+    //
+    // Os AJUSTES vêm junto, e é aqui que eles paravam. Um DT a 1,4x chega como
+    // `{acronym:'DT', settings:{speed_change:1.4}}`, e virar só `'DT'` fazia o
+    // bot calcular a play a 1,5x: medido no mapa sintético dos testes, 12,4% de
+    // pp a mais, além do BPM e do AR errados na linha do mapa. Mod sem ajuste
+    // continua sendo string — é a forma que o bitmask e o texto digitado
+    // produzem, e o resto do bot já lê as duas (ver mods.js).
+    mods: (raw.mods ?? []).map(normalizeMod),
 
     statistics: {
       ...stats,

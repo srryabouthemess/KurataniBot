@@ -2,6 +2,53 @@
 
 ---
 
+# Sessão de 2026-08-16 (DT com rate ajustado)
+
+No lazer o acrônimo deixou de descrever a play: o DT carrega um `speed_change` que quem joga escolhe, de 1,05x a 2,00x. A API oficial manda esse ajuste junto do mod, e o bot **jogava fora** na normalização — toda play de rate ajustado era exibida e calculada como se fosse 1,5x.
+
+Relatado por quem usa, com o print de uma play a 1,4x. A mesma play, antes e depois, pelo caminho real do bot:
+
+| | estrela | pp | FC | BPM | AR | OD |
+|---|---|---|---|---|---|---|
+| antes (calculado a 1,5x) | 9.12★ | 96.33 | 341.49 | 298 | 10.47 | 10.44 |
+| depois (o 1,4x que foi) | 8.39★ | 79.31 | 280.75 | 278 | 10.29 | 10.24 |
+
+## 🐛 Correções
+
+- **O ajuste de rate morria na borda da API.** [`officialApi.js`](src/osu/officialApi.js), [`mods.js`](src/mods.js)
+  - O `normalizeScore` fazia `.map(m => m.acronym)`, e `{acronym:'DT', settings:{speed_change:1.4}}` virava `'DT'` antes de chegar a qualquer cálculo. Nada adiante tinha como saber: o número saía plausível, só que de outra play.
+  - Um "mod" agora é `string` **ou** `{acronym, settings}`, e as funções do `mods.js` leem as duas formas. A string continua sendo o caso comum de propósito — é o que sai do bitmask (bancho.py, Ripple) e do texto digitado, e nenhum dos dois tem onde guardar ajuste. Mod sem ajuste que muda alguma coisa continua chegando como string.
+  - `speed_change` igual ao padrão do mod é descartado na entrada. A API não manda o valor default, mas se mandar, `DT` e `DT a 1,5x` são a mesma play e precisam cair na mesma linha de cache — que não tem TTL.
+
+- **A chave de cache passou a distinguir os rates.** [`mods.js`](src/mods.js), [`pp.js`](src/pp.js)
+  - O `canonicalMods` prometia isso desde a troca de motor (era um dos dois motivos de o bitmask ter saído), mas o ajuste nunca chegava até ele. Agora a chave é `DT(speed_change=1.4)`, com os ajustes ordenados para o JSON da API não conseguir duplicar entrada por ordem de propriedade.
+  - As linhas já gravadas continuam certas e continuam sendo usadas: antes disso, um score de 1,4x era calculado como 1,5x e gravado sob `DT`, que é exatamente o valor do DT sem ajuste. O que muda é que o 1,4x deixa de encontrar essa linha.
+
+- **A linha do mapa mostrava a velocidade errada.** [`pp.js`](src/pp.js), [`rosuWorkerThread.js`](src/rosuWorkerThread.js)
+  - BPM, AR e OD saem do `rosu-pp`, que recebia só o bitmask e lia a velocidade do bit do DT. O rate agora viaja como **número ao lado dos bits** (`clockRate`), que é o que o bit não sabe dizer.
+  - Mandar os mods como objeto daria o mesmo número — conferido, AR 10.1429 e OD 8.8095 pelos dois caminhos —, mas o `rosu-pp` **recusa a lista inteira** quando encontra um acrônimo ou um nome de ajuste que não conhece (`all modes failed to deserialize mods`), e aí a linha do mapa some do embed. Como os mods vêm da API oficial, que ganha mod novo sem avisar, o bitmask mais um número é o caminho que não quebra por vocabulário. O lazer-calculator, que engole ajuste desconhecido em silêncio, recebe os mods inteiros.
+  - De quebra o **DC (Daycore)** passou a valer: ele não tem bit legado, então uma play desacelerada mostrava o mapa em velocidade normal.
+
+- **`mods:DT` no `/top` perdia as plays de rate ajustado.** [`topFilter.js`](src/topFilter.js)
+  - O filtro comparava o mod inteiro, e um DT a 1,4x não é a string `'DT'`. A lista saía plausível e incompleta, sem nada na tela dizendo isso. A comparação passou a ser por acrônimo.
+
+## 🖥️ Interface
+
+- **O rate ajustado aparece na tela: `+HDDT (1.4x)`.** [`mods.js`](src/mods.js)
+  - Fora do bloco de acrônimos porque não haveria outro jeito legível: `+HDDT1.4` se lê como um mod chamado DT1. Só aparece quando a velocidade foge do padrão do mod — um DT comum continua sendo `+DT`.
+
+## ✅ Testes
+
+- O que os motores fazem com o ajuste está medido contra eles, não suposto: o lazer aplica o `speed_change` (1.9129★ contra 2.0619★ no mapa sintético, e 12,4% de pp) e engole ajuste que não conhece; o `rosu-pp` com `clockRate` explícito bate casa a casa com o `rosu-pp` recebendo o mod como objeto. Se algum dos dois passar a ignorar o ajuste, o teste cai — nada mais no bot denunciaria.
+- 38 asserções novas entre `mods`, `officialScore`, `topFilter`, `lazerWorker` e `rosuWorker`. Suíte em 495 testes.
+
+## ⚠️ O que ficou de fora
+
+- **Digitar o rate ainda não dá.** O `/simulate`, o `/map` e o filtro do `/top` leem mods como texto, e o scanner corta dígitos e lê de dois em dois caracteres — `dt1.4` vira `DT`. Simular uma play de rate ajustado continua fora de alcance; ler uma que aconteceu, não.
+- **Servidor de Relax não recebe o ajuste.** O `akatsuki-pp` é bitmask e não tem onde guardá-lo. Não é perda de verdade: Relax é bancho.py ou Ripple, e os dois guardam o score em bitmask, então um DT ajustado não tem por onde chegar.
+
+---
+
 # Sessão de 2026-08-16 (o PP passou a bater com o osu!)
 
 Estrelas e PP saíam do `rosu-pp`, que é uma reimplementação em Rust do algoritmo do osu! — e estava **dois reworks atrás** dele. O código já admitia isso em comentário, e o `getAdjustedStars` chegava a desviar para o `difficulty_rating` da API porque o número de casa era pior. Agora quem calcula é o [`@tosuapp/lazer-calculator`](https://github.com/tosuapp/lazer-calculator), que compila o C# do **próprio osu!lazer**: medido contra a API oficial, ele reproduz o número publicado com **erro 0,00%**.

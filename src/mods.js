@@ -40,6 +40,86 @@ const MOD_MAP = Object.fromEntries(
 // mas precisa ser reconhecido como token válido.
 const KNOWN_MOD_TOKENS = new Set([...Object.keys(MOD_BITS), 'CL']);
 
+// ─── A quarta forma: o mod com AJUSTE ─────────────────────────────────────────
+//
+// O acrônimo deixou de descrever a play. No lazer o DT carrega um
+// `speed_change` que quem joga escolhe (1,05x a 2,00x, de 0,05 em 0,05), e a
+// API oficial manda esse ajuste junto — `{acronym:'DT', settings:{speed_change:
+// 1.4}}`. Um DT a 1,4x e um DT a 1,5x são o mesmo acrônimo e plays diferentes:
+// medido no mapa sintético dos testes, 1.9129★ contra 2.0619★, e o pp de um FC
+// vai de 83.15 a 94.87 — 12,4% de diferença cobrada em cima do acrônimo só.
+//
+// Por isso um "mod" aqui é `string` OU `{acronym, settings}`, e todas as funções
+// deste arquivo leem as duas formas. A string continua sendo o caso comum: ela é
+// o que sai do bitmask (bancho.py, Ripple) e do que a pessoa digita, e nenhum
+// dos dois tem onde guardar ajuste.
+
+/**
+ * Os mods que mexem na velocidade, e o rate de cada um sem ajuste nenhum.
+ *
+ * O DC (Daycore) está aqui mesmo sem bit legado, pelo mesmo motivo do CL: ele
+ * chega em score da API oficial, e fora desta tabela uma play desacelerada
+ * mostraria o BPM e o AR do mapa em velocidade normal.
+ */
+const RATE_MODS = { DT: 1.5, NC: 1.5, HT: 0.75, DC: 0.75 };
+
+/** O acrônimo, venha o mod como string ou como objeto com ajustes. */
+const modAcronym = (mod) => (typeof mod === 'string' ? mod : mod?.acronym ?? '');
+
+/**
+ * Os ajustes que MUDAM alguma coisa, ou null quando não há nenhum.
+ *
+ * Um `speed_change` igual ao padrão do mod é jogado fora de propósito. A API não
+ * manda o valor default, mas se um dia mandar — ou se alguém montar o mod na
+ * mão — `DT` e `DT a 1,5x` são a mesma play, e precisam cair na mesma linha de
+ * cache e imprimir o mesmo texto. Sem este corte, o mesmo cálculo ocuparia duas
+ * entradas e a tela diria "+DT (1.5x)", que é ruído.
+ */
+function modSettings(mod) {
+  if (typeof mod === 'string' || !mod?.settings) return null;
+
+  const padrao = RATE_MODS[modAcronym(mod)];
+  const entradas = Object.entries(mod.settings).filter(([chave, valor]) => {
+    if (valor === null || valor === undefined) return false;
+    if (chave === 'speed_change' && padrao !== undefined) return Number(valor) !== padrao;
+    return true;
+  });
+
+  return entradas.length > 0 ? Object.fromEntries(entradas) : null;
+}
+
+/**
+ * O rate que a play realmente teve, ou null quando nenhum mod mexe na
+ * velocidade.
+ *
+ * Devolve o rate mesmo quando ele é o padrão do mod: quem pergunta é o rosu-pp
+ * (ver getMapAttrs), que lê a velocidade do BITMASK e portanto não enxerga nem
+ * o ajuste do DT nem o DC inteiro, que não tem bit.
+ *
+ * O primeiro mod de rate vence. No lazer só existe um por play; no bitmask do
+ * stable o NC arrasta o DT junto, e os dois valem 1,5 — então a ordem não muda
+ * resposta nenhuma.
+ */
+function clockRate(mods) {
+  for (const mod of mods ?? []) {
+    const padrao = RATE_MODS[modAcronym(mod)];
+    if (padrao === undefined) continue;
+
+    const ajuste = Number(mod?.settings?.speed_change);
+    return Number.isFinite(ajuste) ? ajuste : padrao;
+  }
+  return null;
+}
+
+/** O rate só quando ele foge do padrão do mod — é o que a tela precisa dizer. */
+function customRate(mods) {
+  const rate = clockRate(mods);
+  if (rate === null) return null;
+
+  const mod = (mods ?? []).find(m => RATE_MODS[modAcronym(m)] !== undefined);
+  return rate === RATE_MODS[modAcronym(mod)] ? null : rate;
+}
+
 /** Bitmask → acrônimos. */
 function decodeMods(bits) {
   return Object.entries(MOD_MAP)
@@ -82,9 +162,15 @@ function parseModsString(input) {
   return parseModTokens(input).mods;
 }
 
-/** Acrônimos → bitmask. */
+/**
+ * Acrônimos → bitmask.
+ *
+ * O ajuste de rate não cabe aqui, e não há como fazê-lo caber: um bit é um bit.
+ * Quem precisa do rate junto do bitmask pede o `clockRate` separado — é o que o
+ * caminho do rosu-pp faz (ver getMapAttrs em pp.js).
+ */
 function modsToBits(mods) {
-  return (mods ?? []).reduce((acc, mod) => acc | (MOD_BITS[mod] ?? 0), 0);
+  return (mods ?? []).reduce((acc, mod) => acc | (MOD_BITS[modAcronym(mod)] ?? 0), 0);
 }
 
 /**
@@ -106,7 +192,7 @@ function modsToBits(mods) {
  * @returns {string[]} pode ser vazio, e aí quem chama decide o que fazer
  */
 function stripClassic(mods) {
-  return (mods ?? []).filter(mod => mod !== 'CL');
+  return (mods ?? []).filter(mod => modAcronym(mod) !== 'CL');
 }
 
 /**
@@ -135,7 +221,9 @@ function stripClassic(mods) {
  */
 function stripImpliedDT(mods) {
   const list = mods ?? [];
-  return list.includes('NC') ? list.filter(mod => mod !== 'DT') : [...list];
+  return list.some(mod => modAcronym(mod) === 'NC')
+    ? list.filter(mod => modAcronym(mod) !== 'DT')
+    : [...list];
 }
 
 /**
@@ -172,7 +260,7 @@ const COSMETIC_MODS = new Set(['NF', 'SO', 'SD', 'PF', 'CL', 'TD']);
  * o que fazer — normalmente confiar no número que a API já publicou.
  */
 function difficultyMods(mods) {
-  return (mods ?? []).filter(mod => !COSMETIC_MODS.has(mod));
+  return (mods ?? []).filter(mod => !COSMETIC_MODS.has(modAcronym(mod)));
 }
 
 /**
@@ -187,12 +275,36 @@ function difficultyMods(mods) {
  * lazer-calculator. O bitmask não servia mais por duas razões: o CL não tem bit
  * (era uma coluna `lazer` à parte, ao lado da coluna de mods, para guardar um
  * mod que já é um mod), e nenhum bit tem onde guardar AJUSTE de mod — um DT a
- * 1,3x e um a 1,5x colidiam na mesma chave, com números diferentes.
+ * 1,4x e um a 1,5x colidiam na mesma chave, com números diferentes.
  *
- * @returns {string} ex.: 'CL,DT,HD'; string vazia quando não há mod nenhum
+ * O ajuste entra na chave por causa dessa segunda razão, e é ele que faz a
+ * promessa acima valer de verdade: `DT(speed_change=1.4)` e `DT` são duas
+ * dificuldades e dois pp, e a `map_difficulty` não tem TTL — colidir ali é
+ * gravar o número errado para sempre.
+ *
+ * As linhas antigas continuam certas e continuam sendo usadas: antes do ajuste
+ * chegar aqui, um score de 1,4x era CALCULADO como 1,5x e gravado sob `DT`, que
+ * é exatamente o valor do DT sem ajuste. O que muda é que o 1,4x deixa de
+ * encontrar essa linha.
+ *
+ * @returns {string} ex.: 'CL,DT(speed_change=1.4),HD'; vazia quando não há mod
  */
 function canonicalMods(mods) {
-  return [...new Set(mods ?? [])].sort().join(',');
+  const chaves = (mods ?? []).map((mod) => {
+    const settings = modSettings(mod);
+    if (!settings) return modAcronym(mod);
+
+    // Ordenado para o mesmo conjunto de ajustes dar sempre a mesma chave: o
+    // JSON da API não garante ordem de propriedade mais do que garante a de mod.
+    const ajustes = Object.entries(settings)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([chave, valor]) => `${chave}=${valor}`)
+      .join(';');
+
+    return `${modAcronym(mod)}(${ajustes})`;
+  });
+
+  return [...new Set(chaves)].sort().join(',');
 }
 
 /**
@@ -203,16 +315,29 @@ function canonicalMods(mods) {
  * quatro discordavam no caso vazio: o /recent dizia "No Mods", o /score também
  * (mas por uma chave de i18n), o /simulate dizia "Nenhum" e o /topplays não
  * mostrava nada.
+ *
+ * O rate ajustado sai FORA do bloco de acrônimos — `+HDDT (1.4x)` —, e não
+ * grudado no mod. É como o próprio osu! escreve, e não teria outro jeito legível
+ * de escrever: `+HDDT1.4` é lido como um mod chamado DT1. Só aparece quando a
+ * velocidade foge do padrão do mod; um DT comum continua sendo `+DT`.
  */
 function formatMods(mods) {
   // `+DTNC` é o bitmask do stable vazando para a tela: o NC sempre traz o DT
   // junto, e o osu! escreve isso como `+NC`.
   const list = stripImpliedDT(mods);
-  return list.length > 0 ? `+${list.join('')}` : '+NM';
+  if (list.length === 0) return '+NM';
+
+  const rate = customRate(list);
+  // O rate vem da API em passos de 0,05; o arredondamento é contra um
+  // 1.4000000000000001 que a ponte com o .NET ou o JSON podem produzir.
+  const ajuste = rate === null ? '' : ` (${Math.round(rate * 100) / 100}x)`;
+
+  return `+${list.map(modAcronym).join('')}${ajuste}`;
 }
 
 module.exports = {
-  MOD_BITS, KNOWN_MOD_TOKENS,
+  MOD_BITS, KNOWN_MOD_TOKENS, RATE_MODS,
   decodeMods, parseModsString, parseModTokens, modsToBits, stripClassic,
   stripImpliedDT, difficultyMods, formatMods, canonicalMods,
+  modAcronym, modSettings, clockRate, customRate,
 };
