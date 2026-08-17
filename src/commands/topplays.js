@@ -69,8 +69,8 @@ module.exports = {
     .addStringOption(option =>
       option
         .setName('mods')
-        .setDescription('Only plays with these mods (e.g. HDDT, or NM for no mods)')
-        .setDescriptionLocalizations({ 'pt-BR': 'Só plays com estes mods (ex: HDDT, ou NM para sem mods)' })
+        .setDescription('Only plays with these mods (e.g. HDDT, DT1.4, or NM for no mods)')
+        .setDescriptionLocalizations({ 'pt-BR': 'Só plays com estes mods (ex: HDDT, DT1.4, ou NM para sem mods)' })
         .setRequired(false)
         .setMaxLength(20)
     )

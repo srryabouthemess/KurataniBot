@@ -24,8 +24,8 @@ module.exports = {
     .addStringOption(opt =>
       opt
         .setName('mods')
-        .setDescription('Mods (e.g. DT HR)')
-        .setDescriptionLocalizations({ 'pt-BR': 'Mods (ex: DT HR)' })
+        .setDescription('Mods (e.g. DT HR, or DT1.4 for an adjusted rate)')
+        .setDescriptionLocalizations({ 'pt-BR': 'Mods (ex: DT HR, ou DT1.4 para rate ajustado)' })
         .setRequired(false)
     )
     .addIntegerOption(opt =>
