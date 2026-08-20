@@ -133,6 +133,12 @@ for (const server of servers.all()) {
   caso(`/topplays -acc ${server.label}`, 'topplays.js',
     { player, server: server.key, sort: 'acc', mods: 'HD' });
   caso(`/recent   ${server.label}`, 'recent.js', { player, server: server.key });
+  // Só quando o servidor tem par RX: exercita o `modo:` explícito nos dois
+  // sentidos, além do combinado que o caso de cima já cobre.
+  if (servers.has(`${server.key}_rx`)) {
+    caso(`/recent VN  ${server.label}`, 'recent.js', { player, server: server.key, modo: 'vn' });
+    caso(`/recent RX  ${server.label}`, 'recent.js', { player, server: server.key, modo: 'rx' });
+  }
   // Este não depende de jogador, mas depende do servidor: é o único comando que
   // chama `leaderboard` no adaptador, e cada tipo o serve de um endpoint
   // diferente (ver osu/).
