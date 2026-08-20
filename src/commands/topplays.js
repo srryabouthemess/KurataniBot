@@ -1,6 +1,7 @@
 const { SlashCommandBuilder, EmbedBuilder, ApplicationIntegrationType, InteractionContextType, MessageFlags } = require('discord.js');
 const osu = require('../osuClient');
 const servers = require('../servers');
+const modo = require('../modo');
 const { resolvePlayer, fetchPlayer } = require('../userLink');
 const mapContext = require('../mapContext');
 const playEmbed = require('../embeds/play');
@@ -37,7 +38,7 @@ const sortChoices = () => topFilter.SORTS.map(value => ({
 }));
 
 module.exports = {
-  data: new SlashCommandBuilder()
+  data: modo.addOption(new SlashCommandBuilder()
     .setName('topplays')
     .setDescription("Show a player's top plays")
     .setDescriptionLocalizations({ 'pt-BR': 'Mostra as melhores plays de um jogador' })
@@ -56,7 +57,7 @@ module.exports = {
         .setDescription('Which server to use? (default: your linked server)')
         .setDescriptionLocalizations({ 'pt-BR': 'Qual servidor usar? (padrão: o do seu link)' })
         .setRequired(false)
-        .addChoices(...servers.choices())
+        .addChoices(...servers.rootChoices())
     )
     .addStringOption(option =>
       option
@@ -80,7 +81,7 @@ module.exports = {
         .setDescription('Invert the order')
         .setDescriptionLocalizations({ 'pt-BR': 'Inverte a ordem' })
         .setRequired(false)
-    ),
+    )),
 
   prefix: {
     // No modo texto os argumentos são posicionais, e estes dois não podem

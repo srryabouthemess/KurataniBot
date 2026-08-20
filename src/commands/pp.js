@@ -1,6 +1,7 @@
 const { SlashCommandBuilder, EmbedBuilder, ApplicationIntegrationType, InteractionContextType, MessageFlags } = require('discord.js');
 const osu = require('../osuClient');
 const servers = require('../servers');
+const modo = require('../modo');
 const { resolvePlayer, fetchPlayer } = require('../userLink');
 const playEmbed = require('../embeds/play');
 const { t } = require('../i18n');
@@ -146,7 +147,7 @@ function simulatePlaysNeeded(currentPlays, bonus, targetPP, avgPP, randomize, sp
 }
 
 module.exports = {
-  data: new SlashCommandBuilder()
+  data: modo.addOption(new SlashCommandBuilder()
     .setName('pp')
     .setDescription('Find out how much pp a single score needs to reach a target pp total')
     .setDescriptionLocalizations({ 'pt-BR': 'Descubra quanto pp uma única play precisa para chegar a um pp total' })
@@ -196,8 +197,8 @@ module.exports = {
         .setDescription('Which server to use? (default: your linked server)')
         .setDescriptionLocalizations({ 'pt-BR': 'Qual servidor usar? (padrão: o do seu link)' })
         .setRequired(false)
-        .addChoices(...servers.choices())
-    ),
+        .addChoices(...servers.rootChoices())
+    )),
 
   async execute(interaction) {
     const s             = t(interaction);

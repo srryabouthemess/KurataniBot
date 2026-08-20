@@ -77,8 +77,9 @@ test('estilos de argumento', async t => {
   });
 
   await t.test('choice pelo valor interno', async () => {
-    const { context } = await run('k!rs server:daycore_rx');
-    assert.equal(context.options.getString('server'), 'daycore_rx');
+    const { context } = await run('k!rs server:daycore modo:rx');
+    assert.equal(context.options.getString('server'), 'daycore');
+    assert.equal(context.options.getString('modo'), 'rx');
   });
 
   await t.test('flag com hífen, em qualquer posição', async () => {
@@ -86,9 +87,18 @@ test('estilos de argumento', async t => {
     assert.equal(a.context.options.getString('player'), 'pudim2');
     assert.equal(a.context.options.getString('server'), 'daycore');
 
+    // `-daycorerx` preenche DUAS opções: o atalho é anterior ao `modo:`, de
+    // quando VN e RX eram duas entradas do `server:`. Continuar aceitando é o
+    // que impede a separação em duas perguntas de quebrar quem já digitava
+    // assim (ver resolveFlag em prefix/coerce.js).
     const b = await run('k!rs -daycorerx pudim2');
     assert.equal(b.context.options.getString('player'), 'pudim2');
-    assert.equal(b.context.options.getString('server'), 'daycore_rx');
+    assert.equal(b.context.options.getString('server'), 'daycore');
+    assert.equal(b.context.options.getString('modo'), 'rx');
+
+    const c = await run('k!rs pudim2 -daycore -rx');
+    assert.equal(c.context.options.getString('server'), 'daycore');
+    assert.equal(c.context.options.getString('modo'), 'rx');
   });
 
   await t.test('flag booleana, com e sem hífen', async () => {

@@ -18,6 +18,7 @@
 const { SlashCommandBuilder, EmbedBuilder, ApplicationIntegrationType, InteractionContextType, MessageFlags } = require('discord.js');
 const osu = require('../osuClient');
 const servers = require('../servers');
+const modo = require('../modo');
 const mapContext = require('../mapContext');
 const playEmbed = require('../embeds/play');
 const { stripClassic, formatMods } = require('../mods');
@@ -45,7 +46,7 @@ const ACCS = [100, 99, 98, 97, 95];
 const cemPara = (acc, objetos) => Math.round((3 * objetos * (1 - acc / 100)) / 2);
 
 module.exports = {
-  data: new SlashCommandBuilder()
+  data: modo.addOption(new SlashCommandBuilder()
     .setName('map')
     .setDescription('Show a beatmap and what a FC on it would pay')
     .setDescriptionLocalizations({ 'pt-BR': 'Mostra um mapa e quanto um FC nele pagaria' })
@@ -72,8 +73,8 @@ module.exports = {
         .setDescription('Which server/algorithm to use? (default: official)')
         .setDescriptionLocalizations({ 'pt-BR': 'Qual servidor/algoritmo usar? (padrão: oficial)' })
         .setRequired(false)
-        .addChoices(...servers.choices())
-    ),
+        .addChoices(...servers.rootChoices())
+    )),
 
   prefix: {
     // Mesma guarda do /score: sem ela, `k!map dt` leria "dt" como mapa e
@@ -86,7 +87,14 @@ module.exports = {
     const s         = t(interaction);
     const mapInput  = interaction.options.getString('map');
     const modsInput = interaction.options.getString('mods');
-    const mode      = interaction.options.getString('server') || osu.DEFAULT_MODE;
+    // Sem consultar o servidor preferido, ao contrário dos comandos de
+    // jogador: `/map` fala de um mapa, não de uma conta, e sempre respondeu
+    // pelo padrão quando ninguém pede outro. O `modo:` entra por cima porque
+    // Relax troca o motor de PP (ver pp.js), não só o leaderboard.
+    const mode      = modo.apply(
+      interaction.options.getString('server') || osu.DEFAULT_MODE,
+      interaction.options.getString('modo'),
+    );
 
     // Sem a opção `map`, o mapa é o da mensagem respondida ou o último do canal
     // — é o que faz `/map` logo depois de um `/rs` de outra pessoa funcionar.

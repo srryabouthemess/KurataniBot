@@ -37,6 +37,40 @@ let modoSalvo     = null;
 }
 
 const { resolvePlayer } = require('../src/userLink');
+const modo = require('../src/modo');
+
+test('modo.apply: modo + chave viram uma chave só', async t => {
+  await t.test('rx acha a variante Relax do par', () => {
+    assert.equal(modo.apply('daycore', 'rx'), 'daycore_rx');
+    assert.equal(modo.apply('daycore_rx', 'rx'), 'daycore_rx');
+  });
+
+  await t.test('vn e both caem no vanilla', () => {
+    assert.equal(modo.apply('daycore_rx', 'vn'), 'daycore');
+    assert.equal(modo.apply('daycore_rx', 'both'), 'daycore');
+  });
+
+  await t.test('sem modo, a chave passa intacta', () => {
+    assert.equal(modo.apply('daycore_rx', null), 'daycore_rx');
+  });
+
+  await t.test('servidor sem Relax fica onde está', () => {
+    assert.equal(modo.apply('official', 'rx'), 'official');
+  });
+});
+
+test('modo.label', async t => {
+  await t.test('rótulo curto de cada modo válido', () => {
+    assert.equal(modo.label('vn'), 'VN');
+    assert.equal(modo.label('rx'), 'RX');
+    assert.equal(modo.label('both'), 'VN+RX');
+  });
+
+  await t.test('sem preferência (null) ou valor desconhecido, sem rótulo', () => {
+    assert.equal(modo.label(null), null);
+    assert.equal(modo.label('lixo'), null);
+  });
+});
 
 /** Uma interação com as opções que o comando declarou, e nada além. */
 function interacao(opcoes = {}) {

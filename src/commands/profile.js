@@ -1,6 +1,7 @@
 const { SlashCommandBuilder, EmbedBuilder, ApplicationIntegrationType, InteractionContextType, MessageFlags } = require('discord.js');
 const osu = require('../osuClient');
 const servers = require('../servers');
+const modo = require('../modo');
 const { resolvePlayer, fetchPlayer } = require('../userLink');
 const emojis = require('../emojis');
 const { md } = require('../markdown');
@@ -15,7 +16,7 @@ const toDiscordTimestamp = (dateString, format = 'R') => {
 };
 
 module.exports = {
-  data: new SlashCommandBuilder()
+  data: modo.addOption(new SlashCommandBuilder()
     .setName('profile')
     .setDescription("Show a player's osu! profile")
     .setDescriptionLocalizations({ 'pt-BR': 'Mostra o perfil de um jogador de osu!' })
@@ -34,8 +35,8 @@ module.exports = {
         .setDescription('Which server to use? (default: your linked server)')
         .setDescriptionLocalizations({ 'pt-BR': 'Qual servidor usar? (padrão: o do seu link)' })
         .setRequired(false)
-        .addChoices(...servers.choices())
-    ),
+        .addChoices(...servers.rootChoices())
+    )),
 
   async execute(interaction) {
     const s        = t(interaction);

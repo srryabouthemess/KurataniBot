@@ -38,7 +38,8 @@
 const { SlashCommandBuilder, EmbedBuilder, ApplicationIntegrationType, InteractionContextType, MessageFlags } = require('discord.js');
 const osu = require('../osuClient');
 const servers = require('../servers');
-const { getPreferredServer } = require('../db');
+const modo = require('../modo');
+const { resolveServer } = require('../userLink');
 const { paginate } = require('../pagination');
 const { ppLegivel } = require('../embeds/play');
 const { md } = require('../markdown');
@@ -91,7 +92,7 @@ function bandeira(codigo) {
 }
 
 module.exports = {
-  data: new SlashCommandBuilder()
+  data: modo.addOption(new SlashCommandBuilder()
     .setName('leaderboard')
     .setDescription("Show a server's pp ranking")
     .setDescriptionLocalizations({ 'pt-BR': 'Mostra o ranking de pp de um servidor' })
@@ -103,7 +104,7 @@ module.exports = {
         .setDescription('Which server to use? (default: your linked server)')
         .setDescriptionLocalizations({ 'pt-BR': 'Qual servidor usar? (padrão: o do seu link)' })
         .setRequired(false)
-        .addChoices(...servers.choices())
+        .addChoices(...servers.rootChoices())
     )
     .addStringOption(option =>
       option
@@ -111,7 +112,7 @@ module.exports = {
         .setDescription('Country code, two letters (ex: BR)')
         .setDescriptionLocalizations({ 'pt-BR': 'Código do país, duas letras (ex: BR)' })
         .setRequired(false)
-    ),
+    )),
 
   async execute(interaction) {
     const s = t(interaction);
@@ -123,10 +124,7 @@ module.exports = {
     // O `resolveKey` traduz nome antigo para a chave atual antes de a `mode`
     // seguir adiante: sem isso, `private` e `daycore` seriam dois pedidos
     // distintos para o mesmo servidor, cada um com sua entrada no cache.
-    const escolhido = interaction.options.getString('server')
-      || getPreferredServer(interaction.user.id)
-      || osu.DEFAULT_MODE;
-    const mode = servers.resolveKey(escolhido) ?? osu.DEFAULT_MODE;
+    const mode = servers.resolveKey(resolveServer(interaction)) ?? osu.DEFAULT_MODE;
 
     const paisBruto = interaction.options.getString('country');
     if (paisBruto && !PAIS.test(paisBruto.trim())) {

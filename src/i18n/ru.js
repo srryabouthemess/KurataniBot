@@ -65,6 +65,7 @@ module.exports = ({ ADMIN }) => ({
   help_cmd_staff:          'Управление привязками стаффа.',
   help_cmd_role:           'Выдача и снятие ролей сервера.',
   help_servers:            '🌐 Доступные серверы',
+  help_modo:               'На серверах с Relax `modo:` выбирает VN или RX (`-vn`, `-rx`). Значение по умолчанию задаётся в `/link`.',
   help_prefix:             '⌨️ Текстовые команды',
   help_prefix_body:        (prefix) => `Те же команды работают текстом: \`${prefix}rs mrekk\`.`,
   help_footer:             'В командах со страницами листайте кнопками ◀️ ▶️.',

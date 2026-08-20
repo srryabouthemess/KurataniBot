@@ -1,6 +1,7 @@
 const { SlashCommandBuilder, EmbedBuilder, ApplicationIntegrationType, InteractionContextType, MessageFlags } = require('discord.js');
 const osu = require('../osuClient');
 const servers = require('../servers');
+const modo = require('../modo');
 const { resolvePlayer, fetchPlayer } = require('../userLink');
 const mapContext = require('../mapContext');
 const playEmbed = require('../embeds/play');
@@ -13,7 +14,7 @@ const { safeEditReply } = require('../replies');
 const PAGE_SIZE = 5;
 
 module.exports = {
-  data: new SlashCommandBuilder()
+  data: modo.addOption(new SlashCommandBuilder()
     .setName('score')
     .setDescription("Show all of a player's scores on a beatmap")
     .setDescriptionLocalizations({ 'pt-BR': 'Mostra todos os scores de um jogador em um mapa' })
@@ -39,8 +40,8 @@ module.exports = {
         .setDescription('Which server to use? (default: your linked server)')
         .setDescriptionLocalizations({ 'pt-BR': 'Qual servidor usar? (padrão: o do seu link)' })
         .setRequired(false)
-        .addChoices(...servers.choices())
-    ),
+        .addChoices(...servers.rootChoices())
+    )),
 
   // No slash o `map` vem primeiro porque é a opção principal do comando. Já
   // escrevendo, `k!c fulano` é o uso normal — o mapa quase sempre vem do

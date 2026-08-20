@@ -9,7 +9,7 @@ const { t } = require('../i18n');
 const { exigirSubcomando } = require('../subcommands');
 const osu = require('../osuClient');
 const servers = require('../servers');
-const { modoLabel } = require('../recentMerge');
+const modo = require('../modo');
 const { logError } = require('../logger');
 const { safeEditReply } = require('../replies');
 
@@ -17,11 +17,8 @@ const { safeEditReply } = require('../replies');
 // e o link em si é o mesmo nos dois (um namespace, ver db/schema.js).
 const SERVER_CHOICES = servers.rootChoices();
 
-const MODO_CHOICES = [
-  { name: 'VN only', value: 'vn', name_localizations: { 'pt-BR': 'Só VN' } },
-  { name: 'RX only', value: 'rx', name_localizations: { 'pt-BR': 'Só RX' } },
-  { name: 'Both (VN+RX)', value: 'both', name_localizations: { 'pt-BR': 'Ambos (VN+RX)' } },
-];
+// Com `both`: aqui a escolha é a preferência que o /recent e o /rs vão ler.
+const MODO_CHOICES = modo.CHOICES_AMBOS;
 
 /**
  * Rótulo a exibir para uma conta linkada. Vanilla e RX do mesmo servidor
@@ -125,7 +122,7 @@ module.exports = {
 
       const preferred = getPreferredServer(interaction.user.id) ?? osu.DEFAULT_MODE;
       const preferredNs = linkNamespace(preferred);
-      const preferredModo = modoLabel(getPreferredModo(interaction.user.id));
+      const preferredModo = modo.label(getPreferredModo(interaction.user.id));
 
       const lines = links.map(l => {
         const isPreferred = l.namespace === preferredNs;
@@ -164,7 +161,7 @@ module.exports = {
 
     if (sub === 'default') {
       const server = interaction.options.getString('server');
-      const modo   = interaction.options.getString('modo'); // 'vn' | 'rx' | 'both' | null
+      const escolhido = interaction.options.getString('modo'); // 'vn' | 'rx' | 'both' | null
 
       // Só faz sentido apontar o padrão para um servidor onde há link.
       if (!getLink(interaction.user.id, server)) {
@@ -173,10 +170,11 @@ module.exports = {
 
       setPreferredServer(interaction.user.id, server);
       // Sem `modo:` no comando, a preferência salva antes continua — só troca
-      // quando a pessoa pede explicitamente (ver /recent, que lê daqui).
-      if (modo) setPreferredModo(interaction.user.id, modo);
+      // quando a pessoa pede explicitamente (ver userLink.resolveServer, que
+      // é quem aplica isso em todo comando).
+      if (escolhido) setPreferredModo(interaction.user.id, escolhido);
 
-      const label = modo ? modoLabel(modo) : modoLabel(getPreferredModo(interaction.user.id));
+      const label = modo.label(escolhido ?? getPreferredModo(interaction.user.id));
       return interaction.reply({
         content: label
           ? s.link_default_set_modo(osu.getModeLabel(server), label)
@@ -198,7 +196,7 @@ module.exports = {
 
     const username = interaction.options.getString('player');
     const server   = interaction.options.getString('server') || osu.DEFAULT_MODE;
-    const modo     = interaction.options.getString('modo'); // 'vn' | 'rx' | 'both' | null
+    const escolhido = interaction.options.getString('modo'); // 'vn' | 'rx' | 'both' | null
 
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
@@ -213,9 +211,9 @@ module.exports = {
       setLink(interaction.user.id, server, user.username, user.id);
       // Sem `modo:`, a preferência de antes continua valendo — linkar de novo
       // para corrigir o nick não deveria apagar a escolha de VN/RX.
-      if (modo) setPreferredModo(interaction.user.id, modo);
+      if (escolhido) setPreferredModo(interaction.user.id, escolhido);
 
-      const modoAtual = modoLabel(getPreferredModo(interaction.user.id));
+      const modoAtual = modo.label(getPreferredModo(interaction.user.id));
       const embed = new EmbedBuilder()
         .setColor(0x99ff99)
         .setTitle(s.link_success_title)

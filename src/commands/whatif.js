@@ -1,6 +1,7 @@
 const { SlashCommandBuilder, EmbedBuilder, ApplicationIntegrationType, InteractionContextType, MessageFlags } = require('discord.js');
 const osu = require('../osuClient');
 const servers = require('../servers');
+const modo = require('../modo');
 const { resolvePlayer, fetchPlayer } = require('../userLink');
 const playEmbed = require('../embeds/play');
 const { ppLegivel } = playEmbed;
@@ -29,7 +30,7 @@ function simulateWhatIf(currentPlays, hypotheticalPP) {
 }
 
 module.exports = {
-  data: new SlashCommandBuilder()
+  data: modo.addOption(new SlashCommandBuilder()
     .setName('whatif')
     .setDescription('Simulate how much pp you would gain from a hypothetical score')
     .setDescriptionLocalizations({ 'pt-BR': 'Simula quanto PP você ganharia com uma play hipotética' })
@@ -57,8 +58,8 @@ module.exports = {
         .setDescription('Which server to use? (default: your linked server)')
         .setDescriptionLocalizations({ 'pt-BR': 'Qual servidor usar? (padrão: o do seu link)' })
         .setRequired(false)
-        .addChoices(...servers.choices())
-    ),
+        .addChoices(...servers.rootChoices())
+    )),
 
   async execute(interaction) {
     const s              = t(interaction);

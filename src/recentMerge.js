@@ -116,10 +116,4 @@ async function fetchEach(keys, fetchOne) {
   return ok;
 }
 
-/** Rótulo curto de uma preferência de modo, pro /link confirmar o que gravou. */
-const MODO_LABELS = { vn: 'VN', rx: 'RX', both: 'VN+RX' };
-function modoLabel(modo) {
-  return MODO_LABELS[modo] ?? null;
-}
-
-module.exports = { pairFor, keysToFetch, mergeRecent, fetchEach, modoLabel };
+module.exports = { pairFor, keysToFetch, mergeRecent, fetchEach };

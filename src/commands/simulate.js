@@ -1,6 +1,7 @@
 const { SlashCommandBuilder, EmbedBuilder, ApplicationIntegrationType, InteractionContextType, MessageFlags } = require('discord.js');
 const osu = require('../osuClient');
 const servers = require('../servers');
+const modo = require('../modo');
 const mapContext = require('../mapContext');
 const { stripClassic, formatMods } = require('../mods');
 const { t } = require('../i18n');
@@ -8,7 +9,7 @@ const { logError } = require('../logger');
 const { safeEditReply } = require('../replies');
 
 module.exports = {
-  data: new SlashCommandBuilder()
+  data: modo.addOption(new SlashCommandBuilder()
     .setName('simulate')
     .setDescription('Simulate the pp value of a hypothetical score on a map')
     .setDescriptionLocalizations({ 'pt-BR': 'Simula o valor de PP de uma play hipotética em um mapa' })
@@ -72,8 +73,8 @@ module.exports = {
         .setDescription('Which server/algorithm to use? (default: official)')
         .setDescriptionLocalizations({ 'pt-BR': 'Qual servidor/algoritmo usar? (padrão: oficial)' })
         .setRequired(false)
-        .addChoices(...servers.choices())
-    ),
+        .addChoices(...servers.rootChoices())
+    )),
 
   async execute(interaction) {
     const s = t(interaction);
@@ -84,7 +85,13 @@ module.exports = {
     const n50       = interaction.options.getInteger('n50') ?? 0;
     const miss      = interaction.options.getInteger('miss') ?? 0;
     const comboOpt  = interaction.options.getInteger('combo');
-    const mode      = interaction.options.getString('server') || osu.DEFAULT_MODE;
+    // Mesma escolha do /map: o padrão não vem do link, porque a simulação é
+    // sobre um mapa e não sobre uma conta. O `modo:` entra por cima porque em
+    // Relax o cálculo de PP é outro.
+    const mode      = modo.apply(
+      interaction.options.getString('server') || osu.DEFAULT_MODE,
+      interaction.options.getString('modo'),
+    );
 
     const beatmapId = osu.parseBeatmapId(mapInput);
     if (!beatmapId) {

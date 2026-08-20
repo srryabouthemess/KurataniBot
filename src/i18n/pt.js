@@ -69,6 +69,7 @@ module.exports = ({ ADMIN }) => ({
   help_cmd_staff:          'Gerencia os vínculos de staff.',
   help_cmd_role:           'Dá e tira cargos do servidor.',
   help_servers:            '🌐 Servidores disponíveis',
+  help_modo:               'Em servidor com Relax, `modo:` escolhe VN ou RX (`-vn`, `-rx`). Dá pra fixar no `/link`.',
   help_prefix:             '⌨️ Comandos por texto',
   help_prefix_body:        (prefix) => `Os mesmos comandos funcionam escritos: \`${prefix}rs mrekk\`.`,
   help_footer:             'Nos comandos com páginas, use ◀️ ▶️ para navegar.',

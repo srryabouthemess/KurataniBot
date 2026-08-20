@@ -78,12 +78,15 @@ module.exports = {
       .map(group => fieldFor(group, available, s))
       .filter(Boolean);
 
-    // `choices()` em vez de `all()`: é a mesma lista que a opção `server` dos
-    // comandos oferece, então o help não tem como divergir do que é aceito de
-    // verdade — inclusive no corte de 25 que o Discord impõe.
+    // `rootChoices()` em vez de `all()`: é a mesma lista que a opção `server`
+    // dos comandos oferece, então o help não tem como divergir do que é aceito
+    // de verdade — inclusive no corte de 25 que o Discord impõe. As variantes
+    // RX não entram porque deixaram de ser servidores: viraram a opção `modo`,
+    // anunciada na linha logo abaixo.
     fields.push({
       name:   s.help_servers,
-      value:  servers.choices().map(({ name, value }) => `**${name}** \`${value}\``).join('\n'),
+      value:  servers.rootChoices().map(({ name, value }) => `**${name}** \`${value}\``).join('\n')
+              + `\n-# ${s.help_modo}`,
       inline: false,
     });
 

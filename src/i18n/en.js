@@ -65,6 +65,7 @@ module.exports = ({ ADMIN }) => ({
   help_cmd_staff:          'Manage staff links.',
   help_cmd_role:           'Grant and remove server roles.',
   help_servers:            '🌐 Available servers',
+  help_modo:               'On servers with Relax, `modo:` picks VN or RX (`-vn`, `-rx`). You can set a default with `/link`.',
   help_prefix:             '⌨️ Text commands',
   help_prefix_body:        (prefix) => `The same commands work written out: \`${prefix}rs mrekk\`.`,
   help_footer:             'On paged commands, use ◀️ ▶️ to browse.',

@@ -57,8 +57,10 @@ async function parseArgs(spec, tokens, message, s) {
     // Flag com hífen: `-daycore`, `-rank`, `-randomize`. O `-\d` de fora é para
     // um número negativo não ser lido como flag.
     if (token.length > 1 && token.startsWith('-') && !/^-[\d.]/.test(token)) {
-      const flag = resolveFlag(defs, token.slice(1));
-      if (!flag) {
+      // Lista, e não um par: uma flag pode preencher duas opções de uma vez
+      // (`-daycorerx` é servidor e modo — ver resolveFlag).
+      const atribuicoes = resolveFlag(defs, token.slice(1));
+      if (!atribuicoes) {
         const accepted = listFlags(defs);
         return {
           error: accepted.length > 0
@@ -66,7 +68,7 @@ async function parseArgs(spec, tokens, message, s) {
             : s.prefix_no_flags(token, usageFor(spec, subcommand)),
         };
       }
-      values.set(flag.def.name, flag.value);
+      for (const { def, value } of atribuicoes) values.set(def.name, value);
       continue;
     }
 

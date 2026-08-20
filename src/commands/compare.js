@@ -1,7 +1,9 @@
 const { SlashCommandBuilder, EmbedBuilder, ApplicationIntegrationType, InteractionContextType, MessageFlags } = require('discord.js');
 const osu = require('../osuClient');
 const servers = require('../servers');
-const { getLink, getPreferredServer } = require('../db');
+const modo = require('../modo');
+const { getLink } = require('../db');
+const { resolveServer } = require('../userLink');
 const { md } = require('../markdown');
 const { t } = require('../i18n');
 const { logError } = require('../logger');
@@ -36,7 +38,7 @@ const short = (str, max) => {
 };
 
 module.exports = {
-  data: new SlashCommandBuilder()
+  data: modo.addOption(new SlashCommandBuilder()
     .setName('compare')
     .setDescription("Compare two players' statistics")
     .setDescriptionLocalizations({ 'pt-BR': 'Compara as estatísticas de dois jogadores' })
@@ -65,17 +67,16 @@ module.exports = {
         .setDescription('Which server to use? (default: your linked server)')
         .setDescriptionLocalizations({ 'pt-BR': 'Qual servidor usar? (padrão: o do seu link)' })
         .setRequired(false)
-        .addChoices(...servers.choices())
-    ),
+        .addChoices(...servers.rootChoices())
+    )),
 
   async execute(interaction) {
     const s        = t(interaction);
     const manualU1 = interaction.options.getString('user1');
     const manualU2 = interaction.options.getString('user2');
-    // Mesma prioridade do resolvePlayer: opção do comando > preferido > padrão
-    const mode     = interaction.options.getString('server')
-                     || getPreferredServer(interaction.user.id)
-                     || osu.DEFAULT_MODE;
+    // Mesma resolução do resolvePlayer (opção > preferido > padrão, com o
+    // `modo:` aplicado por cima), sem exigir link dos jogadores comparados.
+    const mode     = resolveServer(interaction);
     const link     = getLink(interaction.user.id, mode);
 
     // Prefere o ID numérico: sobrevive a troca de nick no osu!.

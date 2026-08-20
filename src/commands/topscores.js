@@ -34,7 +34,8 @@
 const { SlashCommandBuilder, EmbedBuilder, ApplicationIntegrationType, InteractionContextType } = require('discord.js');
 const osu = require('../osuClient');
 const servers = require('../servers');
-const { getPreferredServer } = require('../db');
+const modo = require('../modo');
+const { resolveServer } = require('../userLink');
 const { paginate } = require('../pagination');
 const playEmbed = require('../embeds/play');
 const { md } = require('../markdown');
@@ -95,7 +96,7 @@ async function completar(score, mode) {
 }
 
 module.exports = {
-  data: new SlashCommandBuilder()
+  data: modo.addOption(new SlashCommandBuilder()
     .setName('topscores')
     .setDescription("Show the server's best plays")
     .setDescriptionLocalizations({ 'pt-BR': 'Mostra as melhores plays do servidor' })
@@ -107,7 +108,7 @@ module.exports = {
         .setDescription('Which server to use? (default: your linked server)')
         .setDescriptionLocalizations({ 'pt-BR': 'Qual servidor usar? (padrão: o do seu link)' })
         .setRequired(false)
-        .addChoices(...servers.choices())
+        .addChoices(...servers.rootChoices())
     )
     .addBooleanOption(option =>
       option
@@ -115,17 +116,14 @@ module.exports = {
         .setDescription('Include plays from flagged accounts (Cheating/Fuquila)')
         .setDescriptionLocalizations({ 'pt-BR': 'Incluir plays de contas marcadas (Cheating/Fuquila)' })
         .setRequired(false)
-    ),
+    )),
 
   async execute(interaction) {
     const s = t(interaction);
 
     // Mesma resolução do /leaderboard: opção, preferido, padrão — sem exigir
     // link, porque a lista não é de ninguém.
-    const escolhido = interaction.options.getString('server')
-      || getPreferredServer(interaction.user.id)
-      || osu.DEFAULT_MODE;
-    const mode  = servers.resolveKey(escolhido) ?? osu.DEFAULT_MODE;
+    const mode  = servers.resolveKey(resolveServer(interaction)) ?? osu.DEFAULT_MODE;
     const label = osu.getModeLabel(mode);
 
     if (!osu.supportsTopScores(mode)) {

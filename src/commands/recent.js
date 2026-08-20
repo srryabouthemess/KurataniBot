@@ -2,6 +2,7 @@ const { SlashCommandBuilder, EmbedBuilder, ApplicationIntegrationType, Interacti
 const osu = require('../osuClient');
 const servers = require('../servers');
 const recentMerge = require('../recentMerge');
+const modo = require('../modo');
 const { getPreferredModo } = require('../db');
 const { resolvePlayer, fetchPlayer } = require('../userLink');
 const mapContext = require('../mapContext');
@@ -15,7 +16,7 @@ const { safeEditReply } = require('../replies');
 const FETCH_LIMIT = 50;
 
 module.exports = {
-  data: new SlashCommandBuilder()
+  data: modo.addOption(new SlashCommandBuilder()
     .setName('recent')
     .setDescription("Show a player's most recent plays (including fails)")
     .setDescriptionLocalizations({ 'pt-BR': 'Mostra as últimas plays (incluindo falhas) de um jogador' })
@@ -34,25 +35,8 @@ module.exports = {
         .setDescription('Which server to use? (default: your linked server)')
         .setDescriptionLocalizations({ 'pt-BR': 'Qual servidor usar? (padrão: o do seu link)' })
         .setRequired(false)
-        // As variantes `_rx` continuam aqui, ao contrário do /link: é destas
-        // choices que o modo texto deriva as flags, e `k!rs -daycorerx` é
-        // atalho que existe desde antes de haver um `modo:` (ver prefix/spec.js).
-        // Quando as duas se contradizem, o `modo:` explícito vence — ele é a
-        // opção mais específica (ver keysToFetch em recentMerge.js).
-        .addChoices(...servers.choices())
-    )
-    .addStringOption(option =>
-      option
-        .setName('modo')
-        .setDescription('Filter VN/RX, or combine both (default: your /link default preference)')
-        .setDescriptionLocalizations({ 'pt-BR': 'Filtra VN/RX, ou combina os dois (padrão: sua preferência do /link default)' })
-        .setRequired(false)
-        .addChoices(
-          { name: 'VN only', value: 'vn', name_localizations: { 'pt-BR': 'Só VN' } },
-          { name: 'RX only', value: 'rx', name_localizations: { 'pt-BR': 'Só RX' } },
-          { name: 'Both (VN+RX)', value: 'both', name_localizations: { 'pt-BR': 'Ambos (VN+RX)' } },
-        )
-    ),
+        .addChoices(...servers.rootChoices())
+    ), { ambos: true }),
 
   async execute(interaction) {
     const s        = t(interaction);

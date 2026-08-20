@@ -30,6 +30,11 @@ function matchChoice(def, raw) {
   );
 }
 
+/** A opção que oferece o modo Relax, quando o comando tem uma. */
+function relaxDef(defs) {
+  return defs.find(def => def.choices?.some(c => c.value === 'rx')) ?? null;
+}
+
 /**
  * Resolve uma flag `-alguma-coisa`.
  *
@@ -38,18 +43,42 @@ function matchChoice(def, raw) {
  * opções de lista fechada do bot têm valores distintos entre si — e é o que
  * deixa escrever `k!rs pudim2 -daycore` sem repetir "server".
  *
- * @returns {{def: object, value: any}|null}
+ * Uma flag pode preencher DUAS opções: `-daycorerx` é servidor e modo na mesma
+ * palavra. O atalho é anterior à opção `modo:` — quando VN e RX ainda eram
+ * duas entradas do `server:`, ele saía de graça da choice "Daycore RX". Com a
+ * separação em duas perguntas ele deixaria de existir, e quem o tinha na mão
+ * (`k!rs fulano -daycorerx`) não teria nem erro que explicasse: a palavra
+ * simplesmente não seria reconhecida.
+ *
+ * @returns {{def: object, value: any}[]|null}
  */
 function resolveFlag(defs, word) {
   for (const def of defs) {
     if (!def.choices?.length) continue;
     const choice = matchChoice(def, word);
-    if (choice) return { def, value: choice.value };
+    if (choice) return [{ def, value: choice.value }];
+  }
+
+  // `-daycorerx` = `-daycore` + `-rx`. Só quando sobra algo antes do "rx" e o
+  // comando realmente tem as duas opções; senão a palavra segue desconhecida.
+  const semRx = /rx$/i.test(word) ? word.slice(0, -2) : null;
+  const modoDef = semRx ? relaxDef(defs) : null;
+  if (semRx && modoDef) {
+    for (const def of defs) {
+      if (def === modoDef || !def.choices?.length) continue;
+      const choice = matchChoice(def, semRx);
+      if (choice) {
+        return [
+          { def, value: choice.value },
+          { def: modoDef, value: 'rx' },
+        ];
+      }
+    }
   }
 
   for (const def of defs) {
     if (def.type === OptionType.Boolean && def.name.toLowerCase() === word.toLowerCase()) {
-      return { def, value: true };
+      return [{ def, value: true }];
     }
   }
 
@@ -59,9 +88,17 @@ function resolveFlag(defs, word) {
 /** Flags que o comando aceita, para a mensagem de erro. */
 function listFlags(defs) {
   const flags = [];
+  const modoDef = relaxDef(defs);
+  const nome = choice => choice.name.toLowerCase().replace(/\s+/g, '');
+
   for (const def of defs) {
     if (def.choices?.length) {
-      flags.push(...def.choices.map(c => `\`-${c.name.toLowerCase().replace(/\s+/g, '')}\``));
+      flags.push(...def.choices.map(c => `\`-${nome(c)}\``));
+      // As compostas entram na lista porque são aceitas: uma flag que funciona
+      // sem ser anunciada é uma que ninguém descobre.
+      if (modoDef && def !== modoDef) {
+        flags.push(...def.choices.map(c => `\`-${nome(c)}rx\``));
+      }
     } else if (def.type === OptionType.Boolean) {
       flags.push(`\`-${def.name}\``);
     }

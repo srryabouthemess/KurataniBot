@@ -8,9 +8,13 @@
  *
  * Prioridade do SERVIDOR:
  *   1. Opção `server` do comando
- *   2. Servidor preferido do usuário (definido pelo último /link set),
- *      com o modo preferido aplicado sobre ele (ver `comModoPreferido`)
+ *   2. Servidor preferido do usuário (definido pelo último /link set)
  *   3. DEFAULT_MODE
+ *
+ * Prioridade do MODO (VN/RX), aplicado sobre o servidor acima:
+ *   1. Opção `modo` do comando
+ *   2. Modo preferido do usuário (definido pelo /link)
+ *   3. Nenhum — a chave vale como está (ver `modo.apply`)
  *
  * Prioridade do JOGADOR:
  *   1. Nome passado na opção `player` do comando
@@ -20,34 +24,45 @@
 
 const { getLink, getPreferredServer, getPreferredModo } = require('./db');
 const { t } = require('./i18n');
-const servers = require('./servers');
+const modo = require('./modo');
 const osu = require('./osuClient');
 
 /**
- * O servidor preferido, já apontando para VN ou RX conforme o modo preferido.
+ * A chave de servidor que o comando vai usar: servidor e modo, resolvidos.
  *
- * O `/link` pergunta as duas coisas separadamente — o servidor numa opção, o
- * modo (VN/RX/VN+RX) em outra —, mas o resto do bot trabalha com UMA chave, e
+ * O `/link` e os comandos perguntam as duas coisas separadamente — o servidor
+ * numa opção, VN/RX em outra —, mas o resto do bot trabalha com UMA chave, e
  * `daycore_rx` é a forma de dizer "Daycore, leaderboard de Relax". Esta função
- * é a costura entre os dois: sem ela, escolher RX no `/link` não teria efeito
- * em nenhum comando, porque só o `/recent` sabe o que fazer com um modo.
+ * é a costura entre as duas perguntas, e é o que faz a preferência do `/link`
+ * valer em todo comando: sem ela, escolher RX ali não teria efeito no
+ * `/topplays` nem no `/profile`, que não sabem o que é um modo.
  *
- * `both` não vira chave nenhuma: combinar as duas listas é coisa que só o
- * `/recent` e o `/rs` fazem, e eles leem a preferência direto. Para todos os
- * outros comandos, que mostram um leaderboard só, `both` cai no vanilla.
+ * O `modo:` do comando ganha do salvo (é o mais específico), e o salvo só é
+ * consultado quando o comando não disse nada — nessa ordem, "eu jogo Relax"
+ * pode ser configurado uma vez sem impedir de ver o vanilla numa consulta
+ * avulsa.
+ *
+ * Vive aqui, e não copiado nos comandos, porque a prioridade já estava escrita
+ * três vezes (`leaderboard.js`, `compare.js`, `topscores.js`) com o comentário
+ * "mesma prioridade do resolvePlayer" em cima — o tipo de duplicata que só
+ * fica de pé enquanto ninguém mexe numa das cópias.
+ *
+ * @param {object} interaction
+ * @param {string} serverOptionName nome da opção de servidor no comando
+ * @param {string|null} modoOptionName nome da opção de modo, ou null se o
+ *   comando não tem uma (o `/wipe` tem um `mode` que é ruleset, não isto)
+ * @param {string|null} padrao chave usada quando não há opção nem preferência
  */
-function comModoPreferido(discordId) {
-  const preferido = getPreferredServer(discordId);
-  if (!preferido) return null;
+function resolveServer(interaction, serverOptionName = 'server', modoOptionName = 'modo', padrao = null) {
+  const escolhido = interaction.options.getString(serverOptionName);
+  const modoDoComando = modoOptionName ? interaction.options.getString(modoOptionName) : null;
 
-  const modo = getPreferredModo(discordId);
-  if (modo === 'vn' || modo === 'both') return servers.rootKey(preferido);
-  if (modo === 'rx') return servers.relaxKey(preferido) ?? preferido;
+  const base = escolhido
+    || getPreferredServer(interaction.user.id)
+    || padrao
+    || osu.DEFAULT_MODE;
 
-  // Sem preferência de modo, a chave salva vale como está — inclusive o
-  // `daycore_rx` de quem escolheu RX quando o `server:` ainda listava as
-  // variantes, que continua valendo sem precisar reconfigurar nada.
-  return preferido;
+  return modo.apply(base, modoDoComando ?? getPreferredModo(interaction.user.id));
 }
 
 /**
@@ -57,13 +72,9 @@ function comModoPreferido(discordId) {
  *   os comandos não precisam decidir entre "sem link nenhum" e "sem link para
  *   este servidor", que exigem orientações diferentes.
  */
-function resolvePlayer(interaction, playerOptionName = 'player', serverOptionName = 'server') {
+function resolvePlayer(interaction, playerOptionName = 'player', serverOptionName = 'server', modoOptionName = 'modo') {
   const manualPlayer = interaction.options.getString(playerOptionName);
-  const manualServer = interaction.options.getString(serverOptionName);
-
-  const mode = manualServer
-    || comModoPreferido(interaction.user.id)
-    || osu.DEFAULT_MODE;
+  const mode = resolveServer(interaction, serverOptionName, modoOptionName);
 
   if (manualPlayer) {
     return { username: manualPlayer, displayName: manualPlayer, mode, fromLink: false };
@@ -134,4 +145,4 @@ async function fetchPlayer({ username, mode }, buscarScores) {
   return { user: perfil.value, scores: scores.value };
 }
 
-module.exports = { resolvePlayer, fetchPlayer };
+module.exports = { resolveServer, resolvePlayer, fetchPlayer };

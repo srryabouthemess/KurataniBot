@@ -17,8 +17,17 @@ Até aqui, quem jogava nos dois leaderboards de um servidor com Relax (Daycore, 
   - `/link set` e `/link default` ganharam `modo:` (`VN` / `RX` / `Ambos (VN+RX)`), e o `server:` deles passou a listar **só os servidores**, sem as variantes `_rx`. Ter as duas coisas na mesma lista era pior que redundante: o link é por namespace, então "Daycore" e "Daycore RX" gravavam **o mesmo vínculo**, e a única diferença entre escolher um ou outro ficava escondida numa preferência que a tela não explicava.
   - A preferência mora em `users.preferred_modo` ('vn'/'rx'/'both'/NULL, migração v3) e é aplicada **na resolução do servidor** (`comModoPreferido`, em `userLink.js`), não só no `/recent`: sem isso, escolher RX no `/link` não teria efeito em `/topplays`, `/profile` ou `/score`, que não sabem o que é um modo. `both` cai no vanilla fora do `/recent` — é o único par de comandos que sabe mostrar os dois.
   - Quem já tinha `daycore_rx` salvo como padrão (de quando o `server:` listava as variantes) continua em RX sem reconfigurar nada: sem preferência de modo, a chave salva vale como está.
-  - O `server:` dos **outros** comandos continua com as variantes RX. É de lá que o modo texto deriva as flags, e `k!rs -daycorerx` é atalho anterior ao `modo:` — os testes do prefixo pegaram isso quando a lista do `/recent` foi trimada. Quando as duas se contradizem no `/recent`, o `modo:` vence, por ser a opção mais específica.
   - `/link status` mostra a preferência junto do servidor padrão (ex: `Daycore (VN+RX)  ⭐ (padrão)`), e o `/link set` confirma o modo em uso na resposta.
+
+- **A separação vale em TODO comando, não só no `/link`.** [`modo.js`](src/modo.js), [`userLink.js`](src/userLink.js), e os 11 comandos com `server:`
+  - `/topplays`, `/profile`, `/score`, `/pp`, `/whatif`, `/compare`, `/leaderboard`, `/topscores`, `/map`, `/simulate` e `/recent` (com os atalhos que herdam deles) perderam as variantes `_rx` do `server:` e ganharam `modo:`. Só o `/recent` e o `/rs` oferecem `VN+RX`, porque são os únicos que sabem mostrar os dois leaderboards de uma vez — oferecer nos outros seria prometer uma lista combinada que o comando não monta.
+  - A opção nova mora num módulo (`modo.addOption`), e não copiada onze vezes: é dessa lista que o modo texto deriva as flags, então uma divergência entre comandos viraria um atalho que funciona num e não no outro.
+  - `userLink.resolveServer` virou o único lugar que resolve "qual chave usar" — a prioridade estava escrita três vezes (`leaderboard.js`, `compare.js`, `topscores.js`), cada uma com o comentário "mesma prioridade do resolvePlayer" em cima. O `modo:` do comando ganha do salvo no `/link`, que ganha de nada.
+  - `/map` e `/simulate` recebem só o `modo:` explícito, sem consultar o servidor preferido: eles falam de um mapa e não de uma conta, e sempre responderam pelo padrão. O modo importa neles porque Relax troca o motor de PP, não só o leaderboard.
+
+- **`-daycorerx` sobreviveu à separação, virando uma flag que preenche duas opções.** [`prefix/coerce.js`](src/prefix/coerce.js), [`prefix/parseArgs.js`](src/prefix/parseArgs.js)
+  - O atalho saía de graça da choice "Daycore RX" do `server:`; sem ela, `k!rs fulano -daycorerx` deixaria de ser reconhecido — e sem nem um erro que explicasse, porque a palavra simplesmente não casaria com nada. Agora `resolveFlag` devolve uma LISTA de atribuições: `-daycorerx` é `server: daycore` + `modo: rx`, e `-ezpprx`/`-akatsukirx` seguem a mesma regra.
+  - Pego pelos testes do prefixo, que já cobriam o atalho — foi a segunda vez nesta sessão que eles seguraram a mesma classe de estrago. As compostas também entram na lista de flags aceitas da mensagem de erro: flag que funciona sem ser anunciada é flag que ninguém descobre.
 
 ## 🐛 Correções
 
