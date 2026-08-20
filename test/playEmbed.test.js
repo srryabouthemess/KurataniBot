@@ -121,14 +121,18 @@ test('pp que não dá para calcular vira "?", não zero', async () => {
 
 // ─── Play interrompida ────────────────────────────────────────────────────────
 
-test('play interrompida mostra até onde foi, e muda de cor', async () => {
+test('play interrompida mostra até onde foi, e a cor segue a grade (não vira vermelho sozinha)', async () => {
   // 189 objetos jogados de 400 = 47%. O denominador vem do .osu; sem ele a
   // marca some, em vez de virar um "@0%" que parece nota.
+  //
+  // A cor NÃO é o vermelho de falha: a play interrompida pode ter parado com
+  // grade C (é o rank do fixture), e a cor precisa bater com a letra que o
+  // emoji mostra — não com o passed/failed por trás dela.
   setup({ mapAttrs: { cs: 4, ar: 9.4, od: 9.6, hp: 5, clockRate: 1, bpm: 128, objects: 400 } });
   const bloco = await playEmbed.single(jogada({ passed: false }), { mode: 'official', s });
 
   assert.match(bloco.description, /@47%/);
-  assert.equal(bloco.color, playEmbed.COLOR_FAIL);
+  assert.equal(bloco.color, playEmbed.RANK_COLORS.C);
 });
 
 test('sem os atributos do mapa, o progresso não é inventado', async () => {
@@ -136,7 +140,15 @@ test('sem os atributos do mapa, o progresso não é inventado', async () => {
   const bloco = await playEmbed.single(jogada({ passed: false }), { mode: 'official', s });
 
   assert.doesNotMatch(bloco.description, /@/);
+  assert.equal(bloco.color, playEmbed.RANK_COLORS.C);
+});
+
+test('play interrompida com grade F cai no vermelho de falha, porque a grade é vermelha', async () => {
+  setup({ mapAttrs: null });
+  const bloco = await playEmbed.single(jogada({ passed: false, rank: 'F' }), { mode: 'official', s });
+
   assert.equal(bloco.color, playEmbed.COLOR_FAIL);
+  assert.equal(bloco.color, playEmbed.RANK_COLORS.F);
 });
 
 // ─── O que pode faltar ────────────────────────────────────────────────────────
