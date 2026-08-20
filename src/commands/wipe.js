@@ -32,7 +32,7 @@ const {
 const osu = require('../osuClient');
 const daycore = require('../daycoreAdmin');
 const { resolveStaff, checkRedisOrError } = require('../staffGuard');
-const db = require('../db');
+const { registrarAcao } = require('../adminLog');
 const { t } = require('../i18n');
 const { logError } = require('../logger');
 
@@ -179,7 +179,18 @@ module.exports = {
 
       // Os números destruídos vão no detail: é o único lugar onde eles ainda
       // existem depois desta linha.
-      db.logAdminAction({
+      //
+      // E é justamente por isso que a gravação passa pelo adminLog em vez de ir
+      // direto ao `db`: dentro do `try`, uma falha de SQLite caía no `catch` lá
+      // embaixo e respondia "nada foi confirmado — verifique o estado antes de
+      // tentar de novo" para um wipe que já tinha acontecido e já tinha sido
+      // confirmado pela releitura. Aqui isso é o pior conselho possível: o
+      // comando não tem volta, quem lesse a resposta tentaria de novo, e o
+      // registro que se perdeu era a única prova dos números apagados. O
+      // adminLog ainda imprime a linha no log do processo, e o embed abaixo
+      // continua mostrando os stats — as duas cópias que sobram. Ver
+      // adminLog.js.
+      const registrado = registrarAcao('wipe', {
         action: 'wipe',
         target: target.id,
         detail: `${target.name} | ${modeLabel} | ${reason} | ` +
@@ -191,12 +202,15 @@ module.exports = {
       });
 
       const resultado = new EmbedBuilder()
-        .setColor(confirmado ? 0x99ff99 : 0xffcc66)
+        // Verde só quando as duas pontas fecharam — mesma regra do /role e do
+        // /moderate.
+        .setColor(confirmado && registrado ? 0x99ff99 : 0xffcc66)
         .setTitle(s.wipe_done_title(modeLabel))
         .setDescription(
           s.wipe_done_body(target.name, target.id, modeLabel) + '\n\n' +
           describeStats(stats, s) + '\n\n' +
-          (confirmado ? s.wipe_confirmed : s.wipe_unconfirmed),
+          (confirmado ? s.wipe_confirmed : s.wipe_unconfirmed) +
+          (registrado ? '' : '\n\n' + s.admin_log_failed),
         )
         .setFooter({ text: s.nom_actor(staff.osuName) });
 

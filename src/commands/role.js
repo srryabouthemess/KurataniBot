@@ -28,7 +28,7 @@ const {
 const osu = require('../osuClient');
 const daycore = require('../daycoreAdmin');
 const { resolveStaff, checkRedisOrError } = require('../staffGuard');
-const db = require('../db');
+const { registrarAcao } = require('../adminLog');
 const { t } = require('../i18n');
 const { exigirSubcomando } = require('../subcommands');
 const { logError } = require('../logger');
@@ -164,7 +164,12 @@ module.exports = {
 
       // O único lugar onde a conta do Discord fica amarrada a esta ação: o log
       // do servidor não tem campo de motivo nestes dois canais.
-      db.logAdminAction({
+      //
+      // Passa pelo adminLog, e não pelo `db` direto, porque neste ponto o cargo
+      // JÁ mudou no servidor e a releitura já disse qual foi o efeito. Uma falha
+      // de SQLite aqui não pode cair no `catch` lá embaixo e responder "nada foi
+      // confirmado" para uma ação que aconteceu — ver adminLog.js.
+      const registrado = registrarAcao('role', {
         action: sub === 'give' ? 'addpriv' : 'removepriv',
         target: target.id,
         detail: `${target.name} | ${roleKey} | ${reason} | ${confirmado ? 'confirmado' : 'NAO confirmado'}`,
@@ -174,11 +179,15 @@ module.exports = {
       });
 
       const embed = new EmbedBuilder()
-        .setColor(confirmado ? 0x99ff99 : 0xffcc66)
+        // Verde só quando as duas pontas fecharam: o efeito confirmado no
+        // servidor e a ação registrada aqui. Log perdido não desfaz a mudança,
+        // mas também não é uma resposta sem ressalva.
+        .setColor(confirmado && registrado ? 0x99ff99 : 0xffcc66)
         .setTitle(sub === 'give' ? s.role_give_title(roleName) : s.role_take_title(roleName))
         .setDescription(
           s.role_body(target.name, target.id, roleName, reason) + '\n\n' +
-          (confirmado ? s.mod_confirmed : s.mod_unconfirmed),
+          (confirmado ? s.mod_confirmed : s.mod_unconfirmed) +
+          (registrado ? '' : '\n\n' + s.admin_log_failed),
         )
         .setFooter({ text: s.nom_actor(staff.osuName) });
       return interaction.editReply({ embeds: [embed] });

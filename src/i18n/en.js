@@ -245,6 +245,7 @@ module.exports = ({ ADMIN }) => ({
   admin_redis_unconfigured:`❌ The ${ADMIN} connection is not configured (missing \`REDIS_HOST\` in \`.env\`). Without it the bot cannot apply changes to the server.`,
   admin_redis_unreachable: `❌ Could not reach ${ADMIN} right now (Redis unreachable). Nothing was changed.`,
   admin_action_failed:     '❌ An error occurred while performing the action. Nothing was confirmed — check the state before retrying.',
+  admin_log_failed:        '⚠️ **Could not write this to the bot\'s audit log** — `/moderate log` will not show this action. What is above is the only record left: copy it before dismissing.',
 
   ann_title:               (status) => `Map is now ${status}`,
   ann_diffs:               (n) => `${n} difficulty(ies) on ${ADMIN}`,

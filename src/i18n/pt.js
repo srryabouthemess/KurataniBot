@@ -261,6 +261,9 @@ module.exports = ({ ADMIN }) => ({
   // no Discord não faz nada com isso.
   admin_redis_unreachable: `❌ Não consegui falar com o ${ADMIN} agora (Redis inacessível). Nada foi alterado.`,
   admin_action_failed:     '❌ Ocorreu um erro ao executar a ação. Nada foi confirmado — verifique o estado antes de tentar de novo.',
+  // A ação aconteceu; só o registro dela é que não. Ver adminLog.js para o
+  // porquê de isso ser aviso e não recusa.
+  admin_log_failed:        '⚠️ **Não consegui gravar isto no log de auditoria do bot** — o `/moderate log` não vai mostrar esta ação. O que está acima é o único registro que sobrou: copie antes de fechar.',
 
   ann_title:               (status) => `Mapa agora está ${status}`,
   ann_diffs:               (n) => `${n} dificuldade(s) no ${ADMIN}`,

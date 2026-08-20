@@ -7,6 +7,7 @@ const osu = require('../osuClient');
 const daycore = require('../daycoreAdmin');
 const { resolveStaff, checkRedisOrError } = require('../staffGuard');
 const db = require('../db');
+const { registrarAcao } = require('../adminLog');
 const { t } = require('../i18n');
 const { exigirSubcomando } = require('../subcommands');
 const { logError } = require('../logger');
@@ -197,7 +198,12 @@ module.exports = {
       const expectRestricted = sub === 'restrict';
       const confirmed = await daycore.verifyRestricted(target.id, expectRestricted);
 
-      db.logAdminAction({
+      // Pelo adminLog, e não pelo `db` direto: a restrição já foi publicada e a
+      // releitura já confirmou o efeito, então uma falha de SQLite aqui não pode
+      // cair no `catch` lá embaixo e responder "nada foi confirmado" — quem
+      // lesse isso restringiria de novo alguém que já está restrito. Ver
+      // adminLog.js.
+      const registrado = registrarAcao('moderate', {
         action: sub,
         target: target.id,
         detail: `${target.name} | ${reason} | ${confirmed ? 'confirmado' : 'NAO confirmado'}`,
@@ -207,11 +213,14 @@ module.exports = {
       });
 
       const embed = new EmbedBuilder()
-        .setColor(confirmed ? 0x99ff99 : 0xffcc66)
+        // Verde só quando as duas pontas fecharam — mesma regra do /role e do
+        // /wipe.
+        .setColor(confirmed && registrado ? 0x99ff99 : 0xffcc66)
         .setTitle(expectRestricted ? s.mod_restrict_title : s.mod_unrestrict_title)
         .setDescription(
           s.mod_action_body(target.name, target.id, reason) + '\n\n' +
-          (confirmed ? s.mod_confirmed : s.mod_unconfirmed),
+          (confirmed ? s.mod_confirmed : s.mod_unconfirmed) +
+          (registrado ? '' : '\n\n' + s.admin_log_failed),
         )
         .setFooter({ text: s.nom_actor(staff.osuName) });
       return interaction.editReply({ embeds: [embed] });
