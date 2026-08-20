@@ -63,6 +63,7 @@ module.exports = ({ ADMIN }) => ({
   help_cmd_moderate:       'Inspect and restrict accounts.',
   help_cmd_wipe:           "Erase an account's scores in one mode (irreversible).",
   help_cmd_staff:          'Manage staff links.',
+  help_cmd_role:           'Grant and remove server roles.',
   help_servers:            '🌐 Available servers',
   help_prefix:             '⌨️ Text commands',
   help_prefix_body:        (prefix) => `The same commands work written out: \`${prefix}rs mrekk\`.`,
@@ -279,6 +280,13 @@ module.exports = ({ ADMIN }) => ({
   mod_not_restricted:      '🟢 Not restricted',
   mod_cannot_self:         '❌ You cannot apply this to your own account.',
   mod_target_is_staff:     (name, role) => `❌ **${name}** is server staff (${role}), and only **Developer** can moderate staff members. Nothing was published.`,
+
+  role_give_title:         (role) => `Role granted: ${role}`,
+  role_take_title:         (role) => `Role removed: ${role}`,
+  role_body:               (name, id, role, reason) =>
+    `**${name}** (\`${id}\`)\nRole: **${role}**\nReason: ${reason}`,
+  role_already_has:        (name, role) => `❌ **${name}** already has **${role}**.`,
+  role_missing:            (name, role) => `❌ **${name}** does not have **${role}**.`,
 
   wipe_confirm_title:      '⚠️ Confirm score deletion',
   wipe_confirm_body:       (name, id, mode) => `Target: **${name}** (\`${id}\`)\nMode: **${mode}**`,

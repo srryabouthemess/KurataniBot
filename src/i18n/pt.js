@@ -67,6 +67,7 @@ module.exports = ({ ADMIN }) => ({
   help_cmd_moderate:       'Consulta e restringe contas.',
   help_cmd_wipe:           'Apaga os scores de uma conta num modo (irreversível).',
   help_cmd_staff:          'Gerencia os vínculos de staff.',
+  help_cmd_role:           'Dá e tira cargos do servidor.',
   help_servers:            '🌐 Servidores disponíveis',
   help_prefix:             '⌨️ Comandos por texto',
   help_prefix_body:        (prefix) => `Os mesmos comandos funcionam escritos: \`${prefix}rs mrekk\`.`,
@@ -295,6 +296,13 @@ module.exports = ({ ADMIN }) => ({
   mod_not_restricted:      '🟢 Sem restrição',
   mod_cannot_self:         '❌ Você não pode aplicar isso na sua própria conta.',
   mod_target_is_staff:     (name, role) => `❌ **${name}** é da staff do servidor (${role}), e só quem tem **Developer** pode moderar membros da staff. Nada foi publicado.`,
+
+  role_give_title:         (role) => `Cargo concedido: ${role}`,
+  role_take_title:         (role) => `Cargo removido: ${role}`,
+  role_body:               (name, id, role, reason) =>
+    `**${name}** (\`${id}\`)\nCargo: **${role}**\nMotivo: ${reason}`,
+  role_already_has:        (name, role) => `❌ **${name}** já tem **${role}**.`,
+  role_missing:            (name, role) => `❌ **${name}** não tem **${role}**.`,
 
   wipe_confirm_title:      '⚠️ Confirmar exclusão de scores',
   wipe_confirm_body:       (name, id, mode) => `Alvo: **${name}** (\`${id}\`)\nModo: **${mode}**`,

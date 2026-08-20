@@ -23,6 +23,7 @@ redis.createClient = () => ({
 });
 
 const daycore = require('../src/daycoreAdmin');
+const role = require('../src/commands/role');
 
 const ACTOR = { osuId: 3, discordId: '100000000000000002', discordName: 'staff-dois' };
 
@@ -125,4 +126,25 @@ test('verifyPriv confirma pela releitura, e desiste quando o bit não aparece', 
   } finally {
     osuClient.getServerPlayerRaw = original;
   }
+});
+
+test('as choices do comando batem com a tabela', () => {
+  // Cargo oferecido no Discord que o publish não sabe mandar viraria um
+  // `Invalid privilege` silencioso; cargo na tabela que o Discord não oferece é
+  // função morta.
+  const json  = role.data.toJSON();
+  const give  = json.options.find(o => o.name === 'give');
+  const opcao = give.options.find(o => o.name === 'role');
+
+  assert.deepEqual(
+    opcao.choices.map(c => c.value).sort(),
+    Object.keys(daycore.ROLES).sort(),
+  );
+  assert.equal(opcao.required, true);
+});
+
+test('fica fora do modo texto', () => {
+  // A resposta expõe o privilégio de terceiro; em texto a flag de efêmero some
+  // e isso vira mensagem no canal (ver prefix/spec.js).
+  assert.equal(role.prefix?.slashOnly, true);
 });

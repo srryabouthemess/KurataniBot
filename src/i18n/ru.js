@@ -63,6 +63,7 @@ module.exports = ({ ADMIN }) => ({
   help_cmd_moderate:       'Просмотр и ограничение аккаунтов.',
   help_cmd_wipe:           'Удаление скоров аккаунта в одном режиме (необратимо).',
   help_cmd_staff:          'Управление привязками стаффа.',
+  help_cmd_role:           'Выдача и снятие ролей сервера.',
   help_servers:            '🌐 Доступные серверы',
   help_prefix:             '⌨️ Текстовые команды',
   help_prefix_body:        (prefix) => `Те же команды работают текстом: \`${prefix}rs mrekk\`.`,
@@ -279,6 +280,13 @@ module.exports = ({ ADMIN }) => ({
   mod_not_restricted:      '🟢 Без ограничений',
   mod_cannot_self:         '❌ Нельзя применить это к своему аккаунту.',
   mod_target_is_staff:     (name, role) => `❌ **${name}** — сотрудник сервера (${role}), а модерировать сотрудников может только **Developer**. Ничего не опубликовано.`,
+
+  role_give_title:         (role) => `Роль выдана: ${role}`,
+  role_take_title:         (role) => `Роль снята: ${role}`,
+  role_body:               (name, id, role, reason) =>
+    `**${name}** (\`${id}\`)\nРоль: **${role}**\nПричина: ${reason}`,
+  role_already_has:        (name, role) => `❌ У **${name}** уже есть **${role}**.`,
+  role_missing:            (name, role) => `❌ У **${name}** нет **${role}**.`,
 
   wipe_confirm_title:      '⚠️ Подтвердите удаление скоров',
   wipe_confirm_body:       (name, id, mode) => `Цель: **${name}** (\`${id}\`)\nРежим: **${mode}**`,
