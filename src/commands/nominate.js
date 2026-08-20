@@ -8,6 +8,7 @@ const daycore = require('../daycoreAdmin');
 const { resolveStaff, checkRedisOrError } = require('../staffGuard');
 const announce = require('../announce');
 const db = require('../db');
+const { registrarAcao } = require('../adminLog');
 const { md } = require('../markdown');
 const { t } = require('../i18n');
 const { exigirSubcomando } = require('../subcommands');
@@ -222,6 +223,30 @@ function failureDetail(result) {
   return ` | publicacao interrompida em ${result.published.length}/${result.total}: ${result.failure.message}`;
 }
 
+/**
+ * Descarta a fila DEPOIS de o status já ter sido aplicado no servidor.
+ *
+ * Com try/catch pelo mesmo motivo do registro de auditoria (ver adminLog.js):
+ * neste ponto as dificuldades já mudaram no Daycore e a releitura já confirmou.
+ * Um erro de SQLite subindo daqui caía no `catch` do execute e a resposta virava
+ * `admin_action_failed` — "nada foi confirmado" para um set que acabou de ser
+ * rankeado. Quem lesse isso rankearia de novo.
+ *
+ * Não limpar é um problema menor e reversível: a fila continua mostrando votos
+ * de um estado que já mudou, e a resposta avisa para quem quiser retirá-los.
+ *
+ * @returns {boolean} se a fila foi mesmo esvaziada
+ */
+function limparFila(setId, statuses) {
+  try {
+    for (const status of statuses) db.clearNominations(setId, status);
+    return true;
+  } catch (error) {
+    logError('nominate:fila', error);
+    return false;
+  }
+}
+
 function resultLine(s, confirmed, pending) {
   if (pending.length === 0) return s.nom_all_confirmed(confirmed.length);
   if (confirmed.length === 0) return s.nom_none_confirmed(pending.length);
@@ -239,6 +264,20 @@ function resultLine(s, confirmed, pending) {
 function resultBlock(s, result) {
   return resultLine(s, result.confirmed, result.pending) +
     (result.failure ? `\n${s.nom_publish_interrupted(result.published.length, result.total)}` : '');
+}
+
+/**
+ * Os avisos da papelada local que falhou DEPOIS de o servidor já ter mudado.
+ *
+ * Nenhuma das duas desfaz a ação, então elas entram como ressalva ao lado do
+ * resultado e não como negação no lugar dele — é o mesmo princípio do
+ * adminLog.js. Separadas porque a consequência é diferente: sem o registro, a
+ * ação não aparece no `/moderate log`; sem a limpeza, a fila continua contando
+ * votos de um estado que já mudou.
+ */
+function avisosLocais(s, registrado, filaLimpa) {
+  return (registrado ? '' : '\n\n' + s.admin_log_failed) +
+         (filaLimpa  ? '' : '\n\n' + s.nom_queue_not_cleared);
 }
 
 module.exports = {
@@ -408,12 +447,17 @@ module.exports = {
         // acumuladas se referem a um estado que não existe mais. Só que isso
         // vale quando o estado MUDOU — antes a limpeza era incondicional, e uma
         // queda do bancho apagava a fila sem que nada tivesse sido aplicado.
-        if (pending.length === 0) {
-          db.clearNominations(setId, daycore.RankedStatus.RANK);
-          db.clearNominations(setId, daycore.RankedStatus.LOVE);
-        }
+        //
+        // Sem nada para limpar não há o que avisar, daí o `true`.
+        const filaLimpa = pending.length === 0
+          ? limparFila(setId, [daycore.RankedStatus.RANK, daycore.RankedStatus.LOVE])
+          : true;
 
-        db.logAdminAction({
+        // Pelo adminLog, e não pelo `db` direto: o status já foi publicado e a
+        // releitura já disse o que pegou. Uma falha de SQLite aqui não pode cair
+        // no `catch` lá embaixo e responder "nada foi confirmado" para um set já
+        // rankeado — ver adminLog.js.
+        const registrado = registrarAcao('nominate', {
           action: sub === 'disqualify' ? 'disqualify' : 'force',
           target: setId,
           detail: `${daycore.STATUS_LABELS[status]} | ${confirmed.length}/${diffs.length} ok` +
@@ -429,11 +473,14 @@ module.exports = {
         });
 
         const embed = new EmbedBuilder()
-          .setColor(pending.length === 0 ? 0x99ff99 : 0xffcc66)
+          // Verde só quando tudo fechou: o servidor confirmou todas as
+          // dificuldades E a papelada local foi em frente. Mesma regra do /role,
+          // /moderate e /wipe.
+          .setColor(pending.length === 0 && registrado && filaLimpa ? 0x99ff99 : 0xffcc66)
           .setTitle(s.nom_applied_title(daycore.STATUS_LABELS[status]))
           .setDescription(
             `**${md(label)}**\n${s.nom_set_line(setId, diffs.length)}${origin}\n\n` +
-            resultBlock(s, result),
+            resultBlock(s, result) + avisosLocais(s, registrado, filaLimpa),
           )
           .setFooter({ text: s.nom_actor(staff.osuName) });
         return interaction.editReply({ embeds: [embed] });
@@ -472,9 +519,13 @@ module.exports = {
       // uma única dificuldade tivesse mudado no servidor. Com limiar 1 o custo é
       // renomear; com limiar maior, uma falha transitória destruía os votos de
       // várias pessoas. Reexecutar é idempotente — recuperar voto perdido não é.
-      if (pending.length === 0) db.clearNominations(setId, targetStatus);
+      const filaLimpa = pending.length === 0
+        ? limparFila(setId, [targetStatus])
+        : true;
 
-      db.logAdminAction({
+      // Mesmo motivo do ramo acima: o servidor já mudou, então falha de escrita
+      // vira aviso e não negação — ver adminLog.js.
+      const registrado = registrarAcao('nominate', {
         action: 'rank',
         target: setId,
         detail: `${daycore.STATUS_LABELS[targetStatus]} | ${confirmed.length}/${diffs.length} ok | ` +
@@ -491,7 +542,8 @@ module.exports = {
       });
 
       const embed = new EmbedBuilder()
-        .setColor(pending.length === 0 ? 0x99ff99 : 0xffcc66)
+        // Verde só quando tudo fechou — mesma regra do ramo de cima.
+        .setColor(pending.length === 0 && registrado && filaLimpa ? 0x99ff99 : 0xffcc66)
         .setTitle(s.nom_applied_title(daycore.STATUS_LABELS[targetStatus]))
         .setDescription(
           `**${md(label)}**\n${s.nom_set_line(setId, diffs.length)}${origin}\n\n` +
@@ -499,7 +551,7 @@ module.exports = {
           // seria ruído.
           (need > 1 ? `${s.nom_threshold_reached(need)}\n` : '') +
           s.nom_by(nominations.map(n => n.osu_name ?? n.osu_id).join(', ')) + '\n\n' +
-          resultBlock(s, result),
+          resultBlock(s, result) + avisosLocais(s, registrado, filaLimpa),
         );
       return interaction.editReply({ embeds: [embed] });
     } catch (error) {

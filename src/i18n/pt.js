@@ -274,6 +274,9 @@ module.exports = ({ ADMIN }) => ({
   nom_invalid_map:         '❌ Não entendi qual mapa é esse. Use o ID do beatmap/set ou um link.',
   nom_map_not_found:       `❌ Mapa não encontrado no ${ADMIN} nem no osu!.`,
   nom_not_on_server:       `ℹ️ Ainda não está no ${ADMIN} — as dificuldades vieram do osu!, e o servidor busca o mapa ao aplicar o status.`,
+  // O status foi aplicado; a fila local é que não foi descartada. Ver limparFila
+  // em nominate.js.
+  nom_queue_not_cleared:   '⚠️ Não consegui esvaziar a fila de nomeação deste set — ela ainda conta votos de um estado que já mudou. Use `/nominate withdraw` se atrapalhar.',
   nom_publish_interrupted: (published, total) => `⚠️ A publicação parou em **${published}/${total}** dificuldades (falha na conexão com o ${ADMIN}). As que já saíram ainda serão aplicadas — rode de novo para concluir o resto.`,
   nom_set_line:            (setId, diffs) => `Set \`${setId}\` — ${diffs} dificuldade(s)`,
   nom_added_title:         (status) => `Nomeação registrada (${status})`,

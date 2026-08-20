@@ -245,7 +245,7 @@ test('/role: com o banco são, a resposta não traz aviso nenhum', async () => {
 const fonteDe = (nome) =>
   fs.readFileSync(require.resolve(`../src/commands/${nome}`), 'utf8');
 
-for (const nome of ['role', 'moderate', 'wipe']) {
+for (const nome of ['role', 'moderate', 'wipe', 'nominate']) {
   test(`/${nome} registra pelo adminLog, e não pelo db dentro do try`, () => {
     // `db.logAdminAction` direto dentro do `try` do execute é exatamente o
     // defeito: a falha de escrita cai no catch da publicação e nega uma ação
