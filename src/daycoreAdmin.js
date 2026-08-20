@@ -400,15 +400,6 @@ function hasPriv(priv, flag) {
   return (Number(priv) & flag) === flag;
 }
 
-/** Rótulo do cargo mais alto, só para exibição. */
-function privLabel(priv) {
-  if (hasPriv(priv, Privileges.DEVELOPER))     return 'Developer';
-  if (hasPriv(priv, Privileges.ADMINISTRATOR)) return 'Administrator';
-  if (hasPriv(priv, Privileges.MODERATOR))     return 'Moderator';
-  if (hasPriv(priv, Privileges.NOMINATOR))     return 'Nominator';
-  return 'Player';
-}
-
 /**
  * Rótulo de exibição de cada bit, do mais alto para o mais baixo.
  *
@@ -449,6 +440,31 @@ function labelOfBit(bit) {
 function privNames(priv) {
   const nomes = PRIV_LABELS.filter(([bit]) => hasPriv(priv, bit)).map(([, label]) => label);
   return nomes.length > 0 ? nomes : ['Player'];
+}
+
+/**
+ * Rótulo do cargo mais alto, só para exibição.
+ *
+ * Fonte única do nome: é daqui (via `privNames` que lê `PRIV_LABELS`) que sai
+ * tanto o texto do `/moderate check` quanto o rótulo das choices do `/role`.
+ * Dois lugares com o nome do mesmo bit divergiriam no primeiro que alguém
+ * renomeasse — não há dois.
+ *
+ * ── Mudança de comportamento em relação ao antecessor ──────────────────────────
+ * O antecessor era uma cadeia if/else que só reconhecia os quatro cargos de
+ * staff (DEVELOPER, ADMINISTRATOR, MODERATOR, NOMINATOR) e colapsava tudo mais
+ * baixo em "Player". Agora `privLabel` devolve o topo real de `privNames`:
+ *   - Quem tem WHITELISTED (mas não nada mais acima) aparecia como "Player",
+ *     agora aparece como "Whitelisted".
+ *   - Quem tem SUPPORTER ou PREMIUM agora aparece com o cargo, não "Player".
+ *   - Quem tem UNRESTRICTED só (o comum) continua sendo "Player".
+ * O `/moderate check` lê assim a priv inteira e identifica o cargo de verdade,
+ * sem perder os que ficavam ocultos. O `/moderate restrict` mira em staff
+ * definido no servidor (staff mask), então nenhum cargo novo nessa lista o
+ * afeta.
+ */
+function privLabel(priv) {
+  return privNames(priv)[0];
 }
 
 /**

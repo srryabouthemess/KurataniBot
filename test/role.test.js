@@ -84,13 +84,24 @@ test('cargo fora da tabela não chega a ser publicado', async () => {
   assert.equal(published.length, 0);
 });
 
-test('privNames lista todos os cargos; o privLabel continua só com o topo', () => {
+test('privNames lista todos os cargos; o privLabel devolve só o topo (o mais alto)', () => {
   const priv = daycore.Privileges.UNRESTRICTED
     | daycore.Privileges.NOMINATOR
     | daycore.Privileges.WHITELISTED;
 
   assert.equal(daycore.privLabel(priv), 'Nominator');
   assert.deepEqual(daycore.privNames(priv), ['Nominator', 'Whitelisted']);
+});
+
+test('privLabel de WHITELISTED (sem staff) devolve "Whitelisted", não "Player"', () => {
+  // O antecessor colapsava tudo abaixo de NOMINATOR em "Player", perdendo
+  // o cargo real. Agora privLabel devolve o topo verdadeiro de privNames.
+  const priv = daycore.Privileges.UNRESTRICTED | daycore.Privileges.WHITELISTED;
+  assert.equal(daycore.privLabel(priv), 'Whitelisted');
+});
+
+test('privLabel de UNRESTRICTED puro continua sendo "Player"', () => {
+  assert.equal(daycore.privLabel(daycore.Privileges.UNRESTRICTED), 'Player');
 });
 
 test('privNames devolve Player quando não há cargo nenhum', () => {
