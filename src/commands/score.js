@@ -135,7 +135,10 @@ module.exports = {
         ));
 
         return new EmbedBuilder()
-          .setColor(playEmbed.COLOR)
+          // Cor pela grade do melhor score da página (o primeiro da lista) —
+          // um embed só tem uma cor, e os scores da página são todos do mesmo
+          // mapa, então o topo representa a página inteira.
+          .setColor(playEmbed.rankColor(pageScores[0]))
           .setAuthor(playEmbed.author(user, mode, s))
           .setTitle(mapTitle)
           .setURL(mapUrl)

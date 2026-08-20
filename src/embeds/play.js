@@ -39,6 +39,30 @@ const { localScorePP } = require('../scorePP');
 const COLOR      = 0xff66aa;
 const COLOR_FAIL = 0xee4444;
 
+/** Cor de cada grade — prata pras versões com Hidden, ouro pra SS/S, vermelho pra D/F. */
+const RANK_COLORS = {
+  XH: 0xE0FFFF,
+  X:  0xFFD700,
+  SH: 0xC0C0C0,
+  S:  0xF2A80D,
+  A:  0x66CC66,
+  B:  0x6699FF,
+  C:  0xCC66FF,
+  D:  0xFF6666,
+  F:  COLOR_FAIL,
+};
+
+/**
+ * Cor pela grade real da play — a mesma que o emoji já mostra (rankLabel).
+ *
+ * Play interrompida não vira "F" sozinha: a API manda o rank de onde ela
+ * parou (uma falha com boa mira pode marcar B, não só D/F), e a cor precisa
+ * bater com a letra na tela, não com o passed/failed por trás dela.
+ */
+function rankColor(play) {
+  return RANK_COLORS[play.rank] ?? COLOR;
+}
+
 // Título de embed estoura em 256 caracteres, e "artista - título [dificuldade]"
 // de mapa de maratona chega perto. O corte evita que o comando falhe ao
 // responder depois de já ter buscado tudo.
@@ -332,7 +356,7 @@ async function single(play, { mode, s }) {
     title:       mapTitle(play, { stars: estrelas }),
     url:         osu.getMapUrl(play.beatmap.id, play.beatmapset?.id, mode),
     description: linhas.filter(Boolean).join('\n'),
-    color:       play.passed === false ? COLOR_FAIL : COLOR,
+    color:       rankColor(play),
     // null e não undefined: o setThumbnail do discord.js aceita "sem imagem"
     // escrito assim, e recusa o valor ausente.
     thumbnail:   play.beatmapset?.covers?.list ?? null,
@@ -394,8 +418,8 @@ async function listItem(play, { mode, index, mapUrl = null, autor = null }) {
 }
 
 module.exports = {
-  COLOR, COLOR_FAIL,
-  author, single, listItem,
+  COLOR, COLOR_FAIL, RANK_COLORS,
+  author, single, listItem, rankColor,
   mapTitle, mapLine, mapMeta,
   ppLegivel,
 };
