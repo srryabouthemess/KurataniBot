@@ -383,19 +383,59 @@ function defaultKey() {
   return wanted ?? OFFICIAL_KEY;
 }
 
+// ─── O par vanilla/Relax ──────────────────────────────────────────────────────
+// Um servidor com Relax existe como duas chaves (`daycore` e `daycore_rx`) que
+// são a MESMA conta, e a diferença entre elas é dimensão à parte de "qual
+// servidor" — quem escolhe entre VN e RX escolhe modo, não servidor. As duas
+// funções abaixo são o caminho de ida e volta desse par; antes esta regra
+// (`endsWith('_rx')`, `slice(0, -3)`) morava escrita à mão no recentMerge.
+
+/** A chave vanilla do par a que uma chave pertence. `daycore_rx` → `daycore`. */
+function rootKey(key) {
+  const resolved = resolveKey(key) ?? String(key ?? '');
+  return resolved.endsWith('_rx') ? resolved.slice(0, -3) : resolved;
+}
+
+/** A variante Relax do par, ou null se o servidor não tem Relax configurado. */
+function relaxKey(key) {
+  const rx = `${rootKey(key)}_rx`;
+  return _byKey.has(rx) ? rx : null;
+}
+
+function isRelax(key) {
+  return get(key).relax === true;
+}
+
 // O Discord aceita no máximo 25 escolhas por opção.
 const MAX_CHOICES = 25;
 
-/** Escolhas prontas para o `addChoices` dos comandos. */
-function choices() {
-  const list = all();
+function comoChoices(list) {
   if (list.length > MAX_CHOICES) {
     console.warn(`[servers] ${list.length} servidores configurados; o Discord só aceita ${MAX_CHOICES} por opção — o excedente não aparece.`);
   }
   return list.slice(0, MAX_CHOICES).map(s => ({ name: s.label, value: s.key }));
 }
 
+/** Escolhas prontas para o `addChoices` dos comandos. */
+function choices() {
+  return comoChoices(all());
+}
+
+/**
+ * Só os servidores vanilla, sem as variantes `_rx`.
+ *
+ * Para a opção que pergunta "qual SERVIDOR", que é coisa diferente de "VN ou
+ * RX" — no `/link`, listar as duas era pior que redundante: o link é por
+ * namespace (ver db/schema.js), então "Daycore" e "Daycore RX" gravavam
+ * exatamente o mesmo vínculo, e a única diferença entre escolher um ou outro
+ * ficava escondida numa preferência que a tela não explicava.
+ */
+function rootChoices() {
+  return comoChoices(all().filter(s => !s.relax));
+}
+
 module.exports = {
-  all, get, has, resolveKey, isOfficial, label, namespace, keyForNamespace,
-  defaultKey, choices, OFFICIAL_KEY,
+  all, get, has, resolveKey, isOfficial, isRelax, label, namespace, keyForNamespace,
+  rootKey, relaxKey,
+  defaultKey, choices, rootChoices, OFFICIAL_KEY,
 };

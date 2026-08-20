@@ -8,7 +8,8 @@
  *
  * Prioridade do SERVIDOR:
  *   1. Opção `server` do comando
- *   2. Servidor preferido do usuário (definido pelo último /link set)
+ *   2. Servidor preferido do usuário (definido pelo último /link set),
+ *      com o modo preferido aplicado sobre ele (ver `comModoPreferido`)
  *   3. DEFAULT_MODE
  *
  * Prioridade do JOGADOR:
@@ -17,9 +18,37 @@
  *   3. Erro — o usuário não tem link para aquele servidor especificamente
  */
 
-const { getLink, getPreferredServer } = require('./db');
+const { getLink, getPreferredServer, getPreferredModo } = require('./db');
 const { t } = require('./i18n');
+const servers = require('./servers');
 const osu = require('./osuClient');
+
+/**
+ * O servidor preferido, já apontando para VN ou RX conforme o modo preferido.
+ *
+ * O `/link` pergunta as duas coisas separadamente — o servidor numa opção, o
+ * modo (VN/RX/VN+RX) em outra —, mas o resto do bot trabalha com UMA chave, e
+ * `daycore_rx` é a forma de dizer "Daycore, leaderboard de Relax". Esta função
+ * é a costura entre os dois: sem ela, escolher RX no `/link` não teria efeito
+ * em nenhum comando, porque só o `/recent` sabe o que fazer com um modo.
+ *
+ * `both` não vira chave nenhuma: combinar as duas listas é coisa que só o
+ * `/recent` e o `/rs` fazem, e eles leem a preferência direto. Para todos os
+ * outros comandos, que mostram um leaderboard só, `both` cai no vanilla.
+ */
+function comModoPreferido(discordId) {
+  const preferido = getPreferredServer(discordId);
+  if (!preferido) return null;
+
+  const modo = getPreferredModo(discordId);
+  if (modo === 'vn' || modo === 'both') return servers.rootKey(preferido);
+  if (modo === 'rx') return servers.relaxKey(preferido) ?? preferido;
+
+  // Sem preferência de modo, a chave salva vale como está — inclusive o
+  // `daycore_rx` de quem escolheu RX quando o `server:` ainda listava as
+  // variantes, que continua valendo sem precisar reconfigurar nada.
+  return preferido;
+}
 
 /**
  * @returns {{username: string|number, displayName?: string, mode: string, fromLink: boolean}
@@ -33,7 +62,7 @@ function resolvePlayer(interaction, playerOptionName = 'player', serverOptionNam
   const manualServer = interaction.options.getString(serverOptionName);
 
   const mode = manualServer
-    || getPreferredServer(interaction.user.id)
+    || comModoPreferido(interaction.user.id)
     || osu.DEFAULT_MODE;
 
   if (manualPlayer) {

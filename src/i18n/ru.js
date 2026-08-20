@@ -161,6 +161,7 @@ module.exports = ({ ADMIN }) => ({
   link_error:              '❌ Произошла ошибка при проверке игрока.',
   link_default_set:        (label) => `✅ Сервер по умолчанию: **${label}**.`,
   link_default_set_modo:   (label, modo) => `✅ Сервер по умолчанию: **${label}**, режим **${modo}**.`,
+  link_modo_note:          (modo) => `Текущий режим: **${modo}**. Изменить можно через \`/link default\`.`,
   link_default_missing:    (label) => `❌ У вас нет привязки на **${label}**. Сначала используйте \`/link set\` там.`,
   no_link_for_server:      (label) =>
     `❌ У вас нет привязки на **${label}**. Используйте \`/link set\`, чтобы привязать аккаунт этого сервера, ` +

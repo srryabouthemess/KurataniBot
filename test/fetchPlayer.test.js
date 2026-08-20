@@ -20,7 +20,10 @@ const assert = require('node:assert');
 // O db entra dublê porque só o `resolvePlayer` o usa — o `fetchPlayer` não toca
 // no banco, e abrir o de verdade só para este arquivo seria efeito colateral.
 for (const [caminho, exports] of [
-  ['../src/db', { getLink: () => null, getPreferredServer: () => null, getUserLang: () => null, getServerLang: () => null }],
+  ['../src/db', {
+    getLink: () => null, getPreferredServer: () => null, getPreferredModo: () => null,
+    getUserLang: () => null, getServerLang: () => null,
+  }],
   ['../src/osuClient', {}],
 ]) {
   const resolvido = require.resolve(caminho);

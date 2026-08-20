@@ -22,13 +22,12 @@ const { logErrorOnce } = require('./logger');
  */
 function pairFor(key) {
   const resolved = servers.resolveKey(key) ?? String(key ?? '');
-  const resolvedIsRx = resolved.endsWith('_rx');
-  const root = resolvedIsRx ? resolved.slice(0, -3) : resolved;
+  const root = servers.rootKey(resolved);
 
   return {
     vn: servers.has(root) ? root : null,
-    rx: servers.has(`${root}_rx`) ? `${root}_rx` : null,
-    resolvedIsRx,
+    rx: servers.relaxKey(root),
+    resolvedIsRx: resolved.endsWith('_rx'),
   };
 }
 

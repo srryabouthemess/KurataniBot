@@ -34,6 +34,11 @@ module.exports = {
         .setDescription('Which server to use? (default: your linked server)')
         .setDescriptionLocalizations({ 'pt-BR': 'Qual servidor usar? (padrão: o do seu link)' })
         .setRequired(false)
+        // As variantes `_rx` continuam aqui, ao contrário do /link: é destas
+        // choices que o modo texto deriva as flags, e `k!rs -daycorerx` é
+        // atalho que existe desde antes de haver um `modo:` (ver prefix/spec.js).
+        // Quando as duas se contradizem, o `modo:` explícito vence — ele é a
+        // opção mais específica (ver keysToFetch em recentMerge.js).
         .addChoices(...servers.choices())
     )
     .addStringOption(option =>

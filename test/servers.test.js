@@ -72,6 +72,37 @@ test('configuração nova', async t => {
     ]);
   });
 
+  await t.test('rootChoices deixa de fora as variantes RX', () => {
+    // O /link pergunta o SERVIDOR numa opção e VN/RX em outra; com as duas
+    // variantes na mesma lista, "Daycore" e "Daycore RX" gravariam o mesmo
+    // vínculo e a diferença entre elas ficaria escondida.
+    assert.deepEqual(servers.rootChoices(), [
+      { name: 'Bancho',  value: 'official' },
+      { name: 'Daycore', value: 'daycore' },
+    ]);
+  });
+
+  await t.test('o par vanilla/RX é navegável nos dois sentidos', () => {
+    assert.equal(servers.rootKey('daycore_rx'),  'daycore');
+    assert.equal(servers.rootKey('daycore'),     'daycore');
+    assert.equal(servers.relaxKey('daycore'),    'daycore_rx');
+    assert.equal(servers.relaxKey('daycore_rx'), 'daycore_rx');
+    assert.equal(servers.isRelax('daycore_rx'),  true);
+    assert.equal(servers.isRelax('daycore'),     false);
+  });
+
+  await t.test('servidor sem Relax não ganha par inventado', () => {
+    // Devolver 'official_rx' aqui faria o comando pedir um leaderboard que não
+    // existe; quem chama trata o null caindo no vanilla.
+    assert.equal(servers.relaxKey('official'), null);
+    assert.equal(servers.rootKey('official'),  'official');
+  });
+
+  await t.test('o par também responde por nome antigo', () => {
+    assert.equal(servers.rootKey('private_rx'), 'daycore');
+    assert.equal(servers.relaxKey('private'),   'daycore_rx');
+  });
+
   await t.test('OSU_MODE define o padrão', () => {
     assert.equal(servers.defaultKey(), 'daycore');
   });

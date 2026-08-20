@@ -13,7 +13,15 @@ const { modoLabel } = require('../recentMerge');
 const { logError } = require('../logger');
 const { safeEditReply } = require('../replies');
 
-const SERVER_CHOICES = servers.choices();
+// Só os servidores, sem as variantes `_rx`: aqui "VN ou RX" é a opção `modo`,
+// e o link em si é o mesmo nos dois (um namespace, ver db/schema.js).
+const SERVER_CHOICES = servers.rootChoices();
+
+const MODO_CHOICES = [
+  { name: 'VN only', value: 'vn', name_localizations: { 'pt-BR': 'Só VN' } },
+  { name: 'RX only', value: 'rx', name_localizations: { 'pt-BR': 'Só RX' } },
+  { name: 'Both (VN+RX)', value: 'both', name_localizations: { 'pt-BR': 'Ambos (VN+RX)' } },
+];
 
 /**
  * Rótulo a exibir para uma conta linkada. Vanilla e RX do mesmo servidor
@@ -50,6 +58,14 @@ module.exports = {
             .setDescriptionLocalizations({ 'pt-BR': 'Servidor do perfil (padrão: Bancho)' })
             .setRequired(false)
             .addChoices(...SERVER_CHOICES)
+        )
+        .addStringOption(opt =>
+          opt
+            .setName('modo')
+            .setDescription('VN, RX, or both — for servers that have Relax')
+            .setDescriptionLocalizations({ 'pt-BR': 'VN, RX, ou os dois — em servidores que têm Relax' })
+            .setRequired(false)
+            .addChoices(...MODO_CHOICES)
         )
     )
     .addSubcommand(sub =>
@@ -88,17 +104,10 @@ module.exports = {
         .addStringOption(opt =>
           opt
             .setName('modo')
-            .setDescription('/recent and /rs default: VN, RX, or combined (unchanged if omitted)')
-            .setDescriptionLocalizations({ 'pt-BR': 'Padrão do /recent e /rs: VN, RX, ou combinado (mantém se omitido)' })
+            .setDescription('VN, RX, or both (unchanged if omitted)')
+            .setDescriptionLocalizations({ 'pt-BR': 'VN, RX, ou os dois (mantém o atual se omitido)' })
             .setRequired(false)
-            // Mesmas 3 choices de recent.js (modo:) — mantidas em sincronia à
-            // mão porque MODO_CHOICES não pode morar em recentMerge.js: aquele
-            // módulo é de propósito puro, sem nada de Discord (ver seu topo).
-            .addChoices(
-              { name: 'VN only', value: 'vn', name_localizations: { 'pt-BR': 'Só VN' } },
-              { name: 'RX only', value: 'rx', name_localizations: { 'pt-BR': 'Só RX' } },
-              { name: 'Both (VN+RX)', value: 'both', name_localizations: { 'pt-BR': 'Ambos (VN+RX)' } },
-            )
+            .addChoices(...MODO_CHOICES)
         )
     ),
 
@@ -189,21 +198,32 @@ module.exports = {
 
     const username = interaction.options.getString('player');
     const server   = interaction.options.getString('server') || osu.DEFAULT_MODE;
+    const modo     = interaction.options.getString('modo'); // 'vn' | 'rx' | 'both' | null
 
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
     try {
+      // O perfil é o mesmo cadastro em VN e RX, então a conferência acontece na
+      // chave do servidor; o modo escolhido só decide qual leaderboard os
+      // comandos leem depois.
       const user = await osu.getUser(username, server);
       if (!user) return interaction.editReply(s.link_not_found);
 
       // Guarda também o ID numérico: o nome do osu! pode mudar, o ID não.
       setLink(interaction.user.id, server, user.username, user.id);
+      // Sem `modo:`, a preferência de antes continua valendo — linkar de novo
+      // para corrigir o nick não deveria apagar a escolha de VN/RX.
+      if (modo) setPreferredModo(interaction.user.id, modo);
 
+      const modoAtual = modoLabel(getPreferredModo(interaction.user.id));
       const embed = new EmbedBuilder()
         .setColor(0x99ff99)
         .setTitle(s.link_success_title)
         .setThumbnail(user.avatar_url)
-        .setDescription(s.link_success_desc(user.username, osu.getModeLabel(server)));
+        .setDescription(
+          s.link_success_desc(user.username, osu.getModeLabel(server))
+          + (modoAtual ? `\n\n${s.link_modo_note(modoAtual)}` : '')
+        );
 
       await interaction.editReply({ embeds: [embed] });
     } catch (error) {
