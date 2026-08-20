@@ -8,9 +8,9 @@ Até aqui, quem jogava nos dois leaderboards de um servidor com Relax (Daycore, 
 
 ## ✨ Novos recursos
 
-- **`/recent` e `/rs` combinam VN e RX por padrão**, em qualquer servidor com variante Relax. [`recentMerge.js`](src/recentMerge.js), [`recent.js`](src/commands/recent.js)
+- **`/recent` e `/rs` ganham `modo: both` pra combinar VN e RX**, em qualquer servidor com variante Relax. [`recentMerge.js`](src/recentMerge.js), [`recent.js`](src/commands/recent.js)
   - As duas listas são buscadas em paralelo e juntadas por data, uma página por play — cada uma sabendo de qual leaderboard veio (`_mode`), pro `/score` sem argumento continuar procurando no lugar certo.
-  - A opção `modo:` filtra pra um só lado quando é isso que se quer (`vn`/`rx`). Quem já apontava direto pro `_rx` (por `server:` ou por `/link default`) continua vendo só RX por padrão — combinar é o comportamento novo, mas só pra quem chega pela chave raiz.
+  - Combinar é **opção**, não default: sem `modo:`, o comando busca só a chave que `server:` resolveu (raiz vira VN, `_rx` continua RX), igual sempre foi. A primeira versão deste recurso mesclava por padrão pra quem chegava pela chave raiz — surpreendia quem só queria a lista de sempre, então virou `modo: both` explícito, ao lado de `vn`/`rx` pra filtrar pra um só lado.
   - Servidor sem Relax (Bancho oficial, ou um privado sem `RELAX=true`) não muda em nada: sem par, é a mesma busca única de sempre.
 
 ## 🐛 Correções

@@ -38,12 +38,13 @@ module.exports = {
     .addStringOption(option =>
       option
         .setName('modo')
-        .setDescription('Filter VN/RX when the server has both (default: combined)')
-        .setDescriptionLocalizations({ 'pt-BR': 'Filtra VN/RX quando o servidor tem os dois (padrão: combinado)' })
+        .setDescription('Filter VN/RX, or combine both, when the server has both (default: just server)')
+        .setDescriptionLocalizations({ 'pt-BR': 'Filtra VN/RX, ou combina os dois, quando o servidor tem os dois (padrão: só o servidor)' })
         .setRequired(false)
         .addChoices(
           { name: 'VN only', value: 'vn', name_localizations: { 'pt-BR': 'Só VN' } },
           { name: 'RX only', value: 'rx', name_localizations: { 'pt-BR': 'Só RX' } },
+          { name: 'Both (VN+RX)', value: 'both', name_localizations: { 'pt-BR': 'Ambos (VN+RX)' } },
         )
     ),
 
@@ -55,7 +56,7 @@ module.exports = {
     }
 
     const { mode } = resolved;
-    const modoOption = interaction.options.getString('modo'); // 'vn' | 'rx' | null
+    const modoOption = interaction.options.getString('modo'); // 'vn' | 'rx' | 'both' | null
     const pair = recentMerge.pairFor(mode);
     const keys = recentMerge.keysToFetch(pair, modoOption);
     await interaction.deferReply();

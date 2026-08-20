@@ -36,21 +36,22 @@ function pairFor(key) {
  * Quais chaves buscar, dado o par do servidor e a opção `modo:` do comando.
  *
  * Sem par, `modo:` não tem o que filtrar — busca só a chave que existe. Com
- * par e sem `modo:` explícito, o default depende de COMO o servidor foi
- * resolvido: pela raiz vira combinado (o comportamento novo), pelo `_rx`
- * continua só RX — quem já apontava pra lá (`server: daycore_rx`, ou
- * `/link default` configurado assim) não é surpreendido com uma lista
- * mesclada do nada.
+ * par e sem `modo:` explícito, busca só a chave que `server:` resolveu (raiz
+ * vira VN, `_rx` continua RX) — igual ao `/recent` de sempre. Combinar os
+ * dois exige pedir explicitamente com `modo: both`; virou opção, não default,
+ * porque um default silencioso mesclando as duas listas surpreendia quem só
+ * queria a lista de sempre.
  *
  * @param {{vn: string, rx: string|null, resolvedIsRx: boolean}} pair
- * @param {'vn'|'rx'|null} modoOption
+ * @param {'vn'|'rx'|'both'|null} modoOption
  * @returns {string[]}
  */
 function keysToFetch(pair, modoOption) {
   if (!pair.rx) return [pair.vn];
   if (modoOption === 'vn') return [pair.vn];
   if (modoOption === 'rx') return [pair.rx];
-  return pair.resolvedIsRx ? [pair.rx] : [pair.vn, pair.rx];
+  if (modoOption === 'both') return [pair.vn, pair.rx];
+  return pair.resolvedIsRx ? [pair.rx] : [pair.vn];
 }
 
 /**

@@ -35,11 +35,11 @@ test('keysToFetch', async t => {
     assert.deepEqual(recentMerge.keysToFetch(semPar, 'rx'), ['official']);
   });
 
-  await t.test('com par, sem modo: e resolvido pela raiz, combina os dois', () => {
-    assert.deepEqual(recentMerge.keysToFetch(comPar, null), ['daycore', 'daycore_rx']);
+  await t.test('com par, sem modo: e resolvido pela raiz, só VN (sem surpresa)', () => {
+    assert.deepEqual(recentMerge.keysToFetch(comPar, null), ['daycore']);
   });
 
-  await t.test('com par, sem modo: mas resolvido pelo _rx, só RX (compat)', () => {
+  await t.test('com par, sem modo: mas resolvido pelo _rx, só RX', () => {
     assert.deepEqual(recentMerge.keysToFetch(comParRx, null), ['daycore_rx']);
   });
 
@@ -49,6 +49,11 @@ test('keysToFetch', async t => {
 
   await t.test('modo: rx força só RX mesmo resolvido pela raiz', () => {
     assert.deepEqual(recentMerge.keysToFetch(comPar, 'rx'), ['daycore_rx']);
+  });
+
+  await t.test('modo: both combina os dois, resolvido pela raiz ou pelo _rx', () => {
+    assert.deepEqual(recentMerge.keysToFetch(comPar, 'both'), ['daycore', 'daycore_rx']);
+    assert.deepEqual(recentMerge.keysToFetch(comParRx, 'both'), ['daycore', 'daycore_rx']);
   });
 });
 
