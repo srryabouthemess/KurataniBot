@@ -138,7 +138,12 @@ module.exports = {
           .setDescription(
             s.mod_check_body(
               target.id,
-              daycore.privLabel(target.priv),
+              // Todos os cargos, e não só o topo: sem isso quem acabou de
+              // receber `whitelisted` aparece aqui como "Player", e o comando
+              // que serve para conferir a concessão não a mostra. O
+              // `mod_target_is_staff` logo abaixo continua no privLabel — ali o
+              // que a frase precisa é do rótulo único.
+              daycore.privNames(target.priv).join(', '),
               target.priv,
               isRestricted ? s.mod_restricted : s.mod_not_restricted,
             ),

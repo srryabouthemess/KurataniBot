@@ -148,3 +148,11 @@ test('fica fora do modo texto', () => {
   // e isso vira mensagem no canal (ver prefix/spec.js).
   assert.equal(role.prefix?.slashOnly, true);
 });
+
+test('o /moderate check lista todos os cargos, não só o topo', () => {
+  // Quem acabou de receber `whitelisted` sem ter mais nada aparecia como
+  // "Player": o comando que serve para conferir a concessão não mostrava a
+  // concessão.
+  const fonte = require('fs').readFileSync(require.resolve('../src/commands/moderate'), 'utf8');
+  assert.match(fonte, /privNames\(target\.priv\)/);
+});
