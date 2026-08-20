@@ -86,6 +86,8 @@ const CHANNELS = {
   RESTRICT:   'restrict',
   UNRESTRICT: 'unrestrict',
   WIPE:       'wipe',
+  ADDPRIV:    'addpriv',
+  REMOVEPRIV: 'removepriv',
 };
 
 /**
@@ -340,6 +342,46 @@ async function wipePlayer(targetOsuId, modeNum, actor, reason) {
   });
 }
 
+/**
+ * Concede ou tira um cargo.
+ *
+ * ── O motivo não vai junto, e isso é uma garantia a menos ─────────────────────
+ * O receptor lê só `id`, `privs` e `userId` (app/api/start.py,
+ * channel_addpriv_reciever), e o post_audit_log do bancho grava `reason=""`
+ * para estas duas ações. Não existe onde pendurar a assinatura que o restrict
+ * usa para fazer o log do SERVIDOR guardar também a conta do Discord (ver
+ * signReason). Aqui o rastro do Discord fica só no `admin_actions` — dentro do
+ * bot, que é justamente o componente que a assinatura existe para não precisar
+ * supor íntegro.
+ *
+ * Não é crítico hoje: o vínculo de staff exige prova de posse da conta desde o
+ * /staff confirm, e só DEVELOPER concede bit de staff. Fecha de vez com três
+ * linhas no channel_addpriv_reciever lendo `data.get("reason")`, que é mudança
+ * no servidor.
+ *
+ * @param {{osuId: number}} actor quem concede; o bancho grava como `admin`
+ */
+function publishPriv(channel, targetOsuId, roleKey, actor) {
+  // Recusa aqui, e não só no comando: um chamador com chave inventada receberia
+  // do bancho um `Invalid privilege` que nunca volta para cá.
+  if (!Object.hasOwn(ROLES, roleKey)) {
+    throw new Error(`cargo desconhecido: "${roleKey}"`);
+  }
+  return publish(channel, {
+    id:     Number(targetOsuId),
+    privs:  [roleKey],
+    userId: Number(actor.osuId),
+  });
+}
+
+async function addPrivilege(targetOsuId, roleKey, actor) {
+  await publishPriv(CHANNELS.ADDPRIV, targetOsuId, roleKey, actor);
+}
+
+async function removePrivilege(targetOsuId, roleKey, actor) {
+  await publishPriv(CHANNELS.REMOVEPRIV, targetOsuId, roleKey, actor);
+}
+
 // ─── Permissões ───────────────────────────────────────────────────────────────
 
 /**
@@ -366,6 +408,89 @@ function privLabel(priv) {
   if (hasPriv(priv, Privileges.NOMINATOR))     return 'Nominator';
   return 'Player';
 }
+
+/**
+ * Rótulo de exibição de cada bit, do mais alto para o mais baixo.
+ *
+ * Fonte única do nome: é daqui que sai tanto o texto do `/moderate check`
+ * quanto o rótulo das choices do `/role`. Dois lugares com o nome do mesmo bit
+ * divergiriam no primeiro que alguém renomeasse.
+ *
+ * UNRESTRICTED fica de fora de propósito: ele não é cargo, é estado de
+ * restrição, e o `/moderate check` já o mostra em campo próprio. Listá-lo aqui
+ * faria todo jogador comum aparecer com um "cargo" chamado Unrestricted.
+ */
+const PRIV_LABELS = [
+  [Privileges.DEVELOPER,       'Developer'],
+  [Privileges.ADMINISTRATOR,   'Administrator'],
+  [Privileges.MODERATOR,       'Moderator'],
+  [Privileges.NOMINATOR,       'Nominator'],
+  [Privileges.TOURNEY_MANAGER, 'Tourney Manager'],
+  [Privileges.ALUMNI,          'Alumni'],
+  [Privileges.PREMIUM,         'Premium'],
+  [Privileges.SUPPORTER,       'Supporter'],
+  [Privileges.WHITELISTED,     'Whitelisted'],
+  [Privileges.VERIFIED,        'Verified'],
+];
+
+/** O nome de exibição de um bit isolado. */
+function labelOfBit(bit) {
+  return PRIV_LABELS.find(([b]) => b === bit)?.[1] ?? String(bit);
+}
+
+/**
+ * TODOS os cargos ligados, do mais alto para o mais baixo.
+ *
+ * O `privLabel` devolve só o topo, e para conferir uma concessão isso não
+ * serve: quem acabou de receber `whitelisted` sem ter mais nada aparecia no
+ * `/moderate check` como "Player", ou seja, o comando não mostrava o que tinha
+ * acabado de mudar.
+ */
+function privNames(priv) {
+  const nomes = PRIV_LABELS.filter(([bit]) => hasPriv(priv, bit)).map(([, label]) => label);
+  return nomes.length > 0 ? nomes : ['Player'];
+}
+
+/**
+ * Os cargos que o /role distribui: o bit que cada chave liga, e o privilégio
+ * que o BOT exige de quem concede.
+ *
+ * ── A chave sai do str_priv_dict de app/api/utils.py, e isso importa ─────────
+ * O bancho.py-ex tem DOIS dicionários com esse nome, e eles divergem: o de
+ * app/commands.py chama MODERATOR de "moderator", o de app/api/utils.py chama
+ * de "mod". Quem atende o pub/sub é o segundo — os receptores de `addpriv` e
+ * `removepriv` importam dali. Publicar "moderator" devolve
+ * `Invalid privilege: moderator`, e devolve para o console do bancho: pub/sub
+ * não responde a quem publica, então daqui o sintoma seria um "não confirmado"
+ * seco, sem pista do motivo.
+ *
+ * ── Por que o privilégio exigido não é o mesmo para todos ─────────────────────
+ * Conceder `developer` dá controle total do servidor. Se ADMINISTRATOR
+ * bastasse, um administrador obteria por procuração exatamente o que o bancho
+ * não lhe dá — então os três bits de staff exigem DEVELOPER. Os outros cinco
+ * param em ADMINISTRATOR porque nenhum deles concede poder sobre outras contas,
+ * e travá-los no privilégio mais alto faria o dono virar gargalo para dar
+ * nominator a um mapper novo.
+ *
+ * ── O que NÃO está aqui ───────────────────────────────────────────────────────
+ *   supporter, premium — o addpriv recusa os dois (`return "use givedonor."`),
+ *     porque o caminho deles é o canal `givedonator`, que leva duração e não
+ *     tem contrapartida para remover.
+ *   normal — é o bit UNRESTRICTED. Tirá-lo por aqui bane sem passar pelo
+ *     Player.restrict(): sem registro de restrição, sem sair das leaderboards,
+ *     e o alvo continua aparecendo limpo no /moderate check. Quem bane é o
+ *     /moderate restrict.
+ */
+const ROLES = {
+  verified:    { bit: Privileges.VERIFIED,        requires: Privileges.ADMINISTRATOR },
+  whitelisted: { bit: Privileges.WHITELISTED,     requires: Privileges.ADMINISTRATOR },
+  alumni:      { bit: Privileges.ALUMNI,          requires: Privileges.ADMINISTRATOR },
+  tournament:  { bit: Privileges.TOURNEY_MANAGER, requires: Privileges.ADMINISTRATOR },
+  nominator:   { bit: Privileges.NOMINATOR,       requires: Privileges.ADMINISTRATOR },
+  mod:         { bit: Privileges.MODERATOR,       requires: Privileges.DEVELOPER },
+  admin:       { bit: Privileges.ADMINISTRATOR,   requires: Privileges.DEVELOPER },
+  developer:   { bit: Privileges.DEVELOPER,       requires: Privileges.DEVELOPER },
+};
 
 /**
  * Qual servidor as leituras administrativas consultam, para o log.
@@ -506,6 +631,26 @@ async function verifyWiped(osuId, modeNum, { attempts = 3, delayMs = 1200 } = {}
   return false;
 }
 
+/**
+ * Confirma que o bit ficou (ou deixou de estar) ligado.
+ *
+ * Janela fixa, como a do verifyRestricted e ao contrário da de mapa: o alvo é
+ * sempre um só, e o `add_privs` do bancho é um UPDATE na tabela `users` — não
+ * há download pelo meio para fazer o tempo depender do tamanho de nada.
+ */
+async function verifyPriv(osuId, bit, expectPresent, { attempts = 3, delayMs = 1200 } = {}) {
+  for (let i = 0; i < attempts; i++) {
+    await sleep(delayMs);
+    try {
+      const player = await osu.getServerPlayerRaw(osuId);
+      if (player && hasPriv(player.priv, bit) === expectPresent) return true;
+    } catch {
+      // tenta de novo
+    }
+  }
+  return false;
+}
+
 module.exports = {
   Privileges,
   RankedStatus,
@@ -524,6 +669,12 @@ module.exports = {
   isStaff,
   STAFF_MASK,
   privLabel,
+  labelOfBit,
+  privNames,
+  ROLES,
+  addPrivilege,
+  removePrivilege,
+  verifyPriv,
   adminServerLabel,
   getPlayerPrivileges,
   verifyMapStatus,
