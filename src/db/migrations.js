@@ -29,7 +29,7 @@ const path = require('path');
 const servers = require('../servers');
 const { DATA_DIR } = require('../paths');
 
-const VERSAO_ATUAL = 2;
+const VERSAO_ATUAL = 3;
 
 // Dados de versões antigas do bot, que viviam como JSON na raiz.
 const OLD_LINKS_PATH = path.join(DATA_DIR, 'links.json');
@@ -358,6 +358,21 @@ function migrarCachesDeCalculoParaMods(db) {
   }
 }
 
+// ─── 2 → 3: preferência de modo (VN/RX/combinado) do /recent e /rs ────────────
+
+/**
+ * `users.preferred_modo`: o `modo:` que `/link default` grava, pra quem quer
+ * VN+RX combinado (ou só um dos dois) sem repetir a opção em todo `/recent`.
+ * Nasce NULL — sem essa coluna a preferência simplesmente não existia, então
+ * NULL é o mesmo "sem preferência" que já vale pra quem nunca configurou.
+ */
+function acrescentarColunaPreferredModo(db) {
+  const colunas = db.prepare('PRAGMA table_info(users)').all().map(c => c.name);
+  if (!colunas.includes('preferred_modo')) {
+    db.exec('ALTER TABLE users ADD COLUMN preferred_modo TEXT');
+  }
+}
+
 // ─── Execução ─────────────────────────────────────────────────────────────────
 
 function run(db) {
@@ -377,6 +392,10 @@ function run(db) {
 
   if (versao < 2) {
     migrarCachesDeCalculoParaMods(db);
+  }
+
+  if (versao < 3) {
+    acrescentarColunaPreferredModo(db);
   }
 
   // Interpolado porque PRAGMA não aceita parâmetro; o valor é uma constante do

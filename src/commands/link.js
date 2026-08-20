@@ -1,9 +1,15 @@
 const { SlashCommandBuilder, EmbedBuilder, ApplicationIntegrationType, InteractionContextType, MessageFlags } = require('discord.js');
-const { setLink, getLink, getAllLinks, removeLink, setPreferredServer, getPreferredServer, linkNamespace } = require('../db');
+const {
+  setLink, getLink, getAllLinks, removeLink,
+  setPreferredServer, getPreferredServer,
+  setPreferredModo, getPreferredModo,
+  linkNamespace,
+} = require('../db');
 const { t } = require('../i18n');
 const { exigirSubcomando } = require('../subcommands');
 const osu = require('../osuClient');
 const servers = require('../servers');
+const { modoLabel } = require('../recentMerge');
 const { logError } = require('../logger');
 const { safeEditReply } = require('../replies');
 
@@ -69,8 +75,8 @@ module.exports = {
     .addSubcommand(sub =>
       sub
         .setName('default')
-        .setDescription('Choose which server commands use by default')
-        .setDescriptionLocalizations({ 'pt-BR': 'Escolhe qual servidor os comandos usam por padrão' })
+        .setDescription('Choose which server (and VN/RX mode) commands use by default')
+        .setDescriptionLocalizations({ 'pt-BR': 'Escolhe qual servidor (e modo VN/RX) os comandos usam por padrão' })
         .addStringOption(opt =>
           opt
             .setName('server')
@@ -78,6 +84,21 @@ module.exports = {
             .setDescriptionLocalizations({ 'pt-BR': 'Servidor a usar por padrão' })
             .setRequired(true)
             .addChoices(...SERVER_CHOICES)
+        )
+        .addStringOption(opt =>
+          opt
+            .setName('modo')
+            .setDescription('/recent and /rs default: VN, RX, or combined (unchanged if omitted)')
+            .setDescriptionLocalizations({ 'pt-BR': 'Padrão do /recent e /rs: VN, RX, ou combinado (mantém se omitido)' })
+            .setRequired(false)
+            // Mesmas 3 choices de recent.js (modo:) — mantidas em sincronia à
+            // mão porque MODO_CHOICES não pode morar em recentMerge.js: aquele
+            // módulo é de propósito puro, sem nada de Discord (ver seu topo).
+            .addChoices(
+              { name: 'VN only', value: 'vn', name_localizations: { 'pt-BR': 'Só VN' } },
+              { name: 'RX only', value: 'rx', name_localizations: { 'pt-BR': 'Só RX' } },
+              { name: 'Both (VN+RX)', value: 'both', name_localizations: { 'pt-BR': 'Ambos (VN+RX)' } },
+            )
         )
     ),
 
@@ -95,16 +116,18 @@ module.exports = {
 
       const preferred = getPreferredServer(interaction.user.id) ?? osu.DEFAULT_MODE;
       const preferredNs = linkNamespace(preferred);
+      const preferredModo = modoLabel(getPreferredModo(interaction.user.id));
 
-      const lines = links.map(l =>
-        s.link_status_line(
-          // Se o preferido é RX, mostra "Daycore RX" na linha do Daycore para
-          // a pessoa saber qual modo vai ser usado por padrão.
-          l.namespace === preferredNs ? osu.getModeLabel(preferred) : namespaceLabel(l.namespace),
-          l.osu_user,
-          l.namespace === preferredNs
-        )
-      );
+      const lines = links.map(l => {
+        const isPreferred = l.namespace === preferredNs;
+        // Se o preferido é RX, mostra "Daycore RX" na linha do Daycore para a
+        // pessoa saber qual modo vai ser usado por padrão; com uma preferência
+        // de modo salva (/link default modo:), o "(VN+RX)" some junto.
+        const label = isPreferred
+          ? `${osu.getModeLabel(preferred)}${preferredModo ? ` (${preferredModo})` : ''}`
+          : namespaceLabel(l.namespace);
+        return s.link_status_line(label, l.osu_user, isPreferred);
+      });
 
       return interaction.reply({
         content: `${s.link_status_header}\n${lines.join('\n')}\n\n-# ${s.link_status_hint}`,
@@ -132,6 +155,7 @@ module.exports = {
 
     if (sub === 'default') {
       const server = interaction.options.getString('server');
+      const modo   = interaction.options.getString('modo'); // 'vn' | 'rx' | 'both' | null
 
       // Só faz sentido apontar o padrão para um servidor onde há link.
       if (!getLink(interaction.user.id, server)) {
@@ -139,7 +163,17 @@ module.exports = {
       }
 
       setPreferredServer(interaction.user.id, server);
-      return interaction.reply({ content: s.link_default_set(osu.getModeLabel(server)), flags: MessageFlags.Ephemeral });
+      // Sem `modo:` no comando, a preferência salva antes continua — só troca
+      // quando a pessoa pede explicitamente (ver /recent, que lê daqui).
+      if (modo) setPreferredModo(interaction.user.id, modo);
+
+      const label = modo ? modoLabel(modo) : modoLabel(getPreferredModo(interaction.user.id));
+      return interaction.reply({
+        content: label
+          ? s.link_default_set_modo(osu.getModeLabel(server), label)
+          : s.link_default_set(osu.getModeLabel(server)),
+        flags: MessageFlags.Ephemeral,
+      });
     }
 
     // Explícito, e não como "tudo que sobrou".

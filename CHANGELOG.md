@@ -13,6 +13,10 @@ Até aqui, quem jogava nos dois leaderboards de um servidor com Relax (Daycore, 
   - Combinar é **opção**, não default: sem `modo:`, o comando busca só a chave que `server:` resolveu (raiz vira VN, `_rx` continua RX), igual sempre foi. A primeira versão deste recurso mesclava por padrão pra quem chegava pela chave raiz — surpreendia quem só queria a lista de sempre, então virou `modo: both` explícito, ao lado de `vn`/`rx` pra filtrar pra um só lado.
   - Servidor sem Relax (Bancho oficial, ou um privado sem `RELAX=true`) não muda em nada: sem par, é a mesma busca única de sempre.
 
+- **`/link default` agora também grava a preferência de modo.** [`db/users.js`](src/db/users.js), [`db/schema.js`](src/db/schema.js), [`db/migrations.js`](src/db/migrations.js), [`link.js`](src/commands/link.js), [`recent.js`](src/commands/recent.js)
+  - `modo:` no `/recent`/`/rs` só valia naquele comando — quem queria VN+RX combinado por padrão tinha que repetir a opção toda vez, porque `/link` só guardava o servidor, nunca o modo. Coluna nova `users.preferred_modo` ('vn'/'rx'/'both'/NULL), lida como fallback quando o comando não passa `modo:` explícito.
+  - `/link status` mostra a preferência salva junto do servidor padrão (ex: "Daycore (VN+RX)  ⭐ *(padrão)*").
+
 ## 🐛 Correções
 
 - **A mesclagem não funcionava em nenhum servidor bancho.py** — que são justamente os alvos da funcionalidade. [`recentMerge.js`](src/recentMerge.js)

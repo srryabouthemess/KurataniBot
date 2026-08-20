@@ -160,6 +160,7 @@ module.exports = ({ ADMIN }) => ({
     `You can have one link per server and change the default with \`/link default\`.`,
   link_error:              '❌ An error occurred while verifying the player.',
   link_default_set:        (label) => `✅ Default server set to **${label}**.`,
+  link_default_set_modo:   (label, modo) => `✅ Default server set to **${label}**, mode **${modo}**.`,
   link_default_missing:    (label) => `❌ You have no link on **${label}**. Use \`/link set\` on that server first.`,
   no_link_for_server:      (label) =>
     `❌ You have no link on **${label}**. Use \`/link set\` to link your account on that server, ` +

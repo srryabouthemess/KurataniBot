@@ -135,6 +135,21 @@ test('mergeRecent', async t => {
   });
 });
 
+// ─── modoLabel ──────────────────────────────────────────────────────────────
+
+test('modoLabel', async t => {
+  await t.test('rótulo curto de cada modo válido', () => {
+    assert.equal(recentMerge.modoLabel('vn'), 'VN');
+    assert.equal(recentMerge.modoLabel('rx'), 'RX');
+    assert.equal(recentMerge.modoLabel('both'), 'VN+RX');
+  });
+
+  await t.test('sem preferência (null) ou valor desconhecido, sem rótulo', () => {
+    assert.equal(recentMerge.modoLabel(null), null);
+    assert.equal(recentMerge.modoLabel('lixo'), null);
+  });
+});
+
 // ─── fetchEach ──────────────────────────────────────────────────────────────
 
 test('fetchEach', async t => {

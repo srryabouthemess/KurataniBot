@@ -1,8 +1,9 @@
 /**
  * db/users.js
- * Links de conta osu!, servidor preferido e idioma.
+ * Links de conta osu!, servidor preferido, modo preferido (VN/RX/combinado)
+ * e idioma.
  *
- * O que estas três coisas têm em comum: são preferências de uma pessoa, e o
+ * O que estas quatro coisas têm em comum: são preferências de uma pessoa, e o
  * bot as lê em praticamente todo comando.
  */
 
@@ -107,6 +108,26 @@ function getPreferredServer(discordId) {
   return salvo && servers.has(salvo) ? salvo : null;
 }
 
+// ─── Modo preferido (VN/RX/combinado) ──────────────────────────────────────────
+
+const MODOS_VALIDOS = new Set(['vn', 'rx', 'both']);
+
+/** Grava a preferência de modo do /recent e /rs, ou limpa com `null`. */
+function setPreferredModo(discordId, modo) {
+  const valor = MODOS_VALIDOS.has(modo) ? modo : null;
+  db.prepare(`
+    INSERT INTO users (discord_id, preferred_modo) VALUES (?, ?)
+    ON CONFLICT(discord_id) DO UPDATE SET preferred_modo = excluded.preferred_modo
+  `).run(discordId, valor);
+}
+
+/** A preferência de modo salva, ou null se nunca foi definida (ou é inválida). */
+function getPreferredModo(discordId) {
+  const salvo = db.prepare('SELECT preferred_modo FROM users WHERE discord_id = ?')
+    .get(discordId)?.preferred_modo ?? null;
+  return MODOS_VALIDOS.has(salvo) ? salvo : null;
+}
+
 // ─── Idioma do usuário ────────────────────────────────────────────────────────
 
 function setUserLang(discordId, lang) {
@@ -148,6 +169,7 @@ module.exports = {
   linkNamespace,
   setLink, getLink, getAllLinks, removeLink,
   setPreferredServer, getPreferredServer,
+  setPreferredModo, getPreferredModo,
   setUserLang, getUserLang, removeUserLang,
   setServerLang, getServerLang, removeServerLang,
 };

@@ -173,6 +173,7 @@ module.exports = ({ ADMIN }) => ({
     `Você pode ter um link por servidor e trocar o padrão com \`/link default\`.`,
   link_error:              '❌ Ocorreu um erro ao verificar o jogador.',
   link_default_set:        (label) => `✅ Servidor padrão definido para **${label}**.`,
+  link_default_set_modo:   (label, modo) => `✅ Servidor padrão definido para **${label}**, modo **${modo}**.`,
   link_default_missing:    (label) => `❌ Você não tem link no **${label}**. Use \`/link set\` nesse servidor primeiro.`,
   no_link_for_server:      (label) =>
     `❌ Você não tem link no **${label}**. Use \`/link set\` para vincular sua conta desse servidor, ` +
