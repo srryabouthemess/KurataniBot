@@ -92,6 +92,42 @@ test('mergeRecent', async t => {
     const out = recentMerge.mergeRecent([{ mode: 'official', scores: vn }], 50);
     assert.ok(out.every(s => s._mode === 'official'));
   });
+
+  // Regressão: `osu.getRecentScores` devolve o score CRU em bancho.py, e cru
+  // quer dizer data em `play_time`, não `created_at` — a normalização só
+  // acontece depois, dentro do `enrichScores` de cada página (ver
+  // banchoPyApi.js). Ordenar lendo só `created_at` faz `new Date(undefined)`
+  // virar `Invalid Date`, toda comparação dá `NaN`, e o `.sort()` não
+  // reordena nada — a "mesclagem" vira só VN concatenado com RX. Com este
+  // teste sozinho a suíte já cairia no código de antes desta correção.
+  await t.test('mescla score cru de bancho.py (play_time) com score já normalizado (created_at) pela ordem cronológica real', () => {
+    const vnNormalizado = [
+      { id: 1, created_at: '2026-08-20T10:00:00Z' },
+      { id: 2, created_at: '2026-08-20T08:00:00Z' },
+    ];
+    // Sem `created_at` nenhum — é assim que `getRecentScores` devolve uma
+    // play de bancho.py antes de passar pelo enrichScores.
+    const rxCru = [
+      { id: 3, play_time: '2026-08-20 09:00:00' },
+    ];
+
+    const out = recentMerge.mergeRecent(
+      [{ mode: 'daycore', scores: vnNormalizado }, { mode: 'daycore_rx', scores: rxCru }],
+      50,
+    );
+    assert.deepEqual(out.map(s => s.id), [1, 3, 2]);
+  });
+
+  await t.test('score sem created_at e sem play_time vai pro fim da lista, não pro topo', () => {
+    const semData = { id: 9 };
+    const comData = { id: 1, created_at: '2026-08-20T08:00:00Z' };
+
+    const out = recentMerge.mergeRecent(
+      [{ mode: 'daycore', scores: [semData, comData] }],
+      50,
+    );
+    assert.deepEqual(out.map(s => s.id), [1, 9]);
+  });
 });
 
 // ─── fetchEach ──────────────────────────────────────────────────────────────
@@ -105,18 +141,37 @@ test('fetchEach', async t => {
     ]);
   });
 
-  await t.test('uma falha, a outra ainda responde', async () => {
-    const out = await recentMerge.fetchEach(['daycore', 'daycore_rx'], async mode => {
-      if (mode === 'daycore_rx') throw new Error('RX fora do ar');
-      return [{ mode }];
-    });
+  await t.test('uma falha, a outra ainda responde — e a falha vai pro log, não some calada', async () => {
+    // Sem o log, "RX fora do ar" e "esse jogador não tem play em RX" ficam
+    // indistinguíveis: as duas devolvem só a lista de VN.
+    const original = console.error;
+    const linhas = [];
+    console.error = (...parts) => linhas.push(parts.join(' '));
+
+    let out;
+    try {
+      out = await recentMerge.fetchEach(['daycore', 'daycore_rx'], async mode => {
+        if (mode === 'daycore_rx') throw new Error('RX fora do ar');
+        return [{ mode }];
+      });
+    } finally {
+      console.error = original;
+    }
+
     assert.deepEqual(out, [{ mode: 'daycore', scores: [{ mode: 'daycore' }] }]);
+    assert.ok(linhas.some(l => l.includes('RX fora do ar')), 'a falha parcial deveria ter sido logada');
   });
 
   await t.test('as duas falham, relança o primeiro erro', async () => {
-    await assert.rejects(
-      recentMerge.fetchEach(['daycore', 'daycore_rx'], async () => { throw new Error('fora do ar'); }),
-      /fora do ar/,
-    );
+    const original = console.error;
+    console.error = () => {};
+    try {
+      await assert.rejects(
+        recentMerge.fetchEach(['daycore', 'daycore_rx'], async () => { throw new Error('fora do ar'); }),
+        /fora do ar/,
+      );
+    } finally {
+      console.error = original;
+    }
   });
 });

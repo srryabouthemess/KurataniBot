@@ -11,6 +11,8 @@
  */
 
 const servers = require('./servers');
+const { dateOf } = require('./topFilter');
+const { logErrorOnce } = require('./logger');
 
 /**
  * O par VN/RX do mesmo namespace que uma chave pertence.
@@ -19,7 +21,7 @@ const servers = require('./servers');
  * @returns {{vn: string, rx: string|null, resolvedIsRx: boolean}}
  */
 function pairFor(key) {
-  const resolved = servers.resolveKey(key) ?? key;
+  const resolved = servers.resolveKey(key) ?? String(key ?? '');
   const resolvedIsRx = resolved.endsWith('_rx');
   const root = resolvedIsRx ? resolved.slice(0, -3) : resolved;
 
@@ -56,6 +58,15 @@ function keysToFetch(pair, modoOption) {
  * no limite. Cada score ganha um `_mode` com a chave de onde veio — inclusive
  * quando só há uma chave, pra quem consome não precisar de um caso especial.
  *
+ * A data lê as duas formas (ver `topFilter.dateOf`) porque o que chega aqui é
+ * o resultado CRU de `osu.getRecentScores` — em bancho.py isso é `play_time`,
+ * não `created_at`; a normalização só acontece depois, dentro do
+ * `enrichScores` de cada página. Ler só `created_at` faria a comparação virar
+ * `Invalid Date` para todo mundo, e um `.sort()` onde toda comparação dá `NaN`
+ * não reordena nada — a "mesclagem" era só VN concatenado com RX. Score sem
+ * data (nenhum dos dois campos) vai para o FIM, não para o topo, mesmo padrão
+ * do `arrange()` do topFilter.
+ *
  * @param {{mode: string, scores: object[]}[]} porModo
  * @param {number} limit
  * @returns {object[]}
@@ -64,8 +75,15 @@ function mergeRecent(porModo, limit) {
   const marcados = porModo.flatMap(({ mode, scores }) =>
     scores.map(score => ({ ...score, _mode: mode })));
 
-  marcados.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-  return marcados.slice(0, limit);
+  const comData = [];
+  const semData = [];
+  for (const item of marcados) {
+    if (dateOf(item) === null) semData.push(item);
+    else comData.push(item);
+  }
+  comData.sort((a, b) => dateOf(b) - dateOf(a));
+
+  return [...comData, ...semData].slice(0, limit);
 }
 
 /**
@@ -74,12 +92,20 @@ function mergeRecent(porModo, limit) {
  * `fetchPlayer` em userLink.js pra separar "sem esse jogador" de "erro de
  * rede").
  *
+ * Uma falha parcial ainda vai pro log (uma vez por causa, ver
+ * `logErrorOnce`) — sem isso, "RX fora do ar" e "esse jogador não tem play em
+ * RX" ficam indistinguíveis: as duas devolvem a lista da outra chave, quieto.
+ *
  * @param {string[]} keys
  * @param {(mode: string) => Promise<object[]>} fetchOne
  * @returns {Promise<{mode: string, scores: object[]}[]>}
  */
 async function fetchEach(keys, fetchOne) {
   const settled = await Promise.allSettled(keys.map(fetchOne));
+
+  settled.forEach((result, i) => {
+    if (result.status === 'rejected') logErrorOnce(`recentMerge:${keys[i]}`, result.reason);
+  });
 
   const ok = keys
     .map((mode, i) => ({ mode, result: settled[i] }))

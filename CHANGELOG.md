@@ -2,6 +2,32 @@
 
 ---
 
+# Sessão de 2026-08-20 (/recent e /rs juntam VN e RX)
+
+Até aqui, quem jogava nos dois leaderboards de um servidor com Relax (Daycore, EZPP) via a lista recente pela metade: `/recent` e `/rs` mostravam só o VN ou só o RX, dependendo de qual servidor estava ligado, e a outra metade das plays ficava invisível a não ser que a pessoa trocasse de servidor no meio da sessão.
+
+## ✨ Novos recursos
+
+- **`/recent` e `/rs` combinam VN e RX por padrão**, em qualquer servidor com variante Relax. [`recentMerge.js`](src/recentMerge.js), [`recent.js`](src/commands/recent.js)
+  - As duas listas são buscadas em paralelo e juntadas por data, uma página por play — cada uma sabendo de qual leaderboard veio (`_mode`), pro `/score` sem argumento continuar procurando no lugar certo.
+  - A opção `modo:` filtra pra um só lado quando é isso que se quer (`vn`/`rx`). Quem já apontava direto pro `_rx` (por `server:` ou por `/link default`) continua vendo só RX por padrão — combinar é o comportamento novo, mas só pra quem chega pela chave raiz.
+  - Servidor sem Relax (Bancho oficial, ou um privado sem `RELAX=true`) não muda em nada: sem par, é a mesma busca única de sempre.
+
+## 🐛 Correções
+
+- **A mesclagem não funcionava em nenhum servidor bancho.py** — que são justamente os alvos da funcionalidade. [`recentMerge.js`](src/recentMerge.js)
+  - `mergeRecent` ordenava por `created_at`, mas `osu.getRecentScores` devolve o score **cru** pra bancho.py: a data mora em `play_time`, e `created_at` só existe depois do `enrichScores`, que roda por página — depois da mesclagem, não antes. `new Date(undefined)` é `Invalid Date`, toda comparação do `.sort()` dava `NaN`, e um comparador que sempre devolve algo tratado como zero não reordena nada: a "mesclagem" era as 50 plays de VN concatenadas com as 50 de RX, cortadas em 50 — RX só aparecia se o jogador tivesse menos de 50 plays em VN.
+  - A correção troca a leitura direta de `created_at` pelo `dateOf()` que o `topFilter.js` já tinha, pronto pras duas formas (normalizada e crua) — sem duplicar essa lógica. Score sem nenhuma das duas datas vai pro fim da lista, não pro topo, mesmo padrão do `arrange()` do próprio `topFilter`.
+  - Pego na revisão final do branch, com teste que alimenta o `mergeRecent` com um score no formato cru de bancho.py (`play_time`) misturado a um já normalizado (`created_at`) e confere a ordem cronológica real — o teste cai sozinho se a leitura voltar a ser só `created_at`.
+
+- **A falha de uma das duas chaves (VN ou RX) sumia sem deixar rastro.** [`recentMerge.js`](src/recentMerge.js)
+  - `fetchEach` já tolerava uma das duas rejeitar, mas não registrava a rejeição em lugar nenhum — "RX fora do ar" virava indistinguível de "esse jogador não tem play em RX". Agora vai pro log (`logErrorOnce`, uma vez por causa, mesmo padrão do `osuClient.js`).
+
+- **As labels em português da opção `modo:` nunca chegavam ao Discord.** [`recent.js`](src/commands/recent.js)
+  - `.addChoices()` lê a chave crua da API do Discord (`name_localizations`, com underscore), não `nameLocalizations` — o validador do builder ignora chave desconhecida em silêncio, em vez de acusar erro. A opção funcionava, só que sempre em inglês pra quem tem o Discord em pt-BR. Corrigido pro nome que o resto do bot já usa (`topplays.js`).
+
+---
+
 # Sessão de 2026-08-16 (o /map e o /simulate discordavam)
 
 Os dois comandos respondem a mesma pergunta — quanto paga um FC de 98% neste mapa — e vinham respondendo números diferentes. A causa é de uma linha, e ela é do tipo que nenhuma tela denuncia: uma **opção renomeada que o chamador não acompanhou**.

@@ -42,8 +42,8 @@ module.exports = {
         .setDescriptionLocalizations({ 'pt-BR': 'Filtra VN/RX quando o servidor tem os dois (padrão: combinado)' })
         .setRequired(false)
         .addChoices(
-          { name: 'VN only', value: 'vn', nameLocalizations: { 'pt-BR': 'Só VN' } },
-          { name: 'RX only', value: 'rx', nameLocalizations: { 'pt-BR': 'Só RX' } },
+          { name: 'VN only', value: 'vn', name_localizations: { 'pt-BR': 'Só VN' } },
+          { name: 'RX only', value: 'rx', name_localizations: { 'pt-BR': 'Só RX' } },
         )
     ),
 
@@ -104,7 +104,12 @@ module.exports = {
 
         return new EmbedBuilder()
           // Link de perfil: mesmo em VN e RX (ver banchoPyApi/rippleApi
-          // userUrl), então continua no modo do COMANDO, não da play.
+          // userUrl), então continua no modo do COMANDO, não da play. O
+          // author() também renderiza pp e rank global do perfil buscado
+          // nesse modo — então numa lista combinada, uma play de RX aparece
+          // com o pp/rank de VN no cabeçalho. É de propósito: um cabeçalho
+          // estável para a lista inteira, em vez de um que pisca a cada
+          // página conforme a play vem de VN ou de RX.
           .setAuthor(playEmbed.author(user, mode, s))
           .setTitle(bloco.title)
           .setURL(bloco.url)
