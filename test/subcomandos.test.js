@@ -51,6 +51,9 @@ const COMANDOS = {
   nominate: require('../src/commands/nominate'),
   moderate: require('../src/commands/moderate'),
   staff:    require('../src/commands/staff'),
+  // /wipe fica de fora de propósito: não tem subcomando, então nenhuma das
+  // duas camadas se aplica a ele.
+  role:     require('../src/commands/role'),
 };
 
 test.after(() => {

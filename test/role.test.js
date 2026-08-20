@@ -101,12 +101,21 @@ test('privLabel de WHITELISTED (sem staff) devolve "Whitelisted", não "Player"'
   assert.equal(daycore.privLabel(priv), 'Whitelisted');
 });
 
-test('privLabel de UNRESTRICTED puro continua sendo "Player"', () => {
-  assert.equal(daycore.privLabel(daycore.Privileges.UNRESTRICTED), 'Player');
+test('privLabel de uma conta comum (UNRESTRICTED | VERIFIED) continua sendo "Player"', () => {
+  // UNRESTRICTED sozinho não é conta nenhuma: o bancho.py liga VERIFIED no
+  // primeiro login, e toda conta ativa tem os dois. Testar só UNRESTRICTED
+  // dava falsa segurança — não pegaria o caso em que privLabel esquecesse de
+  // filtrar VERIFIED e mostrasse "Verified" para todo jogador comum.
+  const priv = daycore.Privileges.UNRESTRICTED | daycore.Privileges.VERIFIED;
+  assert.equal(daycore.privLabel(priv), 'Player');
 });
 
-test('privNames devolve Player quando não há cargo nenhum', () => {
-  assert.deepEqual(daycore.privNames(daycore.Privileges.UNRESTRICTED), ['Player']);
+test('privNames da MESMA conta comum inclui Verified — a assimetria que privLabel esconde de propósito', () => {
+  // privLabel filtra VERIFIED (é estado, não cargo — mesmo motivo de
+  // UNRESTRICTED). privNames não filtra: o /role liga e desliga VERIFIED, e o
+  // /moderate check precisa continuar mostrando essa mudança.
+  const priv = daycore.Privileges.UNRESTRICTED | daycore.Privileges.VERIFIED;
+  assert.deepEqual(daycore.privNames(priv), ['Verified']);
 });
 
 test('verifyPriv confirma pela releitura, e desiste quando o bit não aparece', async () => {
@@ -147,6 +156,17 @@ test('fica fora do modo texto', () => {
   // A resposta expõe o privilégio de terceiro; em texto a flag de efêmero some
   // e isso vira mensagem no canal (ver prefix/spec.js).
   assert.equal(role.prefix?.slashOnly, true);
+});
+
+test('o privilégio exigido vem do cargo escolhido, não de um valor fixo', () => {
+  // Se esta linha travar num Privileges.* fixo (o mais provável seria
+  // ADMINISTRATOR, que já basta para a maioria dos cargos), um Administrator
+  // passaria a poder conceder `developer` a um cúmplice — o auto-refuso
+  // (mod_cannot_self) só barra a própria conta dele, não a de outra pessoa.
+  // Mesmo idioma de test/wipe.test.js, primeiro teste do arquivo.
+  const fonte = require('fs').readFileSync(require.resolve('../src/commands/role'), 'utf8');
+  assert.match(fonte, /resolveStaff\(interaction, role\.requires/);
+  assert.doesNotMatch(fonte, /resolveStaff\(interaction, daycore\.Privileges\./);
 });
 
 test('o /moderate check lista todos os cargos, não só o topo', () => {

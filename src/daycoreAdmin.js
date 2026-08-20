@@ -410,6 +410,14 @@ function hasPriv(priv, flag) {
  * UNRESTRICTED fica de fora de propósito: ele não é cargo, é estado de
  * restrição, e o `/moderate check` já o mostra em campo próprio. Listá-lo aqui
  * faria todo jogador comum aparecer com um "cargo" chamado Unrestricted.
+ *
+ * VERIFIED fica — mesmo sendo, pela mesma razão acima, um bit que toda conta
+ * que já logou tem (bancho.py seta sozinho no primeiro login). A diferença é
+ * que o `/role` concede e remove `verified` de propósito, então o
+ * `/moderate check` PRECISA conseguir mostrar esse bit específico mudando. Não
+ * tire VERIFIED daqui achando que é a mesma limpeza do UNRESTRICTED acima —
+ * quem quer um rótulo único sem essa poluição usa `privLabel`, que filtra só
+ * ali embaixo.
  */
 const PRIV_LABELS = [
   [Privileges.DEVELOPER,       'Developer'],
@@ -443,12 +451,28 @@ function privNames(priv) {
 }
 
 /**
- * Rótulo do cargo mais alto, só para exibição.
+ * Rótulo de UM cargo só, só para exibição — para frases que pedem um único
+ * nome, como "seu cargo lá: **X**" (`admin_missing_priv`, em staffGuard.js) ou
+ * "alvo já é staff: X" (`mod_target_is_staff`, em moderate.js e role.js), e os
+ * quatro rótulos do /staff (staff.js).
  *
- * Fonte única do nome: é daqui (via `privNames` que lê `PRIV_LABELS`) que sai
- * tanto o texto do `/moderate check` quanto o rótulo das choices do `/role`.
- * Dois lugares com o nome do mesmo bit divergiriam no primeiro que alguém
- * renomeasse — não há dois.
+ * NÃO é fonte do texto do `/moderate check` nem dos rótulos das choices do
+ * `/role` — isso aqui era verdade do `PRIV_LABELS`/`labelOfBit` ali em cima, e
+ * este parágrafo tinha sido copiado de lá por engano. O `/moderate check` lê
+ * `privNames` direto (a lista inteira, sem passar por `privLabel`), e as
+ * choices do `/role` leem `labelOfBit` direto — nenhum dos dois passa por
+ * aqui, então um rótulo esquisito só de `privLabel` não afeta os dois.
+ *
+ * ── Por que filtra VERIFIED na mão, e UNRESTRICTED nem precisa ─────────────────
+ * UNRESTRICTED nunca aparece aqui porque nem está em PRIV_LABELS — `privNames`
+ * já não o lista. VERIFIED está, porque é bit real que o /role liga e desliga,
+ * e o `/moderate check` precisa mostrar essa mudança. Só que, como estado que
+ * toda conta logada tem, é exatamente o mesmo caso de UNRESTRICTED para quem
+ * só quer o cargo que distingue a pessoa — daí o filtro aqui, e não em
+ * `privNames`: tirar de `privNames` esconderia do `/moderate check` que
+ * VERIFIED mudou; tirar só daqui deixa a conta comum (UNRESTRICTED | VERIFIED)
+ * de volta como "Player" nas frases de rótulo único, sem afetar quem lê a
+ * lista inteira.
  *
  * ── Mudança de comportamento em relação ao antecessor ──────────────────────────
  * O antecessor era uma cadeia if/else que só reconhecia os quatro cargos de
@@ -457,14 +481,15 @@ function privNames(priv) {
  *   - Quem tem WHITELISTED (mas não nada mais acima) aparecia como "Player",
  *     agora aparece como "Whitelisted".
  *   - Quem tem SUPPORTER ou PREMIUM agora aparece com o cargo, não "Player".
- *   - Quem tem UNRESTRICTED só (o comum) continua sendo "Player".
+ *   - Quem só tem UNRESTRICTED | VERIFIED — toda conta que já logou —
+ *     continua sendo "Player".
  * O `/moderate check` lê assim a priv inteira e identifica o cargo de verdade,
  * sem perder os que ficavam ocultos. O `/moderate restrict` mira em staff
  * definido no servidor (staff mask), então nenhum cargo novo nessa lista o
  * afeta.
  */
 function privLabel(priv) {
-  return privNames(priv)[0];
+  return privNames(priv & ~Privileges.VERIFIED)[0];
 }
 
 /**

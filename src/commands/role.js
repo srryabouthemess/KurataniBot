@@ -91,10 +91,20 @@ module.exports = {
     }
 
     const roleKey = interaction.options.getString('role');
-    const role    = daycore.ROLES[roleKey];
     // O Discord só envia choice declarada, e o modo texto nem chega aqui
-    // (slashOnly). Sobra o chamador que não é nenhum dos dois.
-    if (!role) throw new Error(`/role: cargo fora da tabela: "${roleKey}"`);
+    // (slashOnly). Sobra o chamador que não é nenhum dos dois — daí o `throw`
+    // em vez de uma resposta educada.
+    //
+    // `hasOwn`, e não `!daycore.ROLES[roleKey]`: `ROLES['constructor']`
+    // devolveria `Object`, herdado do protótipo — truthy, então `!role` não
+    // disparava. O chamador caía discreto em `role.requires === undefined`, a
+    // checagem de privilégio logo abaixo recusava por não bater com nenhum
+    // bit, e quem via a resposta lia "sem permissão" (admin_missing_priv) em
+    // vez do erro que de fato aconteceu — chave fora da tabela.
+    if (!Object.hasOwn(daycore.ROLES, roleKey)) {
+      throw new Error(`/role: cargo fora da tabela: "${roleKey}"`);
+    }
+    const role = daycore.ROLES[roleKey];
 
     // O cargo escolhido é que decide o privilégio exigido — ver ROLES.
     const staff = await resolveStaff(interaction, role.requires, s);
