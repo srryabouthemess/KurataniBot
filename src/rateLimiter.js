@@ -18,6 +18,7 @@
  */
 
 const metrics = require('./metrics');
+const servers = require('./servers');
 
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -84,7 +85,7 @@ class LeakyBucket {
  * serviços da comunidade, não uma API que se contratou. Quando o osu! cai, 2/s
  * ainda dá 120 mapas por minuto, muito mais do que uma página de /topplays pede.
  */
-const BUCKETS = {
+const BUCKETS_FIXOS = {
   osuApi:     8,  // GET/POST em osu.ppy.sh/api/v2
   osuMapFile: 4,  // download de .osu em osu.ppy.sh/osu/{id}
   osuOAuth:   1,  // /oauth/token
@@ -93,9 +94,9 @@ const BUCKETS = {
 };
 
 /**
- * Servidores privados usam `server:<namespace>`, criado sob demanda: são hosts
- * diferentes, com limites independentes — um servidor lento não tem por que
- * segurar a fila do outro.
+ * Servidores privados usam `server:<namespace>`, um balde por servidor
+ * configurado: são hosts diferentes, com limites independentes — um servidor
+ * lento não tem por que segurar a fila do outro.
  *
  * **A chave é o NAMESPACE, e não a chave do servidor.** A variante RX é o mesmo
  * cadastro no mesmo host (ver servers.js): com uma chave por variante, `daycore`
@@ -126,6 +127,35 @@ const BUCKETS = {
  */
 const PER_SERVER = 10;
 
+/**
+ * Um balde para cada servidor privado que o `.env` declarou.
+ *
+ * São declarados aqui, e não criados na primeira chamada, porque `BUCKETS` é
+ * lido de fora como a lista do que existe — é assim que beatmapEspelhos.test.js
+ * confere que todo host de download de `.osu` tem balde ANTES de qualquer
+ * download acontecer. Com o balde nascendo só no `acquire`, o espelho de um
+ * servidor privado (`SERVER_<chave>_MAPFILES`, ver HOSTS em beatmapFile.js)
+ * ficava de fora dessa lista, e a única hora em que isso apareceria é durante
+ * uma queda do osu! — que é justamente quando esse espelho passa a ser usado.
+ *
+ * A chave é o NAMESPACE, pelo mesmo motivo do bloco acima: a variante RX é o
+ * mesmo cadastro no mesmo host, então as duas entradas do registro dividem um
+ * balde só. O oficial fica de fora: ele não usa `server:`, e sim os baldes
+ * `osu*` daqui de cima.
+ */
+function baldesDeServidores() {
+  const nomes = servers.all()
+    .filter(server => server.kind !== 'official')
+    .map(server => `server:${server.namespace}`);
+
+  return Object.fromEntries([...new Set(nomes)].map(nome => [nome, PER_SERVER]));
+}
+
+const BUCKETS = {
+  ...BUCKETS_FIXOS,
+  ...baldesDeServidores(),
+};
+
 const buckets = Object.fromEntries(
   Object.entries(BUCKETS).map(([name, perSecond]) => [name, new LeakyBucket(name, perSecond)])
 );
@@ -137,6 +167,8 @@ const buckets = Object.fromEntries(
 function acquire(site) {
   let bucket = buckets[site];
 
+  // Rede de segurança: todo servidor do registro já tem balde em BUCKETS, então
+  // isto só pega um `server:` de namespace que não veio de servers.js.
   if (!bucket && String(site).startsWith('server:')) {
     bucket = buckets[site] = new LeakyBucket(site, PER_SERVER);
   }
