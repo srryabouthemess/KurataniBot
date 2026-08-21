@@ -3,7 +3,7 @@ const osu = require('../osuClient');
 const servers = require('../servers');
 const modo = require('../modo');
 const { getLink } = require('../db');
-const { resolveServer } = require('../userLink');
+const { resolveServer, resolveSecondServer } = require('../userLink');
 const { md } = require('../markdown');
 const { t } = require('../i18n');
 const { logError } = require('../logger');
@@ -38,7 +38,11 @@ const short = (str, max) => {
 };
 
 module.exports = {
-  data: modo.addOption(new SlashCommandBuilder()
+  // Os dois lados perguntam servidor e modo separadamente: o `server2:` é o que
+  // deixa comparar jogadores de servidores diferentes, e vazio ele herda o do
+  // primeiro lado (ver resolveSecondServer). A ordem importa para o modo texto,
+  // que casa token com opção na ordem de declaração — os nicks primeiro.
+  data: modo.addOption(modo.addOption(new SlashCommandBuilder()
     .setName('compare')
     .setDescription("Compare two players' statistics")
     .setDescriptionLocalizations({ 'pt-BR': 'Compara as estatísticas de dois jogadores' })
@@ -64,11 +68,21 @@ module.exports = {
     .addStringOption(option =>
       option
         .setName('server')
-        .setDescription('Which server to use? (default: your linked server)')
-        .setDescriptionLocalizations({ 'pt-BR': 'Qual servidor usar? (padrão: o do seu link)' })
+        .setDescription('First player: which server? (default: your linked server)')
+        .setDescriptionLocalizations({ 'pt-BR': 'Primeiro jogador: qual servidor? (padrão: o do seu link)' })
         .setRequired(false)
         .addChoices(...servers.rootChoices())
-    )),
+    )
+    .addStringOption(option =>
+      option
+        .setName('server2')
+        .setDescription("Second player: which server? (default: the first player's)")
+        .setDescriptionLocalizations({ 'pt-BR': 'Segundo jogador: qual servidor? (padrão: o do primeiro)' })
+        .setRequired(false)
+        .addChoices(...servers.rootChoices())
+    ),
+  { para: { en: 'First player', pt: 'Primeiro jogador' } }),
+  { name: 'modo2', para: { en: 'Second player', pt: 'Segundo jogador' } }),
 
   async execute(interaction) {
     const s        = t(interaction);
@@ -77,23 +91,36 @@ module.exports = {
     // Mesma resolução do resolvePlayer (opção > preferido > padrão, com o
     // `modo:` aplicado por cima), sem exigir link dos jogadores comparados.
     const mode     = resolveServer(interaction);
+    const mode2    = resolveSecondServer(interaction, mode);
+    const cruzada  = mode2 !== mode;
     const link     = getLink(interaction.user.id, mode);
 
     // Prefere o ID numérico: sobrevive a troca de nick no osu!.
     let u1Name = manualU1 ?? (link ? (link.osu_id ?? link.osu_user) : null);
-    let u2Name = manualU2;
+    // Sem `user2` numa comparação cruzada, o segundo lado é a conta do autor no
+    // OUTRO servidor: `k!compare -bancho -akatsuki` compara a pessoa com ela
+    // mesma nos dois, que é o caso mais direto de um comando cruzado e não pede
+    // nick nenhum. No mesmo servidor isso não existe — compararia o autor com o
+    // autor —, e ali continua valendo o pedido de sempre.
+    const link2 = cruzada && !manualU2 ? getLink(interaction.user.id, mode2) : null;
+    let u2Name = manualU2 ?? (link2 ? (link2.osu_id ?? link2.osu_user) : null);
 
     if (!u1Name) {
       return interaction.reply({ content: s.compare_need_user1, flags: MessageFlags.Ephemeral });
     }
     if (!u2Name) {
-      return interaction.reply({ content: s.compare_need_user2, flags: MessageFlags.Ephemeral });
+      // Numa cruzada o que falta é o link naquele servidor, e não o nick: a
+      // mensagem que nomeia o servidor e manda usar `/link set` é a que diz o
+      // que fazer. O pedido genérico de nick mandaria digitar o que a pessoa
+      // deliberadamente não digitou.
+      const content = cruzada ? s.no_link_for_server(osu.getModeLabel(mode2)) : s.compare_need_user2;
+      return interaction.reply({ content, flags: MessageFlags.Ephemeral });
     }
 
     await interaction.deferReply();
 
     try {
-      const [u1, u2] = await Promise.all([osu.getUser(u1Name, mode), osu.getUser(u2Name, mode)]);
+      const [u1, u2] = await Promise.all([osu.getUser(u1Name, mode), osu.getUser(u2Name, mode2)]);
       if (!u1 || !u2) return interaction.editReply(s.compare_not_found);
 
       const s1 = u1.statistics;
@@ -151,14 +178,24 @@ module.exports = {
       let table = render(true);
       if (table.width > MOBILE_WIDTH_BUDGET) table = render(false);
 
+      // O rótulo do servidor só aparece quando os dois lados diferem: no caso
+      // comum ele seria a mesma palavra repetida duas vezes, e o rodapé já a
+      // diz. A tabela continua sem ele de qualquer jeito — o orçamento de
+      // largura lá em cima não tem folga para uma palavra por coluna.
+      const label1 = osu.getModeLabel(mode);
+      const label2 = osu.getModeLabel(mode2);
+      const nomeCom = (nome, label) => `**${md(nome)}**${cruzada ? ` (${label})` : ''}`;
+
       const embed = new EmbedBuilder()
         .setColor(0x313338)
         .setTitle(s.compare_title)
         // Nomes completos fora do bloco: como texto normal eles quebram linha
         // sem estragar o alinhamento, e assim um nick de 15 caracteres não
         // alarga a tabela inteira.
-        .setDescription(`**${md(u1.username)}**  ·  **${md(u2.username)}**\n\`\`\`arm\n${table.text}\n\`\`\``)
-        .setFooter({ text: s.compare_footer(interaction.user.username, osu.getModeLabel(mode)) });
+        .setDescription(`${nomeCom(u1.username, label1)}  ·  ${nomeCom(u2.username, label2)}\n\`\`\`arm\n${table.text}\n\`\`\``)
+        .setFooter({
+          text: s.compare_footer(interaction.user.username, cruzada ? `${label1} vs ${label2}` : label1),
+        });
 
       if (u1.avatar_url) embed.setThumbnail(u1.avatar_url);
 
@@ -167,5 +204,13 @@ module.exports = {
       logError('compare', error);
       return safeEditReply(interaction, s.compare_error);
     }
+  },
+
+  // `k!compare kuratani ckz -bancho -akatsuki`: a segunda flag de servidor cai
+  // no segundo lado. Sem isto o parser gravaria as duas no `server` — as duas
+  // opções têm as mesmas choices, e ele resolve pela primeira que casa (ver
+  // `transbordo` em prefix/parseArgs.js).
+  prefix: {
+    flagOverflow: { server: 'server2', modo: 'modo2' },
   },
 };

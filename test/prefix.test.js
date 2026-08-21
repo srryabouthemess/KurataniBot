@@ -13,7 +13,7 @@ const prefixCommands = require('../src/prefixCommands');
 
 const NAMES = [
   'recent', 'rs', 'score', 'c', 'simulate', 'pp',
-  'link', 'language', 'whatif', 'nominate',
+  'link', 'language', 'whatif', 'nominate', 'compare',
 ];
 
 let captured = null;
@@ -99,6 +99,37 @@ test('estilos de argumento', async t => {
     const c = await run('k!rs pudim2 -daycore -rx');
     assert.equal(c.context.options.getString('server'), 'daycore');
     assert.equal(c.context.options.getString('modo'), 'rx');
+  });
+
+  await t.test('flag repetida cai no segundo slot, quando o comando tem um', async () => {
+    // O /compare declara `flagOverflow` (ver prefix/parseArgs.js): `server` e
+    // `server2` têm as MESMAS choices, então sem ele as duas flags gravariam no
+    // `server` e o primeiro servidor sumiria sem aviso.
+    const a = await run('k!compare kuratani ckz -bancho -akatsuki');
+    assert.equal(a.context.options.getString('user1'), 'kuratani');
+    assert.equal(a.context.options.getString('user2'), 'ckz');
+    assert.equal(a.context.options.getString('server'), 'official');
+    assert.equal(a.context.options.getString('server2'), 'akatsuki');
+
+    // Uma flag só não transborda: o segundo lado fica vazio para herdar.
+    const b = await run('k!compare kuratani ckz -akatsuki');
+    assert.equal(b.context.options.getString('server'), 'akatsuki');
+    assert.equal(b.context.options.getString('server2'), null);
+
+    // A composta migra INTEIRA. Migrar só o servidor colocaria o `-rx` no
+    // `modo`, ou seja, o Relax no lado errado da comparação.
+    const c = await run('k!compare kuratani ckz -bancho -daycorerx');
+    assert.equal(c.context.options.getString('server'), 'official');
+    assert.equal(c.context.options.getString('modo'), null);
+    assert.equal(c.context.options.getString('server2'), 'daycore');
+    assert.equal(c.context.options.getString('modo2'), 'rx');
+  });
+
+  await t.test('comando sem segundo slot continua sobrescrevendo', async () => {
+    // O /rs fala de um jogador só e não declara `flagOverflow`; a última flag
+    // ganha, como sempre ganhou.
+    const { context } = await run('k!rs pudim2 -bancho -daycore');
+    assert.equal(context.options.getString('server'), 'daycore');
   });
 
   await t.test('flag booleana, com e sem hífen', async () => {

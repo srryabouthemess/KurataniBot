@@ -14,6 +14,39 @@ const { optionsOf, usageFor } = require('./spec');
 const { coerce, matchChoice, resolveFlag, listFlags } = require('./coerce');
 
 /**
+ * A segunda vez que a mesma flag aparece preenche o slot seguinte, quando o
+ * comando declara um.
+ *
+ * `resolveFlag` devolve a PRIMEIRA opção cuja lista de choices casa com a
+ * palavra. No /compare, `server` e `server2` têm as mesmas choices, então
+ * `k!compare kuratani ckz -bancho -akatsuki` gravaria as duas no `server` e o
+ * Bancho sumiria sem aviso. O comando diz para onde a repetição transborda
+ * (`prefix.flagOverflow`, ver compare.js) e aqui ela é redirecionada.
+ *
+ * O grupo migra INTEIRO ou não migra: `-akatsukirx` é servidor e modo na mesma
+ * palavra, e migrar só o servidor gravaria `server2:akatsuki` com `modo:rx` —
+ * o Relax no lado errado da comparação. Por isso um destino faltando cancela a
+ * migração toda, em vez de partir o par ao meio.
+ *
+ * Sem `flagOverflow` declarado nada disso acontece, e a última flag continua
+ * sobrescrevendo a anterior como sempre — é o que mantém `k!rs fulano -bancho
+ * -akatsuki`, num comando de um jogador só, respondendo sobre o Akatsuki.
+ */
+function transbordo(spec, values, atribuicoes, byName) {
+  const destinos = spec.flagOverflow;
+  if (!destinos) return atribuicoes;
+  if (!atribuicoes.some(({ def }) => values.has(def.name))) return atribuicoes;
+
+  const migrado = [];
+  for (const { def, value } of atribuicoes) {
+    const destino = byName.get(String(destinos[def.name] ?? '').toLowerCase());
+    if (!destino) return atribuicoes;
+    migrado.push({ def: destino, value });
+  }
+  return migrado;
+}
+
+/**
  * Casa os tokens com as opções declaradas no slash command.
  *
  * Aceita os dois estilos, misturados: nomeado (`player:mrekk`, igual ao que se
@@ -68,7 +101,9 @@ async function parseArgs(spec, tokens, message, s) {
             : s.prefix_no_flags(token, usageFor(spec, subcommand)),
         };
       }
-      for (const { def, value } of atribuicoes) values.set(def.name, value);
+      for (const { def, value } of transbordo(spec, values, atribuicoes, byName)) {
+        values.set(def.name, value);
+      }
       continue;
     }
 

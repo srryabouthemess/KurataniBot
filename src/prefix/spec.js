@@ -46,6 +46,9 @@ function buildSpec(command) {
     defaultMemberPermissions: json.default_member_permissions ?? null,
     // Guardas declaradas pelo próprio comando (ver `prefix.guards` no score.js).
     guards: command.prefix?.guards ?? null,
+    // Para onde uma flag repetida transborda, quando o comando tem dois slots
+    // da mesma coisa (ver `transbordo` no parseArgs e o /compare).
+    flagOverflow: command.prefix?.flagOverflow ?? null,
     subcommands: subs.length > 0
       ? new Map(subs.map(sub => [sub.name, sub.options ?? []]))
       : null,

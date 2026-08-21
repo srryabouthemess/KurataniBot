@@ -78,6 +78,12 @@ caso('simulate', 'simulate.js', { map: String(MAPA), mods: 'HDDT', acc: 99 });
 caso('whatif',   'whatif.js',   { player: PLAYERS.official, pp: 500 });
 caso('score',    'score.js',    { player: PLAYERS.official, map: String(MAPA) });
 caso('compare',  'compare.js',  { user1: PLAYERS.official, user2: 'mrekk' });
+// O caso cruzado tem embed próprio — o rótulo do servidor só entra quando os
+// dois lados diferem, então o de cima não o exercita.
+caso('compare cruzado', 'compare.js', {
+  user1: PLAYERS.official, server:  'official',
+  user2: PLAYERS.akatsuki, server2: 'akatsuki',
+});
 caso('help',     'help.js',     {});
 caso('diag',     'diag.js',     {});
 

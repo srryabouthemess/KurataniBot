@@ -15,7 +15,7 @@ Funciona no Bancho, no Akatsuki, no EZPP Farm e em servidores bancho.py.
 | `/recent` | Últimas plays, incluindo as que falharam |
 | `/topplays` | Melhores plays, 5 por página |
 | `/score` | Scores num mapa |
-| `/compare` | Compara dois jogadores |
+| `/compare` | Compara dois jogadores, inclusive de servidores diferentes |
 | `/leaderboard` | Ranking de pp do servidor, 10 por página |
 | `/topscores` | Melhores plays do servidor inteiro (só bancho.py) |
 | `/whatif <pp>` | Quanto PP você ganharia com uma play nova |

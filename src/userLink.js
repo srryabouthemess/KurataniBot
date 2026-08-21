@@ -25,6 +25,7 @@
 const { getLink, getPreferredServer, getPreferredModo } = require('./db');
 const { t } = require('./i18n');
 const modo = require('./modo');
+const servers = require('./servers');
 const osu = require('./osuClient');
 
 /**
@@ -63,6 +64,44 @@ function resolveServer(interaction, serverOptionName = 'server', modoOptionName 
     || osu.DEFAULT_MODE;
 
   return modo.apply(base, modoDoComando ?? getPreferredModo(interaction.user.id));
+}
+
+/**
+ * O servidor do SEGUNDO lado, num comando que fala de dois jogadores.
+ *
+ * Só o /compare tem dois lados hoje, e ali o par `server2:`/`modo2:` é o que
+ * deixa escrever "kuratani no Bancho contra ckz no Akatsuki". Vazias as duas,
+ * o segundo lado é o primeiro — o comando se comporta como sempre se comportou
+ * para quem nunca tocar nelas.
+ *
+ * A herança é do `primeiro`, e NÃO uma segunda passada pelo `resolveServer`.
+ * A prioridade de lá (`opção || preferência || padrão`) está certa para o
+ * primeiro lado e errada para este: com `server2:` vazio, ela cairia no
+ * servidor preferido do usuário, e aí `/compare user1:a user2:b
+ * server:akatsuki` mandaria o `b` para o Bancho de quem tem o Bancho como
+ * preferido. Dois jogadores do mesmo servidor viram comparação cruzada sem
+ * ninguém ter pedido.
+ *
+ * O atalho de devolver `primeiro` inteiro quando nada foi dito também não é só
+ * economia: a chave herdada tem que ser a MESMA, e refazer a conta perderia o
+ * `_rx` de quem tem `daycore_rx` salvo como preferido sem preferência de modo
+ * nenhuma (ver `modo.apply` com modo nulo).
+ *
+ * @param {object} interaction
+ * @param {string} primeiro a chave que o `resolveServer` deu para o outro lado
+ */
+function resolveSecondServer(interaction, primeiro, serverOptionName = 'server2', modoOptionName = 'modo2', modoHerdadoOptionName = 'modo') {
+  const escolhido      = interaction.options.getString(serverOptionName);
+  const modoDoComando  = modoOptionName ? interaction.options.getString(modoOptionName) : null;
+
+  if (!escolhido && !modoDoComando) return primeiro;
+
+  // Só o servidor foi trocado: o modo do primeiro lado vale para os dois, que é
+  // o que faz `server2:` sozinho comparar RX com RX em quem joga Relax.
+  const herdado = (modoHerdadoOptionName ? interaction.options.getString(modoHerdadoOptionName) : null)
+    ?? getPreferredModo(interaction.user.id);
+
+  return modo.apply(escolhido ?? servers.rootKey(primeiro), modoDoComando ?? herdado);
 }
 
 /**
@@ -145,4 +184,4 @@ async function fetchPlayer({ username, mode }, buscarScores) {
   return { user: perfil.value, scores: scores.value };
 }
 
-module.exports = { resolveServer, resolvePlayer, fetchPlayer };
+module.exports = { resolveServer, resolveSecondServer, resolvePlayer, fetchPlayer };

@@ -85,25 +85,33 @@ function resolveFlag(defs, word) {
   return null;
 }
 
-/** Flags que o comando aceita, para a mensagem de erro. */
+/**
+ * Flags que o comando aceita, para a mensagem de erro.
+ *
+ * O Set não é enfeite: um comando pode declarar duas opções com as MESMAS
+ * choices — o /compare tem `server` e `server2`, um para cada lado da
+ * comparação —, e a flag é a mesma palavra nos dois casos (quem escolhe o slot
+ * é a ordem, ver `flagOverflow` no parseArgs). Sem ele a mensagem listaria
+ * `-bancho`, `-akatsuki` e companhia duas vezes cada.
+ */
 function listFlags(defs) {
-  const flags = [];
+  const flags = new Set();
   const modoDef = relaxDef(defs);
   const nome = choice => choice.name.toLowerCase().replace(/\s+/g, '');
 
   for (const def of defs) {
     if (def.choices?.length) {
-      flags.push(...def.choices.map(c => `\`-${nome(c)}\``));
+      for (const c of def.choices) flags.add(`\`-${nome(c)}\``);
       // As compostas entram na lista porque são aceitas: uma flag que funciona
       // sem ser anunciada é uma que ninguém descobre.
       if (modoDef && def !== modoDef) {
-        flags.push(...def.choices.map(c => `\`-${nome(c)}rx\``));
+        for (const c of def.choices) flags.add(`\`-${nome(c)}rx\``);
       }
     } else if (def.type === OptionType.Boolean) {
-      flags.push(`\`-${def.name}\``);
+      flags.add(`\`-${def.name}\``);
     }
   }
-  return flags;
+  return [...flags];
 }
 
 /**

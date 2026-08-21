@@ -58,19 +58,27 @@ function apply(key, modo) {
  * precisam dizer a mesma coisa em todos — e porque é dessa lista que o modo
  * texto deriva as flags (`-rx`, `-vn`), então uma divergência entre comandos
  * viraria um atalho que funciona num e não no outro.
+ *
+ * `name` existe porque o /compare tem DOIS lados, cada um com o seu servidor e
+ * o seu leaderboard: lá a segunda chamada pede `modo2`. `para` é o prefixo que
+ * diz de quem é aquele modo — sem ele as duas opções apareceriam na tela do
+ * Discord com a mesma descrição, e nada distinguiria uma da outra.
+ *
+ * @param {{ambos?: boolean, name?: string, para?: {en: string, pt: string}|null}} opcoes
  */
-function addOption(builder, { ambos = false } = {}) {
+function addOption(builder, { ambos = false, name = 'modo', para = null } = {}) {
+  const en = ambos
+    ? 'VN, RX, or both — for servers that have Relax'
+    : 'VN or RX — for servers that have Relax';
+  const pt = ambos
+    ? 'VN, RX, ou os dois — em servidores que têm Relax'
+    : 'VN ou RX — em servidores que têm Relax';
+
   return builder.addStringOption(opt =>
     opt
-      .setName('modo')
-      .setDescription(ambos
-        ? 'VN, RX, or both — for servers that have Relax'
-        : 'VN or RX — for servers that have Relax')
-      .setDescriptionLocalizations({
-        'pt-BR': ambos
-          ? 'VN, RX, ou os dois — em servidores que têm Relax'
-          : 'VN ou RX — em servidores que têm Relax',
-      })
+      .setName(name)
+      .setDescription(para ? `${para.en}: ${en}` : en)
+      .setDescriptionLocalizations({ 'pt-BR': para ? `${para.pt}: ${pt}` : pt })
       .setRequired(false)
       .addChoices(...(ambos ? CHOICES_AMBOS : CHOICES))
   );

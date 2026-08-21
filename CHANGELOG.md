@@ -2,6 +2,33 @@
 
 ---
 
+# Sessão de 2026-08-21 (o /compare atravessa servidores)
+
+O `/compare` resolvia **um** servidor e usava ele nas duas chamadas de perfil, então "kuratani no Bancho contra ckz no Akatsuki" não tinha como ser escrito — a opção `server:` valia para os dois lados, e quem queria a comparação rodava o comando duas vezes e olhava os dois embeds lado a lado.
+
+O bot já fala com todos esses servidores ao mesmo tempo: o registro do `servers.js` é global e o `osuClient` escolhe o adaptador pela chave. Faltava só o comando saber perguntar duas vezes.
+
+## ✨ Novos recursos
+
+- **`server2:` e `modo2:` no `/compare`, um lado de cada vez.** [`compare.js`](src/commands/compare.js), [`userLink.js`](src/userLink.js), [`modo.js`](src/modo.js)
+  - `/compare user1:kuratani user2:ckz server:bancho server2:akatsuki`, e no modo texto `k!compare kuratani ckz -bancho -akatsuki`.
+  - **Vazias, herdam do primeiro lado** — quem nunca tocar nelas vê o comando de sempre. A herança é da chave já resolvida do `user1`, e **não** uma segunda passada pelo `resolveServer`: a prioridade de lá (`opção || preferência || padrão`) está certa para o primeiro lado e errada para este, porque com `server2:` vazio ela cairia no servidor preferido do usuário — e aí `/compare user1:a user2:b server:akatsuki` mandaria o `b` para o Bancho de quem tem o Bancho como preferido, transformando dois jogadores do mesmo servidor numa comparação cruzada que ninguém pediu.
+  - **`modo:` sem `modo2:` vale para os dois**, então quem joga Relax compara RX com RX sem repetir a opção. E `modo2:` sozinho compara VN com RX dentro do mesmo servidor.
+  - **`user2` vazio numa comparação cruzada cai no seu link do outro servidor**: `k!compare -bancho -akatsuki` compara a pessoa com ela mesma nos dois, sem digitar nick nenhum. Só existe quando os servidores diferem — no mesmo servidor compararia o autor com o autor. Sem link lá, a mensagem é a que **nomeia o servidor** e manda usar `/link set`, e não o pedido genérico de nick: o que falta é o vínculo, e mandar digitar um nick não diz isso.
+  - **O rótulo do servidor só aparece quando os dois lados diferem**, ao lado de cada nome e no rodapé (`Bancho vs Akatsuki RX`). No caso comum seria a mesma palavra repetida duas vezes, e o rodapé já a diz. A tabela não muda: o orçamento de 26 colunas existe porque o Discord mobile não rola bloco de código na horizontal, e não tem folga para uma palavra por coluna.
+  - `modo.addOption` ganhou `name` e `para`: o comando tem dois leaderboards para perguntar, e sem o prefixo (`Primeiro jogador:` / `Segundo jogador:`) as duas opções apareceriam na tela do Discord com a mesma descrição.
+
+- **`prefix.flagOverflow`: a flag repetida preenche o slot seguinte.** [`prefix/parseArgs.js`](src/prefix/parseArgs.js), [`prefix/spec.js`](src/prefix/spec.js)
+  - `resolveFlag` devolve a PRIMEIRA opção cuja lista de choices casa com a palavra. Com `server` e `server2` tendo as mesmas choices, `-bancho -akatsuki` gravaria as duas no `server` e o Bancho sumiria sem aviso. O comando declara para onde a repetição transborda, e o parser redireciona.
+  - **O grupo migra inteiro ou não migra.** `-akatsukirx` é servidor e modo na mesma palavra; migrar só o servidor gravaria `server2:akatsuki` com `modo:rx` — o Relax no lado errado da comparação.
+  - Comando sem `flagOverflow` continua sobrescrevendo como sempre: `k!rs fulano -bancho -akatsuki` fala de um jogador só, e ali a última flag ganha.
+
+## 🐛 Correções
+
+- **`listFlags` não repete mais a mesma flag.** [`prefix/coerce.js`](src/prefix/coerce.js) Duas opções com as mesmas choices faziam a mensagem de flag desconhecida listar `-bancho`, `-akatsuki` e companhia duas vezes cada.
+
+---
+
 # Sessão de 2026-08-21 (cargo mexido in-game vira registro no Discord)
 
 Cargo dado ou tirado **dentro do jogo** não aparecia em lugar nenhum. O `/role` e o admin panel publicam nos canais Redis `addpriv`/`removepriv`, e quem os atende no servidor (`app/api/utils.py`) já manda um embed para o webhook de auditoria — mas `!addpriv` e `!rmpriv` chamam `add_privs`/`remove_privs` direto, sem receptor no meio. Sem auditoria, sem anúncio, sem rastro: quem lia o canal de log via as promoções feitas pelo Discord e pelo painel, e não via as feitas por quem estava logado no jogo.
