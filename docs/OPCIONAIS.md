@@ -265,7 +265,7 @@ Do lado do servidor isso exige o fork publicar `ex:priv_change` no `!addpriv`/`!
 | `OSU_MODE` | Servidor padrão dos comandos (`official` ou a chave de um configurado) |
 | `BEATMAP_CACHE_MAX` | Quantos `.osu` manter em cache; padrão `1500` (~75–150 MB) |
 | `FC_PP_CACHE_MAX` | Quantos valores de "PP se tivesse sido FC" manter; padrão `20000` (~1–2 MB) |
-| `KURATANI_DATA_DIR` | Onde ficam `bot.db` e `cache.db`; vazio = raiz do projeto |
+| `KURATANI_DATA_DIR` | Onde ficam `bot.db` e `cache.db`; vazio = raiz do projeto. No `npm test` ela é preenchida sozinha (ver [Testes](#testes)) |
 | `EXIT_ON_UNCAUGHT` | `true` faz o bot sair com código 1 numa exceção não capturada. Ligue **se** você usa supervisor (systemd, pm2, Docker com `restart`) |
 
 ---
@@ -281,6 +281,14 @@ Do lado do servidor isso exige o fork publicar `ex:priv_change` no `!addpriv`/`!
 | `npm run post <canalId> -- --enviar` | manda os embeds para um canal, para ver como ficam | sim |
 
 Os dois `smoke` ficam fora do `npm test` de propósito: dependem de rede e de credencial, então uma falha neles não quer dizer que o código regrediu.
+
+### Onde o `npm test` grava
+
+Em lugar nenhum que dure. O script carrega o [`test/setup.js`](../test/setup.js) antes de tudo, e ele aponta o `KURATANI_DATA_DIR` de **cada processo de teste** para uma pasta temporária própria, apagada quando a rodada acaba.
+
+São duas coisas de uma vez. Rodar a suíte não mexe mais no `bot.db` de desenvolvimento da máquina — antes mexia, e os links e preferências que apareciam ali eram os de verdade. E `node --test` roda os arquivos em processos **paralelos**: com todos apontando para o mesmo SQLite, dois escrevendo ao mesmo tempo davam `SQLITE_BUSY`, que aparecia como um `database is locked` intermitente em um arquivo qualquer, sem relação com o que o teste afirmava.
+
+Definir a variável **antes** de chamar o `npm test` continua valendo, e aí os processos voltam a dividir a mesma pasta. Serve para ir olhar o banco depois que a suíte termina; para o dia a dia, deixe vazia.
 
 <details>
 <summary>O que o smoke:commands cobre, e o que não cobre</summary>

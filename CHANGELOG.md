@@ -2,6 +2,26 @@
 
 ---
 
+# Sessão de 2026-08-21 (o `npm test` para de brigar consigo mesmo)
+
+O `npm test` falhava sozinho de vez em quando — 2 vezes em 21 rodadas da suíte inteira — sempre com `database is locked`, e sempre num arquivo que não tinha nada a ver com banco de dados. Nada no teste explicava a falha, porque a causa não estava nele.
+
+`node --test test/*.test.js` roda os arquivos em processos **paralelos**. Os helpers já ofereciam o `dbWorkspace`/`freshDb`, que apontam o `KURATANI_DATA_DIR` para uma pasta temporária, mas usar era opcional — e 21 dos 57 arquivos não usavam. Quem carrega um comando carrega o `db` junto, sem pedir, então esses 21 abriam o `bot.db` da RAIZ do projeto. Dois processos escrevendo no mesmo SQLite dão `SQLITE_BUSY`, e quem perdesse a corrida derrubava a suíte.
+
+O mesmo descuido tinha um segundo custo, esse silencioso: rodar a suíte escrevia no `bot.db` de desenvolvimento da máquina, com os links e as preferências de verdade dentro.
+
+## 🐛 Correções
+
+- **Cada processo de teste ganha a própria pasta de dados.** [`test/setup.js`](test/setup.js), [`package.json`](package.json)
+  - O script `test` virou `node --require ./test/setup.js --test test/*.test.js`. O preload roda antes de qualquer módulo do bot — inclusive antes do [`paths.js`](src/paths.js), que lê o `KURATANI_DATA_DIR` uma vez só, no require do topo.
+  - **Isolar arquivo por arquivo foi descartado.** Consertaria os 21 de hoje e não os de amanhã: o próximo teste que carregasse um comando traria a intermitência de volta, sem aviso, e o autor não teria como saber que devia se importar. Aqui o isolamento é o padrão e esquecer não é uma opção que exista.
+  - **O marcador `KURATANI_TEST_DATA_ROOT` existe porque o ambiente é herdado.** O runner repassa o ambiente inteiro aos filhos, então o `KURATANI_DATA_DIR` definido no processo pai chega já preenchido em todos eles — sem distinguir "veio de fora" de "fui eu que pus", os processos voltariam a dividir um banco só.
+  - **Todas as pastas penduram numa mãe só, apagada pelo processo que abriu a rodada.** É o que dá conta de quem morre por sinal em vez de sair sozinho: o `lazerWorker` faz `fork` de um filho Node, que herda o preload e é encerrado com `kill()` — nesses o `exit` nunca roda, e a pasta ficaria para trás a cada `npm test`.
+  - Um `KURATANI_DATA_DIR` definido de fora continua mandando, para quem quiser ir olhar o banco depois que a suíte termina.
+  - Medido: 20 rodadas seguidas verdes, e uma sonda no `node:sqlite` confirmando **zero** aberturas e zero `ATTACH` em qualquer caminho dentro do repositório.
+
+---
+
 # Sessão de 2026-08-21 (o /compare atravessa servidores)
 
 O `/compare` resolvia **um** servidor e usava ele nas duas chamadas de perfil, então "kuratani no Bancho contra ckz no Akatsuki" não tinha como ser escrito — a opção `server:` valia para os dois lados, e quem queria a comparação rodava o comando duas vezes e olhava os dois embeds lado a lado.

@@ -5,7 +5,7 @@
   "main": "src/index.js",
   "scripts": {
     "start": "node src/index.js",
-    "test": "node --test test/*.test.js",
+    "test": "node --require ./test/setup.js --test test/*.test.js",
     "lint": "eslint .",
     "smoke": "node test/smoke.js",
     "deploy": "node src/deploy-commands.js",
