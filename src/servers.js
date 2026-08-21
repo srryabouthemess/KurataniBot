@@ -65,6 +65,11 @@ function envFor(key, field) {
   return value?.trim() || null;
 }
 
+/** Tira a barra do fim: quem monta a URL sempre acrescenta a sua. */
+function semBarraFinal(url) {
+  return url ? url.replace(/\/+$/, '') : null;
+}
+
 /** `https://daycore.org` + `api` → `https://api.daycore.org` */
 function subdomain(baseUrl, prefix) {
   try {
@@ -92,7 +97,7 @@ function titleCase(key) {
  * `null` quer dizer "este servidor não tem Shiina-Web". Ver o comentário do
  * cabeçalho e o `temShiina` no adaptador.
  */
-function banchoPyServer({ key, label, site, api, avatars, webApi }) {
+function banchoPyServer({ key, label, site, api, avatars, webApi, covers = null, mapFiles = null }) {
   return {
     key,
     label,
@@ -111,6 +116,12 @@ function banchoPyServer({ key, label, site, api, avatars, webApi }) {
     // bancho.py-ex: busca exata por nome (v1) e leitura de scores/mapas (v2).
     banchoV1:  `${api}/v1`,
     banchoV2:  `${api}/v2`,
+    // Dois espelhos OPCIONAIS, para o que a API oficial nao tem sobre um mapa
+    // que so existe naquele servidor: a capa do set e o arquivo .osu da
+    // dificuldade. Sem eles o bot cai no ppy.sh, que responde 404 para esse
+    // mapa — o combo vira `?x` e a linha de CS/AR/OD/BPM some.
+    covers,
+    mapFiles,
   };
 }
 
@@ -143,6 +154,10 @@ function buildBanchoPy(key) {
     api,
     avatars: envFor(key, 'AVATARS') ?? subdomain(web, 'a') ?? `${web}/a`,
     webApi,
+    // Sem padrao derivado do dominio: nao ha convencao de onde um bancho.py
+    // serve capa e .osu de mapa proprio. Quem tem, configura.
+    covers:   semBarraFinal(envFor(key, 'COVERS')),
+    mapFiles: semBarraFinal(envFor(key, 'MAPFILES')),
   });
 }
 

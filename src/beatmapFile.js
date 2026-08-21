@@ -21,6 +21,7 @@ const rateLimiter = require('./rateLimiter');
 const { dedupe } = require('./inflight');
 const { idSegment } = require('./urlSafe');
 const { withRetry } = require('./retry');
+const servers = require('./servers');
 
 // 16MB. O maior `.osu` do cache real tem alguns poucos MB (mapa de maratona com
 // dezenas de milhares de objetos), então o teto é generoso o bastante para nunca
@@ -63,6 +64,34 @@ const USER_AGENT = 'KurataniBot (+https://github.com/srryabouthemess/KurataniBot
  * de uma não tem por que segurar a da outra (mesmo raciocínio do `server:` dos
  * servidores privados, em rateLimiter.js).
  */
+/**
+ * Os espelhos que servidores privados declaram (`SERVER_<chave>_MAPFILES`).
+ *
+ * Vão no FIM da fila, e é onde eles servem: mapa oficial nunca chega aqui,
+ * porque o primeiro host já respondeu. O que chega é o mapa que só existe
+ * naquele servidor — para o qual os três de cima respondem 404, e sem este
+ * último a linha de `CS/AR/OD/HP • BPM` do embed sumia inteira.
+ *
+ * O balde é o `server:<namespace>` que a API daquele servidor já usa: é a mesma
+ * máquina, e dois baldes contra ela dariam o dobro do teto configurado.
+ * Servidores que dividem o mesmo endereço (a variante RX é o mesmo cadastro)
+ * entram uma vez só.
+ */
+function espelhosDeServidores() {
+  const vistos = new Set();
+
+  return servers.all().flatMap((server) => {
+    if (!server.mapFiles || vistos.has(server.mapFiles)) return [];
+    vistos.add(server.mapFiles);
+
+    return [{
+      nome:   server.namespace,
+      bucket: `server:${server.namespace}`,
+      url:    id => `${server.mapFiles}/${idSegment(id)}`,
+    }];
+  });
+}
+
 const HOSTS = [
   {
     nome:   'osu',
@@ -79,6 +108,7 @@ const HOSTS = [
     bucket: 'mapFileOsuDirect',
     url:    id => `https://osu.direct/api/osu/${idSegment(id)}/raw`,
   },
+  ...espelhosDeServidores(),
 ];
 
 /**

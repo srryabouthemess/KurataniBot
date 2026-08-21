@@ -25,6 +25,16 @@ const axiosPath = require.resolve('axios');
 const chamadas = [];
 
 /**
+ * Só as requisições de DETALHE de score.
+ *
+ * O `enrichScores` também busca o MAPA de cada score (`/v2/maps/{id}`), que é
+ * o que faz um mapa custom aparecer com combo e estrelas. Contar as duas
+ * juntas mediria as duas caches ao mesmo tempo; o assunto deste arquivo é a
+ * do detalhe.
+ */
+const detalhes = () => chamadas.filter(url => url.includes('/scores/'));
+
+/**
  * A resposta atravessa DOIS envelopes antes de virar detalhe: o `data` do axios
  * e o `data` da v2 do bancho.py. Errar isso faz o dublê devolver sempre "sem
  * detalhe", e aí os casos passam sem testar nada.
@@ -32,7 +42,12 @@ const chamadas = [];
 const respostaHttp = (payload) => ({ data: { status: 'success', data: payload } });
 const DETALHE_PADRAO = { pp: 123, acc: 98.5, max_combo: 700, grade: 'S', mods: 64 };
 
-let responder = async () => respostaHttp(DETALHE_PADRAO);
+// O dublê responde por URL: o mapa e o detalhe são endpoints diferentes, e
+// devolver o detalhe também no lugar do mapa faria a mescla inventar combo.
+const respostaPadrao = async (url) =>
+  (String(url).includes('/maps/') ? respostaHttp(null) : respostaHttp(DETALHE_PADRAO));
+
+let responder = respostaPadrao;
 
 require.cache[axiosPath] = {
   id: axiosPath, filename: axiosPath, loaded: true,
@@ -55,14 +70,14 @@ const scoreV1 = (id) => ({
 // mesmo número faria um caso começar com o cache que o anterior deixou quente.
 test.beforeEach(() => {
   chamadas.length = 0;
-  responder = async () => respostaHttp(DETALHE_PADRAO);
+  responder = respostaPadrao;
 });
 
 test('o mesmo score não é buscado duas vezes', async () => {
   const [primeiro] = await enrichScores([scoreV1(1)], 'daycore');
   const [segundo]  = await enrichScores([scoreV1(1)], 'daycore');
 
-  assert.equal(chamadas.length, 1, 'a segunda exibição repetiu a requisição');
+  assert.equal(detalhes().length, 1, 'a segunda exibição repetiu a requisição');
   // E o resultado tem de ser o mesmo, não um score empobrecido: o valor do
   // cache passa pela mesma mescla que o da rede.
   assert.equal(primeiro.pp, segundo.pp);
@@ -72,7 +87,7 @@ test('o mesmo score não é buscado duas vezes', async () => {
 
 test('scores diferentes continuam sendo buscados', async () => {
   await enrichScores([scoreV1(31), scoreV1(32), scoreV1(33)], 'daycore');
-  assert.equal(chamadas.length, 3);
+  assert.equal(detalhes().length, 3);
 });
 
 test('servidores diferentes não dividem a mesma entrada', async () => {
@@ -81,7 +96,7 @@ test('servidores diferentes não dividem a mesma entrada', async () => {
   await enrichScores([scoreV1(7)], 'daycore');
   await enrichScores([scoreV1(7)], 'outro');
 
-  assert.equal(chamadas.length, 2);
+  assert.equal(detalhes().length, 2);
 });
 
 test('falha não entra no cache', async () => {
@@ -93,12 +108,12 @@ test('falha não entra no cache', async () => {
   // A play ainda sai, com o que a v1 já trazia: o comando não pode quebrar
   // porque um detalhe faltou.
   assert.equal(comFalha.rank, 'A');
-  assert.equal(chamadas.length, 1);
+  assert.equal(detalhes().length, 1);
 
   responder = async () => respostaHttp({ pp: 500, grade: 'X' });
   const [depois] = await enrichScores([scoreV1(9)], 'daycore');
 
-  assert.equal(chamadas.length, 2, 'a falha ficou guardada e o detalhe nunca mais foi buscado');
+  assert.equal(detalhes().length, 2, 'a falha ficou guardada e o detalhe nunca mais foi buscado');
   assert.equal(depois.rank, 'X');
 });
 
@@ -108,7 +123,7 @@ test('resposta vazia é guardada — ela também é um resultado', async () => {
   await enrichScores([scoreV1(11)], 'daycore');
   await enrichScores([scoreV1(11)], 'daycore');
 
-  assert.equal(chamadas.length, 1, 'o "não sei" foi repedido a cada exibição');
+  assert.equal(detalhes().length, 1, 'o "não sei" foi repedido a cada exibição');
 });
 
 test('score sem id não busca nada nem cria chave compartilhada', async () => {
@@ -117,7 +132,7 @@ test('score sem id não busca nada nem cria chave compartilhada', async () => {
 
   const [a, b] = await enrichScores([semId, outro], 'daycore');
 
-  assert.equal(chamadas.length, 0, 'saiu requisição para um score sem id');
+  assert.equal(detalhes().length, 0, 'saiu requisição para um score sem id');
   // Cada um continua saindo com os próprios dados da v1, e não com os do outro.
   assert.equal(a.beatmap.id, 1000);
   assert.equal(b.beatmap.id, 555);
@@ -138,5 +153,5 @@ test('dois pedidos simultâneos do mesmo score saem como um', async () => {
   liberar();
   await dois;
 
-  assert.equal(chamadas.length, 1, 'os dois pedidos saíram em vez de compartilhar a mesma promise');
+  assert.equal(detalhes().length, 1, 'os dois pedidos saíram em vez de compartilhar a mesma promise');
 });

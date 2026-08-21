@@ -329,22 +329,146 @@ async function scoreDetail(scoreId, mode) {
   });
 }
 
+
+// ─── O mapa que só existe no servidor ─────────────────────────────────────────
+
+/**
+ * `status` do bancho.py (número) → o rótulo que a API oficial escreve.
+ *
+ * O rodapé do embed capitaliza o que receber, e a fonte dele até agora era
+ * sempre a API oficial. Traduzir aqui é o que deixa as duas origens saírem
+ * iguais na tela.
+ *
+ * `1` é UpdateAvailable, um estado do bancho.py que a oficial não tem: o mapa
+ * está submetido e desatualizado, que para quem lê o rodapé é "pending".
+ */
+const STATUS_LABEL = {
+  '-1': 'graveyard',
+  0:    'pending',
+  1:    'pending',
+  2:    'ranked',
+  3:    'approved',
+  4:    'qualified',
+  5:    'loved',
+};
+
+/**
+ * Completa o mapa de um score com o que o bancho.py sabe dele.
+ *
+ * Existe porque a API oficial não conhece mapa custom: pedido o id, ela dá 404,
+ * e o embed perde combo máximo, estrelas, status, mapper, duração e capa de uma
+ * vez. O `/v2/maps/{id}` do servidor responde para os dois tipos de id.
+ *
+ * **Só preenche buraco.** Onde o score já tem valor, ele fica: mapa oficial
+ * jogado num servidor privado pode ter passado antes pelo enriquecimento
+ * oficial, e o dado de lá é o mais completo dos dois. Pelo mesmo motivo um
+ * campo zerado no servidor não apaga o que já existe.
+ *
+ * @param {object} score       score normalizado
+ * @param {object|null} map    linha do `/v2/maps/{id}`
+ * @param {string|null} coverBase espelho de capas do servidor, quando há um
+ */
+function mergeServerMap(score, map, coverBase = null) {
+  if (!map) return score;
+
+  const bm  = score.beatmap ?? {};
+  const set = score.beatmapset ?? {};
+
+  const setId = set.id ?? map.set_id ?? null;
+  // A versão vem com '?' quando o normalizador não achou nada — é ausência
+  // escrita, não um nome de dificuldade.
+  const version = bm.version && bm.version !== '?' ? bm.version : (map.version ?? bm.version ?? '?');
+
+  return {
+    ...score,
+    beatmap: {
+      ...bm,
+      version,
+      max_combo:         bm.max_combo || map.max_combo || bm.max_combo || null,
+      difficulty_rating: bm.difficulty_rating || Number(map.diff) || bm.difficulty_rating || 0,
+      status:            bm.status ?? STATUS_LABEL[String(map.status)] ?? null,
+      total_length:      bm.total_length || map.total_length || bm.total_length || null,
+    },
+    beatmapset: {
+      ...set,
+      id:      setId,
+      title:   set.title   || map.title   || '???',
+      artist:  set.artist  || map.artist  || '',
+      creator: set.creator || map.creator || null,
+      covers: {
+        ...(set.covers ?? {}),
+        list: coverBase && setId !== null
+          ? `${coverBase}/${setId}`
+          : (set.covers?.list ?? null),
+      },
+    },
+  };
+}
+
+/**
+ * O mapa de um score, pelo id, com cache curto.
+ *
+ * Curto de propósito, e mais curto que o `getServerMapByMd5`: o `status` entra
+ * aqui, e ele muda quando a staff rankeia um mapa. Meia hora de cache faria o
+ * rodapé de um mapa recém-rankeado continuar dizendo "Loved".
+ */
+const MAPA_ID_TTL_MS = 10 * 60_000;
+const MAPA_ID_MAX    = 500;
+const _mapasPorId = new TtlCache({ ttlMs: MAPA_ID_TTL_MS, max: MAPA_ID_MAX });
+
+async function mapaDoScore(mapId, mode) {
+  if (!mapId) return null;
+  const chave = `${mode}:${mapId}`;
+
+  const guardado = _mapasPorId.get(chave);
+  metrics.cache('mapaPorId', guardado !== undefined);
+  if (guardado !== undefined) return guardado;
+
+  return dedupe(`bpmapid:${chave}`, async () => {
+    try {
+      const mapa = await getServerMap(mapId, mode);
+      _mapasPorId.set(chave, mapa);
+      return mapa;
+    } catch {
+      // Falha não entra no cache: uma queda de rede deixaria o mapa "sem dados"
+      // por dez minutos, mesmo cuidado do scoreDetail.
+      return null;
+    }
+  });
+}
+
+/** Se ainda falta ao score algo que só o mapa responde. */
+function precisaDoMapa(score) {
+  return !score.beatmap?.max_combo
+      || !score.beatmap?.difficulty_rating
+      || !score.beatmap?.status;
+}
+
 async function enrichScores(v1Scores, mode = PRIVATE_MODE) {
+  const coverBase = servers.get(mode).covers ?? null;
+
   return Promise.all(
     v1Scores.map(async (s) => {
       // Sem id não há o que buscar nem o que guardar — e uma chave
       // `${mode}:undefined` faria scores diferentes dividirem a mesma entrada.
+      let score;
       if (s.score_id === undefined || s.score_id === null) {
-        return normalizeScorePrivate(s, null);
+        score = normalizeScorePrivate(s, null);
+      } else {
+        try {
+          score = normalizeScorePrivate(s, await scoreDetail(s.score_id, mode));
+        } catch {
+          // Falha não entra no cache: uma queda de rede viraria "sem detalhe" por
+          // uma hora, que é o mesmo cuidado que o rememberFCpp já toma no pp.js.
+          score = normalizeScorePrivate(s, null);
+        }
       }
 
-      try {
-        return normalizeScorePrivate(s, await scoreDetail(s.score_id, mode));
-      } catch {
-        // Falha não entra no cache: uma queda de rede viraria "sem detalhe" por
-        // uma hora, que é o mesmo cuidado que o rememberFCpp já toma no pp.js.
-        return normalizeScorePrivate(s, null);
-      }
+      // O detalhe do score não traz nada do mapa. Buscá-lo aqui, e não deixar
+      // para o enriquecimento pela API oficial, é o que faz um mapa custom
+      // aparecer completo — lá ele é um 404.
+      if (!precisaDoMapa(score)) return score;
+      return mergeServerMap(score, await mapaDoScore(score.beatmap?.id, mode), coverBase);
     })
   );
 }
@@ -849,6 +973,7 @@ module.exports = {
 
   // Específicos deste tipo de servidor, usados pelos comandos administrativos.
   enrichScores,
+  mergeServerMap,
   resolvePlayerId,
   getServerMapByMd5,
   getServerPlayerName,
