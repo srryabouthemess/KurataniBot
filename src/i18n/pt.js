@@ -274,6 +274,14 @@ module.exports = ({ ADMIN }) => ({
   ann_by_ingame:           (who) => `Aplicado por ${who}, in-game`,
   ann_ingame_unknown:      'Aplicado in-game',
 
+  // Log de cargo mexido DENTRO DO JOGO. O que passa pelo /role e pelo admin
+  // panel já vira embed pelo webhook de auditoria do próprio servidor.
+  priv_ann_title_give:     'Cargo concedido in-game',
+  priv_ann_title_take:     'Cargo removido in-game',
+  priv_ann_roles:          (roles) => `Cargos: **${roles}**`,
+  priv_ann_by_ingame:      (who) => `Aplicado por ${who}, in-game`,
+  priv_ann_ingame_unknown: 'Aplicado in-game',
+
   nom_invalid_map:         '❌ Não entendi qual mapa é esse. Use o ID do beatmap/set ou um link.',
   nom_map_not_found:       `❌ Mapa não encontrado no ${ADMIN} nem no osu!.`,
   nom_not_on_server:       `ℹ️ Ainda não está no ${ADMIN} — as dificuldades vieram do osu!, e o servidor busca o mapa ao aplicar o status.`,

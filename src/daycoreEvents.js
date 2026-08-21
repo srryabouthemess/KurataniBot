@@ -13,6 +13,17 @@
  * o `ex:map_status_change`. Então assinar aqui não duplica o que o
  * `/nominate` já anuncia — completa.
  *
+ * ── O segundo canal: cargo mexido dentro do jogo ──────────────────────────────
+ * `ex:priv_change` é a mesma ideia para `!addpriv`/`!rmpriv`. Esses dois são o
+ * ÚNICO caminho de cargo que não aparece em lugar nenhum: o `/role` do bot e o
+ * admin panel publicam nos canais `addpriv`/`removepriv`, e quem atende esses
+ * canais (`app/api/utils.py`) já manda um embed para o webhook de auditoria do
+ * servidor. Os comandos in-game chamam `add_privs`/`remove_privs` direto — sem
+ * receptor no meio, sem auditoria, sem nada.
+ *
+ * Por isso este canal cobre só o caminho in-game: assinar mais que isso
+ * publicaria no Discord o que o webhook do servidor já publica.
+ *
  * ── Conexão separada ──────────────────────────────────────────────────────────
  * Um client em modo subscribe não aceita outros comandos, então esta assinatura
  * NÃO pode dividir a conexão que o daycoreAdmin usa para publicar. É um client
@@ -29,7 +40,8 @@ const { createClient } = require('redis');
 
 const { logError } = require('./logger');
 
-const CHANNEL = 'ex:map_status_change';
+const CHANNEL      = 'ex:map_status_change';
+const PRIV_CHANNEL = 'ex:priv_change';
 
 /**
  * Só `rank` e `love` viram anúncio.
@@ -94,14 +106,88 @@ function parseEvent(raw) {
   };
 }
 
+/** Os dois tipos que o `ex:priv_change` carrega, com o comando que os gera. */
+const PRIV_TYPES = new Set(['addpriv', 'rmpriv']);
+
+/**
+ * Quantos nomes de cargo aceitar de uma vez, e que tamanho cada um pode ter.
+ *
+ * `!addpriv <nick> <cargo1 cargo2 ...>` aceita quantos argumentos quiserem
+ * digitar, e o que chega aqui vai direto para um embed público. O bancho tem
+ * onze cargos no `str_priv_dict`; o teto é folgado o bastante para caber todos
+ * e apertado o bastante para um payload forjado não virar uma parede de texto.
+ */
+const PRIV_MAX_ITEMS  = 16;
+const PRIV_MAX_LENGTH = 32;
+
+/**
+ * Traduz a mensagem crua do `ex:priv_change`.
+ *
+ * Os nomes de cargo vêm como o jogador digitou — o bancho valida contra o
+ * `str_priv_dict` ANTES de aplicar, então tudo que chega aqui é nome válido,
+ * mas em caixa qualquer. Normalizar para minúsculo aqui deixa o rótulo do
+ * embed sair de uma tabela só, em vez de depender de como foi digitado.
+ *
+ * @returns {{type: string, targetId: number, targetName: string|null,
+ *            privs: string[], authorId: number|null,
+ *            authorName: string|null} | null}
+ */
+function parsePrivEvent(raw) {
+  let data;
+  try {
+    data = JSON.parse(raw);
+  } catch {
+    return null;
+  }
+
+  const type = String(data?.type ?? '');
+  if (!PRIV_TYPES.has(type)) return null;
+
+  // Mesmo cuidado dos `map_ids` do `parseEvent`: `Number(null)` é 0, e um alvo
+  // 0 viraria um anúncio sobre um jogador que não existe.
+  const targetId = Number(data?.target_id);
+  if (!Number.isInteger(targetId) || targetId <= 0) return null;
+
+  const privs = (Array.isArray(data?.privs) ? data.privs : [])
+    .filter(p => typeof p === 'string')
+    .map(p => p.trim().toLowerCase())
+    .filter(p => p.length > 0 && p.length <= PRIV_MAX_LENGTH)
+    // Duplicata é o caso comum, não o hostil: `!addpriv fulano mod mod` é o
+    // dedo escorregando, e o bancho aplica sem reclamar.
+    .filter((p, i, todos) => todos.indexOf(p) === i)
+    .slice(0, PRIV_MAX_ITEMS);
+  // Evento sem cargo nenhum não tem o que anunciar.
+  if (privs.length === 0) return null;
+
+  const authorId = Number(data?.author_id);
+
+  return {
+    type,
+    targetId,
+    targetName: data?.target_name ? String(data.target_name) : null,
+    privs,
+    authorId: Number.isInteger(authorId) && authorId > 0 ? authorId : null,
+    authorName: data?.author_name ? String(data.author_name) : null,
+  };
+}
+
 /**
  * Começa a escutar. Idempotente: chamar de novo não abre uma segunda conexão.
  *
- * @param {(evento: object) => Promise<void>|void} onStatusChange
+ * Os dois canais dividem o MESMO client de propósito: um client em modo
+ * subscribe não serve para mais nada mesmo, e duas conexões só dobrariam o que
+ * pode cair sem ninguém perceber.
+ *
+ * @param {object} handlers
+ * @param {(evento: object) => Promise<void>|void} handlers.onStatusChange mapa mexido in-game
+ * @param {(evento: object) => Promise<void>|void} [handlers.onPrivChange]  cargo mexido in-game
  * @returns {Promise<boolean>} se a assinatura ficou de pé
  */
-async function listen(onStatusChange) {
+async function listen({ onStatusChange, onPrivChange } = {}) {
   if (!isConfigured() || _client) return Boolean(_client);
+  // Sem handler nenhum não há o que escutar, e abrir a conexão assim deixaria
+  // um client em modo subscribe pendurado sem assinatura nenhuma.
+  if (!onStatusChange && !onPrivChange) return false;
 
   try {
     const client = createClient({
@@ -122,17 +208,28 @@ async function listen(onStatusChange) {
     client.on('error', (err) => logError('daycoreEvents:redis', err));
 
     await client.connect();
-    await client.subscribe(CHANNEL, (message) => {
-      const evento = parseEvent(message);
-      if (!evento) return;
 
-      // O handler é assíncrono e ninguém o aguarda: uma falha ao anunciar não
-      // pode derrubar o listener e calar todos os eventos seguintes.
-      Promise.resolve(onStatusChange(evento)).catch(err => logError('daycoreEvents:handler', err));
-    });
+    // O handler é assíncrono e ninguém o aguarda: uma falha ao anunciar não
+    // pode derrubar o listener e calar todos os eventos seguintes.
+    const despachar = (contexto, parse, handler) => (message) => {
+      const evento = parse(message);
+      if (!evento) return;
+      Promise.resolve(handler(evento)).catch(err => logError(contexto, err));
+    };
+
+    if (onStatusChange) {
+      await client.subscribe(CHANNEL, despachar('daycoreEvents:handler', parseEvent, onStatusChange));
+      console.log(`[eventos] Escutando "${CHANNEL}" para mapas rankeados no jogo.`);
+    }
+
+    // Assinar o canal de cargo é independente: um fork sem a publicação do
+    // `!addpriv` simplesmente nunca manda nada nele, e o resto segue igual.
+    if (onPrivChange) {
+      await client.subscribe(PRIV_CHANNEL, despachar('daycoreEvents:priv', parsePrivEvent, onPrivChange));
+      console.log(`[eventos] Escutando "${PRIV_CHANNEL}" para cargos mexidos no jogo.`);
+    }
 
     _client = client;
-    console.log(`[eventos] Escutando "${CHANNEL}" para mapas rankeados no jogo.`);
     return true;
   } catch (error) {
     logError('daycoreEvents:listen', error);
@@ -145,4 +242,8 @@ async function close() {
   _client = null;
 }
 
-module.exports = { listen, close, parseEvent, isConfigured, CHANNEL, ANNOUNCED_TYPES };
+module.exports = {
+  listen, close, isConfigured,
+  parseEvent, CHANNEL, ANNOUNCED_TYPES,
+  parsePrivEvent, PRIV_CHANNEL, PRIV_TYPES,
+};

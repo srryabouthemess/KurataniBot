@@ -208,6 +208,7 @@ REDIS_HOST=127.0.0.1
 REDIS_PORT=6379
 REDIS_PASS=a_mesma_do_compose
 DAYCORE_ANNOUNCE_CHANNEL_ID=          # opcional: canal dos anúncios de status
+DAYCORE_ROLE_LOG_CHANNEL_ID=          # opcional: canal do log de cargo mexido in-game
 ```
 
 ### 3. Staff
@@ -234,6 +235,12 @@ O código vai no campo **"sobre mim"** do perfil daquela conta no site do servid
 ```
 
 Com `DAYCORE_ANNOUNCE_CHANNEL_ID` preenchido, todo mapa que vira **ranked** ou **loved** é anunciado nesse canal — inclusive os rankeados dentro do jogo com `!map`. Vazio desliga.
+
+Com `DAYCORE_ROLE_LOG_CHANNEL_ID` preenchido, cargo dado ou tirado **dentro do jogo** (`!addpriv`/`!rmpriv`) vira embed nesse canal. Vazio desliga.
+
+> Os dois são canais diferentes de propósito, e este segundo cobre **só** o caminho in-game: o que passa pelo `/role` e pelo admin panel já sai no webhook de auditoria do próprio servidor (`DISCORD_AUDIT_LOG_WEBHOOK`), porque os dois publicam nos canais `addpriv`/`removepriv` e quem os atende registra. Os comandos in-game não passam por receptor nenhum — não havia registro deles em lugar algum.
+
+Do lado do servidor isso exige o fork publicar `ex:priv_change` no `!addpriv`/`!rmpriv` (`app/commands.py`), como já faz com `ex:map_status_change` no `!map`. Sem essa publicação o bot assina um canal que ninguém alimenta e nada acontece.
 
 <details>
 <summary>Como cada um se comporta por baixo</summary>

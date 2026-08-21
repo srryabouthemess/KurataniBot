@@ -25,6 +25,7 @@
 const { EmbedBuilder, PermissionFlagsBits } = require('discord.js');
 
 const osu = require('./osuClient');
+const servers = require('./servers');
 const daycore = require('./daycoreAdmin');
 const { md } = require('./markdown');
 const { logError } = require('./logger');
@@ -43,6 +44,49 @@ function channelId() {
 
 function isConfigured() {
   return Boolean(channelId());
+}
+
+/**
+ * Canal do log de cargo — separado do de mapa DE PROPÓSITO.
+ *
+ * O anúncio de mapa é vitrine: serve para quem joga saber o que entrou. Cargo
+ * mexido dentro do jogo é registro de staff, e no Daycore ele já convive com o
+ * webhook de auditoria do próprio servidor num canal de log. Amarrar os dois na
+ * mesma variável obrigaria a escolher entre publicar cargo na vitrine ou não
+ * publicar nada.
+ */
+function privChannelId() {
+  return process.env.DAYCORE_ROLE_LOG_CHANNEL_ID || null;
+}
+
+function isPrivLogConfigured() {
+  return Boolean(privChannelId());
+}
+
+/**
+ * O canal, se ele existir, for de texto e o bot puder falar nele.
+ *
+ * Os dois anúncios fazem a mesma checagem pelo mesmo motivo: conferir antes
+ * deixa o motivo no log em vez de um DiscordAPIError genérico, e canal errado
+ * ou permissão retirada são os dois erros de configuração mais prováveis.
+ *
+ * @returns {Promise<import('discord.js').TextBasedChannel|null>}
+ */
+async function resolveChannel(client, id, contexto) {
+  // `fetch` e não o cache: o canal pode não ter sido visto ainda nesta sessão.
+  const channel = await client.channels.fetch(id);
+  if (!channel?.isTextBased?.()) {
+    logError(contexto, new Error(`canal ${id} não é de texto (ou não existe)`));
+    return null;
+  }
+
+  const me = channel.guild?.members?.me;
+  if (me && !channel.permissionsFor(me)?.has(PermissionFlagsBits.SendMessages)) {
+    logError(contexto, new Error(`sem permissão de enviar em ${id}`));
+    return null;
+  }
+
+  return channel;
 }
 
 /**
@@ -74,20 +118,8 @@ async function announceStatus(client, info, s) {
   if (!id) return false;
 
   try {
-    // `fetch` e não o cache: o canal pode não ter sido visto ainda nesta sessão.
-    const channel = await client.channels.fetch(id);
-    if (!channel?.isTextBased?.()) {
-      logError('announce', new Error(`canal ${id} não é de texto (ou não existe)`));
-      return false;
-    }
-
-    // Checar antes de tentar deixa o motivo no log em vez de um DiscordAPIError
-    // genérico — e é o erro de configuração mais provável depois do ID errado.
-    const me = channel.guild?.members?.me;
-    if (me && !channel.permissionsFor(me)?.has(PermissionFlagsBits.SendMessages)) {
-      logError('announce', new Error(`sem permissão de enviar em ${id}`));
-      return false;
-    }
+    const channel = await resolveChannel(client, id, 'announce');
+    if (!channel) return false;
 
     const mapUrl = osu.getMapUrl(info.diffs[0]?.id, info.setId, osu.PRIVATE_MODE);
 
@@ -158,4 +190,75 @@ async function announceGameStatus(client, evento, s) {
   }, s);
 }
 
-module.exports = { isConfigured, announceStatus, announceGameStatus, coverUrl };
+// Mesmas cores que o webhook de auditoria do servidor usa para estas duas
+// ações (`AUDIT_LOG_STYLE`, em app/discord.py). O canal é o mesmo, e ler duas
+// paletas para o mesmo assunto é ruído.
+const PRIV_COLOR = {
+  addpriv: 0x3498db,
+  rmpriv:  0x992d22,
+};
+
+/** Avatar da conta no servidor privado — mesma origem que o resto do bot usa. */
+const avatarUrl = osuId => `${servers.get(osu.PRIVATE_MODE).avatars}/${Number(osuId)}`;
+
+/**
+ * Anuncia um cargo dado ou tirado DENTRO DO JOGO (`!addpriv` / `!rmpriv`).
+ *
+ * ── Por que só o caminho in-game ──────────────────────────────────────────────
+ * O `/role` daqui e o admin panel publicam nos canais `addpriv`/`removepriv`,
+ * e quem os atende no servidor já manda um embed para o webhook de auditoria.
+ * Anunciar esses dois aqui colocaria a mesma ação duas vezes no mesmo canal.
+ * Os comandos in-game não passam por lá — é o buraco que este anúncio fecha.
+ *
+ * ── Não relê o servidor ───────────────────────────────────────────────────────
+ * Ao contrário do anúncio de mapa, o evento já traz nome do alvo e de quem
+ * aplicou: o `!addpriv` roda com os dois objetos em mãos. Não há o que
+ * completar por API, então não há requisição nenhuma no caminho do anúncio.
+ *
+ * @param {import('discord.js').Client} client
+ * @param {object} evento saída do `parsePrivEvent` do daycoreEvents
+ * @param {object} s strings de i18n já resolvidas
+ * @returns {Promise<boolean>} se o anúncio saiu
+ */
+async function announcePrivChange(client, evento, s) {
+  const id = privChannelId();
+  if (!id) return false;
+
+  try {
+    const channel = await resolveChannel(client, id, 'announce:priv');
+    if (!channel) return false;
+
+    const concedeu   = evento.type === 'addpriv';
+    const perfilUrl  = osu.getUserUrl(evento.targetId, osu.PRIVATE_MODE);
+    const cargos     = evento.privs.map(daycore.labelOfPrivName).join(', ');
+    // Nome de jogador é texto de terceiro em canal público, e o do alvo vai em
+    // posição de link — sem escape, um nick com `](url)` forja o destino.
+    const alvo       = md(evento.targetName ?? `#${evento.targetId}`);
+
+    const embed = new EmbedBuilder()
+      .setColor(PRIV_COLOR[evento.type] ?? 0x99ccff)
+      .setTitle(concedeu ? s.priv_ann_title_give : s.priv_ann_title_take)
+      .setURL(perfilUrl)
+      .setDescription(
+        `**[${alvo}](${perfilUrl})** \`#${evento.targetId}\`\n` +
+        s.priv_ann_roles(cargos) +
+        // Quem aplicou só existe se o fork mandar o campo — mesma regra do
+        // anúncio de mapa. Sem ele sai "aplicado in-game", não sai errado.
+        `\n${evento.authorName ? s.priv_ann_by_ingame(md(evento.authorName)) : s.priv_ann_ingame_unknown}`,
+      )
+      .setThumbnail(avatarUrl(evento.targetId))
+      .setTimestamp();
+
+    await channel.send({ embeds: [embed] });
+    return true;
+  } catch (error) {
+    // A mudança de cargo no Daycore já valeu; o anúncio é o que falhou.
+    logError('announce:priv', error);
+    return false;
+  }
+}
+
+module.exports = {
+  isConfigured, announceStatus, announceGameStatus, coverUrl,
+  isPrivLogConfigured, announcePrivChange, avatarUrl,
+};

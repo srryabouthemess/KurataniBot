@@ -74,3 +74,90 @@ test('ids não numéricos são filtrados, não propagados', () => {
   const e = parseEvent(payload({ map_ids: [111, 'abc', null, 222] }));
   assert.deepEqual(e.mapIds, [111, 222]);
 });
+
+/**
+ * Cargo mexido dentro do jogo (`ex:priv_change`).
+ *
+ * Este canal só existe porque `!addpriv`/`!rmpriv` não passam por receptor
+ * nenhum no servidor — o `/role` e o admin panel publicam em `addpriv`/
+ * `removepriv`, e quem atende esses canais já manda embed para o webhook de
+ * auditoria. O que os casos abaixo travam é o filtro: o que vira anúncio, e o
+ * que um payload forjado consegue colocar dentro de um embed público.
+ */
+const { parsePrivEvent } = require('../src/daycoreEvents');
+
+const priv = (extra = {}) => JSON.stringify({
+  target_id: 42, target_name: 'fulano', privs: ['nominator'], type: 'addpriv', ...extra,
+});
+
+test('addpriv e rmpriv viram anúncio', () => {
+  const dado = parsePrivEvent(priv());
+  assert.equal(dado.type, 'addpriv');
+  assert.equal(dado.targetId, 42);
+  assert.equal(dado.targetName, 'fulano');
+  assert.deepEqual(dado.privs, ['nominator']);
+
+  assert.equal(parsePrivEvent(priv({ type: 'rmpriv' })).type, 'rmpriv');
+});
+
+test('tipo que não é de cargo é descartado', () => {
+  // O canal é só dos dois comandos in-game; qualquer outro tipo é payload de
+  // outra coisa (ou forjado) e não tem embed correspondente.
+  assert.equal(parsePrivEvent(priv({ type: 'rank' })), null);
+  assert.equal(parsePrivEvent(priv({ type: '' })), null);
+});
+
+test('alvo inválido não vira anúncio', () => {
+  // Mesmo motivo dos `map_ids`: `Number(null)` é 0, e um alvo 0 anunciaria
+  // cargo de um jogador que não existe.
+  assert.equal(parsePrivEvent(priv({ target_id: null })), null);
+  assert.equal(parsePrivEvent(priv({ target_id: 0 })), null);
+  assert.equal(parsePrivEvent(priv({ target_id: 'abc' })), null);
+  // Id como string é forma legítima de fork que serializa assim.
+  assert.equal(parsePrivEvent(priv({ target_id: '42' })).targetId, 42);
+});
+
+test('o nome do alvo é opcional', () => {
+  // Sem ele o anúncio cai no `#id`, que ainda identifica a conta.
+  assert.equal(parsePrivEvent(priv({ target_name: null })).targetName, null);
+});
+
+test('o autor é opcional, como no anúncio de mapa', () => {
+  assert.equal(parsePrivEvent(priv()).authorId, null);
+  assert.equal(parsePrivEvent(priv()).authorName, null);
+
+  const comAutor = parsePrivEvent(priv({ author_id: 7, author_name: 'sicrano' }));
+  assert.equal(comAutor.authorId, 7);
+  assert.equal(comAutor.authorName, 'sicrano');
+
+  assert.equal(parsePrivEvent(priv({ author_id: 0 })).authorId, null);
+});
+
+test('cargo vem normalizado, sem repetição', () => {
+  // O bancho valida o nome antes de aplicar, mas não a caixa nem a repetição:
+  // `!addpriv fulano Mod mod` é aceito e aplicado.
+  const dado = parsePrivEvent(priv({ privs: ['Mod', 'mod', ' NOMINATOR '] }));
+  assert.deepEqual(dado.privs, ['mod', 'nominator']);
+});
+
+test('evento sem cargo nenhum é descartado', () => {
+  assert.equal(parsePrivEvent(priv({ privs: [] })), null);
+  assert.equal(parsePrivEvent(priv({ privs: 'nominator' })), null);
+  assert.equal(parsePrivEvent(priv({ privs: [null, 3, '  '] })), null);
+});
+
+test('payload forjado não vira parede de texto no canal', () => {
+  // Isto sai num embed público: sem teto, quem alcançasse o Redis mandaria mil
+  // cargos de 10 mil caracteres cada.
+  const dado = parsePrivEvent(priv({
+    privs: [...Array(50).keys()].map(i => `cargo${i}`).concat('x'.repeat(500)),
+  }));
+  assert.equal(dado.privs.length, 16);
+  assert.ok(dado.privs.every(p => p.length <= 32));
+});
+
+test('payload quebrado no canal de cargo também não derruba nada', () => {
+  assert.equal(parsePrivEvent('isso não é json'), null);
+  assert.equal(parsePrivEvent('null'), null);
+  assert.equal(parsePrivEvent(''), null);
+});

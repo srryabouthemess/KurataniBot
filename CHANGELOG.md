@@ -2,6 +2,31 @@
 
 ---
 
+# Sessão de 2026-08-21 (cargo mexido in-game vira registro no Discord)
+
+Cargo dado ou tirado **dentro do jogo** não aparecia em lugar nenhum. O `/role` e o admin panel publicam nos canais Redis `addpriv`/`removepriv`, e quem os atende no servidor (`app/api/utils.py`) já manda um embed para o webhook de auditoria — mas `!addpriv` e `!rmpriv` chamam `add_privs`/`remove_privs` direto, sem receptor no meio. Sem auditoria, sem anúncio, sem rastro: quem lia o canal de log via as promoções feitas pelo Discord e pelo painel, e não via as feitas por quem estava logado no jogo.
+
+É o mesmo buraco que o `ex:map_status_change` fechou para mapa rankeado in-game, e a solução é a mesma.
+
+## ✨ Novos recursos
+
+- **`ex:priv_change`: o bot escuta cargo mexido no jogo e registra no Discord.** [`daycoreEvents.js`](src/daycoreEvents.js), [`announce.js`](src/announce.js), [`index.js`](src/index.js)
+  - O embed traz o alvo com link para o perfil no servidor, o `#id`, os cargos afetados e quem aplicou, com o avatar do alvo — é dele que o cargo mudou. As cores são as mesmas que o webhook de auditoria do servidor usa para `addpriv`/`removepriv`: o canal é o mesmo, e duas paletas para o mesmo assunto seria ruído.
+  - **Canal próprio, `DAYCORE_ROLE_LOG_CHANNEL_ID`**, separado do `DAYCORE_ANNOUNCE_CHANNEL_ID`. Anúncio de mapa é vitrine, cargo é registro de staff; amarrar os dois na mesma variável obrigaria a escolher entre publicar cargo na vitrine ou não publicar nada. Vazio desliga, como no de mapa.
+  - **Cobre só o caminho in-game, de propósito.** Assinar os canais `addpriv`/`removepriv` também colocaria `/role` e admin panel duas vezes no mesmo canal, já que o webhook do servidor os registra.
+  - `listen` passou a receber `{ onStatusChange, onPrivChange }` em vez de uma função só, e os dois canais dividem o mesmo client: um client em modo subscribe não serve para mais nada mesmo, e duas conexões só dobrariam o que pode cair sem ninguém perceber.
+  - O parse trata o payload como entrada hostil, igual ao de mapa: alvo tem que ser inteiro positivo (`Number(null)` é 0, que viraria anúncio sobre jogador que não existe), nome de cargo vem normalizado e sem repetição, e há teto de 16 cargos de até 32 caracteres — sem ele, quem alcançasse o Redis publicaria uma parede de texto num canal público. Nick de terceiro passa pelo escape de markdown, porque vai em posição de link.
+
+- **`labelOfPrivName`, para traduzir o nome de cargo que o servidor publica.** [`daycoreAdmin.js`](src/daycoreAdmin.js)
+  - A tabela `ROLES` não servia: ela é o menu do `/role`, e o que chega pelo evento é o que alguém digitou no jogo — inclusive cargo que o `/role` não oferece (`normal`, `supporter`, `premium`).
+  - Aceita `moderator` **e** `mod` para o mesmo bit, porque o servidor usa os dois nomes: `str_priv_dict` de `app/commands.py` (in-game) diz `moderator`, o de `app/api/utils.py` (canais Redis) diz `mod`.
+
+## 📝 Do lado do servidor
+
+- Exige o fork publicando `ex:priv_change` no `!addpriv`/`!rmpriv` (`app/commands.py`), como já faz com `ex:map_status_change` no `!map`. Sem isso o bot assina um canal que ninguém alimenta — não quebra nada, só não registra nada.
+
+---
+
 # Sessão de 2026-08-20 (/recent e /rs juntam VN e RX)
 
 Até aqui, quem jogava nos dois leaderboards de um servidor com Relax (Daycore, EZPP) via a lista recente pela metade: `/recent` e `/rs` mostravam só o VN ou só o RX, dependendo de qual servidor estava ligado, e a outra metade das plays ficava invisível a não ser que a pessoa trocasse de servidor no meio da sessão.

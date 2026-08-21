@@ -438,6 +438,55 @@ function labelOfBit(bit) {
 }
 
 /**
+ * Nomes de cargo como o BANCHO os aceita, para traduzir o que ele publica.
+ *
+ * Não dá para reaproveitar a tabela ROLES aqui: ela é o menu do `/role`, e o
+ * que chega pelo `ex:priv_change` é o que alguém digitou no jogo — inclusive
+ * cargo que o `/role` não oferece (`normal`, `supporter`, `premium`).
+ *
+ * `moderator` e `mod` são o MESMO bit com dois nomes, e isso é do servidor, não
+ * daqui: o `str_priv_dict` de `app/commands.py` (in-game) diz `moderator`, e o
+ * de `app/api/utils.py` (canais Redis) diz `mod`. Aceitar os dois é o que faz o
+ * rótulo sair certo venha o evento de onde vier.
+ */
+const PRIV_BY_NAME = {
+  normal:      Privileges.UNRESTRICTED,
+  verified:    Privileges.VERIFIED,
+  whitelisted: Privileges.WHITELISTED,
+  supporter:   Privileges.SUPPORTER,
+  premium:     Privileges.PREMIUM,
+  alumni:      Privileges.ALUMNI,
+  tournament:  Privileges.TOURNEY_MANAGER,
+  nominator:   Privileges.NOMINATOR,
+  moderator:   Privileges.MODERATOR,
+  mod:         Privileges.MODERATOR,
+  admin:       Privileges.ADMINISTRATOR,
+  developer:   Privileges.DEVELOPER,
+};
+
+/**
+ * UNRESTRICTED fica fora de PRIV_LABELS porque ninguém quer lê-lo na lista de
+ * cargos de uma conta (ver `privNames`). Aqui o cargo É o assunto da frase —
+ * "cargo concedido: 1" não diz nada a ninguém.
+ */
+const EXTRA_LABELS = { [Privileges.UNRESTRICTED]: 'Unrestricted' };
+
+/**
+ * O nome de exibição de um cargo pelo nome que o bancho usa.
+ *
+ * Nome fora da tabela sai como veio, em minúsculo: o bancho recusa antes de
+ * aplicar (`Not found: x.`), então isto é caminho de payload forjado — e mostrar
+ * o texto recebido é melhor que inventar um rótulo ou engolir o anúncio.
+ */
+function labelOfPrivName(name) {
+  const chave = String(name).trim().toLowerCase();
+  if (!Object.hasOwn(PRIV_BY_NAME, chave)) return chave;
+
+  const bit = PRIV_BY_NAME[chave];
+  return PRIV_LABELS.find(([b]) => b === bit)?.[1] ?? EXTRA_LABELS[bit] ?? chave;
+}
+
+/**
  * TODOS os cargos ligados, do mais alto para o mais baixo.
  *
  * O `privLabel` devolve só o topo, e para conferir uma concessão isso não
@@ -711,8 +760,10 @@ module.exports = {
   STAFF_MASK,
   privLabel,
   labelOfBit,
+  labelOfPrivName,
   privNames,
   ROLES,
+  PRIV_BY_NAME,
   addPrivilege,
   removePrivilege,
   verifyPriv,

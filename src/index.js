@@ -118,6 +118,16 @@ async function announceGameRank(client, evento) {
   await announce.announceGameStatus(client, evento, s);
 }
 
+/**
+ * Anuncia o cargo que foi dado ou tirado dentro do jogo.
+ *
+ * Mesmo idioma e mesmo motivo do anúncio de mapa: não há interação por trás.
+ */
+async function announceGamePriv(client, evento) {
+  const s = forGuild(process.env.DAYCORE_GUILD_ID);
+  await announce.announcePrivChange(client, evento, s);
+}
+
 client.once('clientReady', async () => {
   console.log(`Bot online como ${client.user.tag}`);
 
@@ -138,8 +148,15 @@ client.once('clientReady', async () => {
 
   // Mapa rankeado PELO JOGO (`!map`) também vira anúncio. O bancho já publica
   // esse evento; até aqui ninguém escutava, e ele se perdia.
+  //
+  // Cargo mexido pelo jogo (`!addpriv`/`!rmpriv`) segue o mesmo caminho, e por
+  // um motivo mais forte: esses dois não passam por receptor nenhum no
+  // servidor, então nem a auditoria dele registra — ver announce.js.
   try {
-    await daycoreEvents.listen(evento => announceGameRank(client, evento));
+    await daycoreEvents.listen({
+      onStatusChange: evento => announceGameRank(client, evento),
+      onPrivChange:   evento => announceGamePriv(client, evento),
+    });
   } catch (error) {
     // Extra: sem isto o bot segue inteiro, só não anuncia o que foi feito
     // in-game — o que passa pelo /nominate continua saindo normalmente.

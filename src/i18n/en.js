@@ -256,6 +256,14 @@ module.exports = ({ ADMIN }) => ({
   ann_by_ingame:           (who) => `Applied by ${who}, in-game`,
   ann_ingame_unknown:      'Applied in-game',
 
+  // Log for roles changed INSIDE THE GAME. What goes through /role and the
+  // admin panel is already embedded by the server's own audit webhook.
+  priv_ann_title_give:     'Role granted in-game',
+  priv_ann_title_take:     'Role removed in-game',
+  priv_ann_roles:          (roles) => `Roles: **${roles}**`,
+  priv_ann_by_ingame:      (who) => `Applied by ${who}, in-game`,
+  priv_ann_ingame_unknown: 'Applied in-game',
+
   nom_invalid_map:         '❌ Could not identify that map. Use the beatmap/set ID or a link.',
   nom_map_not_found:       `❌ Map not found on ${ADMIN} or on osu!.`,
   nom_not_on_server:       `ℹ️ Not on ${ADMIN} yet — difficulties read from osu!, and the server fetches the map when the status is applied.`,
