@@ -198,12 +198,19 @@ function apply(db) {
     -- canonicalMods (mods.js): o CL não tem bit, e bit nenhum guarda ajuste de
     -- mod — um DT a 1,3x e um a 1,5x colidiam na mesma linha com números
     -- diferentes.
+    --
+    -- A coluna "engine" está na chave pela mesma razão que na fc_pp abaixo: a
+    -- estrela de um mapa no Relax sai do akatsuki-pp, que zera a dimensão de
+    -- velocidade, e a do vanilla sai do lazer-calculator. São dois números
+    -- legítimos para o mesmo (mapa, mods), e sem a coluna o primeiro a ser
+    -- calculado valeria para os dois — sem TTL para vencer.
     CREATE TABLE IF NOT EXISTS cache.map_difficulty (
       map_id    INTEGER NOT NULL,
       mods      TEXT    NOT NULL,
+      engine    TEXT    NOT NULL,  -- 'lazer' | 'akatsuki'
       stars     REAL    NOT NULL,
       max_combo INTEGER,
-      PRIMARY KEY (map_id, mods)
+      PRIMARY KEY (map_id, mods, engine)
     );
 
     -- PP que o score teria rendido em FC.

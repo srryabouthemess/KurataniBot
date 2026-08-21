@@ -103,20 +103,37 @@ const noRosu = (op, mapId, args) =>
  *
  * Isto substitui o POST em /beatmaps/{id}/attributes que o getAdjustedStars
  * fazia a cada exibição: o rosu-pp já estava no projeto e o simulatePP já
- * lia diffAttrs.stars daqui. Cacheado por (mapa, mods, mecânica), como a
+ * lia diffAttrs.stars daqui. Cacheado por (mapa, mods, motor), como a
  * osu_map_difficulty do BathBot.
  *
+ * ── Qual motor ────────────────────────────────────────────────────────────────
+ * O mesmo que calcula o PP exibido ao lado, e pela mesma razão que o getFCpp
+ * escolhe entre os dois: no Relax, quem pontuou o score foi o akatsuki-pp, e a
+ * estrela dele não é a do lazer. O lazer TEM um caminho para o RX (zera a
+ * velocidade e corta o flashlight), mas é o RX do osu!lazer, não o dos
+ * servidores de Relax — e era ele que estava na tela.
+ *
+ * @param {object} [opts]
+ * @param {boolean} [opts.relax] usar o akatsuki-pp em vez do lazer-calculator
  * @returns {Promise<{stars: number, maxCombo: number|null}|null>}
  */
-async function getDifficultyAttrs(mapId, mods) {
-  // Colapsado ANTES da chave: ver lazerMods. Este caminho é sempre o do lazer.
-  const modsMotor = lazerMods(mods);
+async function getDifficultyAttrs(mapId, mods, { relax = false } = {}) {
+  // O akatsuki-pp é bitmask e lê a velocidade do bit do DT, então tirar o DT de
+  // um nightcore apagaria o mod inteiro; o lazer precisa do corte. Mesma
+  // divisão do getFCpp — e ela entra ANTES da chave, ver lazerMods.
+  const modsMotor = relax ? [...(mods ?? [])] : lazerMods(mods);
   const chaveMods = canonicalMods(modsMotor);
+  const motor     = relax ? 'akatsuki' : 'lazer';
 
-  const cached = db.getMapDifficulty(mapId, chaveMods);
+  const cached = db.getMapDifficulty(mapId, chaveMods, motor);
   if (cached) return cached;
 
-  const attrs = await noLazer('difficulty', mapId, { mods: modsMotor });
+  // Sem hits nem combo: o número que interessa aqui é a estrela, e ela não
+  // depende de como a play foi. O -1 do pp_calc.py preenche o resto assumindo
+  // SS/FC (ver calcPPPython).
+  const attrs = relax
+    ? await calcPPPython(mapId, modsToBits(modsMotor), null, null, null, 0)
+    : await noLazer('difficulty', mapId, { mods: modsMotor });
   if (!attrs || !Number.isFinite(attrs.stars)) return null;
 
   // Combo zero quer dizer "mapa sem objeto nenhum", que não existe de verdade.
@@ -129,8 +146,14 @@ async function getDifficultyAttrs(mapId, mods) {
   // função pura do arquivo).
   if (!attrs.maxCombo) return null;
 
-  db.setMapDifficulty(mapId, chaveMods, attrs.stars, attrs.maxCombo);
-  return attrs;
+  // Só os dois campos, e não o `attrs` inteiro: o retorno do akatsuki-pp traz um
+  // `pp` junto (o do SS que ele calculou de passagem), e devolvê-lo aqui faria a
+  // primeira chamada ter um campo que a chamada seguinte, vinda do cache, não
+  // tem. Um campo que existe às vezes é pior do que não existir.
+  const resultado = { stars: attrs.stars, maxCombo: attrs.maxCombo };
+
+  db.setMapDifficulty(mapId, chaveMods, motor, resultado.stars, resultado.maxCombo);
+  return resultado;
 }
 
 /**
@@ -472,12 +495,19 @@ async function getAdjustedStars(beatmapId, mods, mode = DEFAULT_MODE) {
   // antes vinha pronto (7.08★ contra os 7.13★ do site). O HD, que também estava
   // na lista de cosméticos, SAIU dela quando o rework de reading passou a mexer
   // na estrela — ver mods.js.
-  if (difficultyMods(mods).length === 0) return null;
+  //
+  // No Relax o atalho não existe: a estrela que a API publica é a do vanilla, e
+  // o RX está sempre na lista de mods de um score de lá — então `difficultyMods`
+  // nunca vem vazio ali de qualquer forma. A guarda explícita é para o dia em
+  // que um servidor mandar um score de Relax sem o mod na lista: o valor da API
+  // continuaria sendo o número errado.
+  const relax = servers.get(mode).relax;
+  if (!relax && difficultyMods(mods).length === 0) return null;
 
   // Com mods a API não ajuda: ela só publica o valor sem mods. Aí é cálculo
   // local, com os mesmos mods que o PP exibido ao lado usa (engineMods), para os
   // dois números não saírem de bases diferentes.
-  const attrs = await getDifficultyAttrs(beatmapId, engineMods(mode, mods));
+  const attrs = await getDifficultyAttrs(beatmapId, engineMods(mode, mods), { relax });
   return attrs ? attrs.stars.toFixed(2) : null;
 }
 

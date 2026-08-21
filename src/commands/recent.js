@@ -81,6 +81,27 @@ module.exports = {
       // não passa por lá de novo, mas ainda precisa atualizar o contexto.
       const pageMapId = new Map();
 
+      // O perfil de CADA leaderboard, buscado sob demanda e uma vez só.
+      //
+      // O `fetchPlayer` acima trouxe o do modo que o comando resolveu, e com
+      // `modo: both` esse modo é o VN (ver modo.apply) — a metade que se mostra
+      // quando não dá para mostrar as duas. Só que o cabeçalho não fala da lista:
+      // ele fala da play que está na tela, e uma play de RX com "7.112,00pp (#3)"
+      // do vanilla em cima é um número que não tem nada a ver com ela (a mesma
+      // conta tem 14.324pp e #4 no RX). Estável e errado é pior do que acompanhar
+      // a página.
+      //
+      // Fora do `modo: both` isto não faz requisição nenhuma: as chaves buscadas
+      // e a chave resolvida são a mesma, e o mapa já nasce com a resposta.
+      const perfis = new Map([[resolved.mode, Promise.resolve(user)]]);
+      const perfilDe = (key) => {
+        // Falhar aqui cai no perfil que já se tem: o cabeçalho fica com o número
+        // do outro leaderboard, que é o que acontecia sempre até agora — melhor
+        // do que derrubar a página inteira por causa da linha do autor.
+        if (!perfis.has(key)) perfis.set(key, osu.getUser(user.id, key).catch(() => null));
+        return perfis.get(key);
+      };
+
       async function buildEmbed(page) {
         // Enriquece só a play exibida agora, não as 50 buscadas de uma vez —
         // evita rajada de requisições/rate limit na API do osu!
@@ -94,17 +115,17 @@ module.exports = {
         // Todo o desenho da play mora no embeds/play.js — é o mesmo em todo
         // comando. O que sobra aqui é a moldura: quem jogou, e onde a play
         // está na lista de páginas.
-        const bloco = await playEmbed.single(recent, { mode: playMode, s });
+        const [bloco, dono] = await Promise.all([
+          playEmbed.single(recent, { mode: playMode, s }),
+          perfilDe(playMode),
+        ]);
 
         return new EmbedBuilder()
-          // Link de perfil: mesmo em VN e RX (ver banchoPyApi/rippleApi
-          // userUrl), então continua no modo do COMANDO, não da play. O
-          // author() também renderiza pp e rank global do perfil buscado
-          // nesse modo — então numa lista combinada, uma play de RX aparece
-          // com o pp/rank de VN no cabeçalho. É de propósito: um cabeçalho
-          // estável para a lista inteira, em vez de um que pisca a cada
-          // página conforme a play vem de VN ou de RX.
-          .setAuthor(playEmbed.author(user, mode, s))
+          // pp e rank do leaderboard DESTA play — numa lista combinada eles
+          // mudam de uma página para a outra, porque são outros números. O link
+          // de perfil é o mesmo em VN e RX (ver banchoPyApi/rippleApi userUrl),
+          // então o modo aqui só decide o que se lê, não para onde se clica.
+          .setAuthor(playEmbed.author(dono ?? user, playMode, s))
           .setTitle(bloco.title)
           .setURL(bloco.url)
           .setColor(bloco.color)

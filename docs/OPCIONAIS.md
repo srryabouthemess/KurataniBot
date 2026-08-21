@@ -127,7 +127,7 @@ A lib só tem binário para **Windows x64** e **Linux x64**. Em qualquer outra p
 | O que some | O que continua |
 |---|---|
 | `(FC: ~Xpp)` na linha da play | o PP real do score, que vem da API |
-| estrela ajustada por mod | a estrela sem mods, publicada pela API |
+| estrela ajustada por mod, no vanilla | a estrela sem mods, publicada pela API |
 | `/simulate` e `/whatif` | todo o resto dos comandos |
 
 A causa vai para o log **uma vez só**, e o `/diag` mostra a linha `lazer-calc` como fora do ar.
@@ -142,7 +142,9 @@ O runtime .NET da lib não descarrega: o simples `require()` dela, sem calcular 
 
 ## PP no Relax
 
-O Relax usa outro sistema de PP, calculado por uma biblioteca Python. **Sem ela o bot funciona normalmente** — só o PP do RX aparece como `?pp`.
+O Relax usa outro sistema de PP, calculado por uma biblioteca Python. Ele também é quem dá a **estrela** de uma play de RX: o algoritmo é outro (a dimensão de velocidade sai da conta), então o valor do lazer — e o publicado pela API — descreve outro jogo.
+
+**Sem a lib o bot funciona normalmente**: o PP do RX aparece como `?pp` e a estrela cai na do vanilla, sem mods.
 
 Precisa de **Python 3.11** com a lib instalada, apontado no `.env`:
 

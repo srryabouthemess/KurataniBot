@@ -122,22 +122,26 @@ function setBeatmapMeta(mapId, data) {
 
 // ─── Atributos de dificuldade ─────────────────────────────────────────────────
 
-/** @returns {{stars: number, maxCombo: number|null}|null} */
-function getMapDifficulty(mapId, mods) {
+/**
+ * @param {string} engine 'lazer' | 'akatsuki' — o mesmo eixo da fc_pp: o Relax
+ *   é calculado por outro motor, e a estrela dele é outro número.
+ * @returns {{stars: number, maxCombo: number|null}|null}
+ */
+function getMapDifficulty(mapId, mods, engine) {
   const row = db
-    .prepare('SELECT stars, max_combo FROM cache.map_difficulty WHERE map_id = ? AND mods = ?')
-    .get(mapId, mods);
+    .prepare('SELECT stars, max_combo FROM cache.map_difficulty WHERE map_id = ? AND mods = ? AND engine = ?')
+    .get(mapId, mods, engine);
 
   metrics.cache('mapDifficulty', Boolean(row));
   return row ? { stars: row.stars, maxCombo: row.max_combo ?? null } : null;
 }
 
-function setMapDifficulty(mapId, mods, stars, maxCombo) {
+function setMapDifficulty(mapId, mods, engine, stars, maxCombo) {
   db.prepare(`
-    INSERT INTO cache.map_difficulty (map_id, mods, stars, max_combo) VALUES (?, ?, ?, ?)
-    ON CONFLICT(map_id, mods) DO UPDATE SET
+    INSERT INTO cache.map_difficulty (map_id, mods, engine, stars, max_combo) VALUES (?, ?, ?, ?, ?)
+    ON CONFLICT(map_id, mods, engine) DO UPDATE SET
       stars = excluded.stars, max_combo = excluded.max_combo
-  `).run(mapId, mods, stars, maxCombo ?? null);
+  `).run(mapId, mods, engine, stars, maxCombo ?? null);
 }
 
 // ─── PP de FC ─────────────────────────────────────────────────────────────────

@@ -29,7 +29,7 @@ const path = require('path');
 const servers = require('../servers');
 const { DATA_DIR } = require('../paths');
 
-const VERSAO_ATUAL = 3;
+const VERSAO_ATUAL = 4;
 
 // Dados de versões antigas do bot, que viviam como JSON na raiz.
 const OLD_LINKS_PATH = path.join(DATA_DIR, 'links.json');
@@ -373,6 +373,57 @@ function acrescentarColunaPreferredModo(db) {
   }
 }
 
+// ─── 3 → 4: a estrela do Relax deixa de dividir linha com a do vanilla ────────
+
+/**
+ * `map_difficulty` ganha a coluna `engine`, como a `fc_pp` já tinha.
+ *
+ * A tabela guardava a estrela por (mapa, mods), o que só bastava enquanto UM
+ * motor calculava todas elas. Não era o caso: o Relax é calculado pelo
+ * akatsuki-pp, que zera a dimensão de velocidade, e o vanilla pelo
+ * lazer-calculator — dois números legítimos para a mesma chave.
+ *
+ * Na prática a colisão não chegou a acontecer, porque score de Relax sempre
+ * carrega o mod RX e isso já separava as chaves. O que acontecia era mais
+ * silencioso: o caminho do Relax nem chegava ao akatsuki-pp, então a linha com
+ * RX guardava o que o LAZER achava de um mapa com RX. Agora que o motor certo
+ * responde, essas linhas precisam sair — e sem TTL para vencer, sair quer dizer
+ * aqui.
+ *
+ * O resto do cache é preservado (vira `engine = 'lazer'`, que é o que de fato
+ * calculou): são os mapas vanilla, a maioria das linhas, e recalculá-los custa
+ * baixar e reprocessar .osu à toa.
+ *
+ * Detecção pelo próprio schema, como as anteriores: sem a coluna `engine`, a
+ * tabela é a antiga.
+ */
+function acrescentarEngineNaMapDifficulty(db) {
+  const temEngine = db.prepare('PRAGMA cache.table_info(map_difficulty)').all()
+    .some(c => c.name === 'engine');
+  if (temEngine) return;
+
+  db.exec(`
+    BEGIN;
+    CREATE TABLE cache.map_difficulty_new (
+      map_id    INTEGER NOT NULL,
+      mods      TEXT    NOT NULL,
+      engine    TEXT    NOT NULL,
+      stars     REAL    NOT NULL,
+      max_combo INTEGER,
+      PRIMARY KEY (map_id, mods, engine)
+    );
+    INSERT INTO cache.map_difficulty_new (map_id, mods, engine, stars, max_combo)
+      SELECT map_id, mods, 'lazer', stars, max_combo
+      FROM cache.map_difficulty
+      WHERE ',' || mods || ',' NOT LIKE '%,RX,%';
+    DROP TABLE cache.map_difficulty;
+    ALTER TABLE cache.map_difficulty_new RENAME TO map_difficulty;
+    COMMIT;
+  `);
+
+  console.log('[db] map_difficulty agora separa lazer de akatsuki; as estrelas de RX serão recalculadas sob demanda.');
+}
+
 // ─── Execução ─────────────────────────────────────────────────────────────────
 
 function run(db) {
@@ -396,6 +447,10 @@ function run(db) {
 
   if (versao < 3) {
     acrescentarColunaPreferredModo(db);
+  }
+
+  if (versao < 4) {
+    acrescentarEngineNaMapDifficulty(db);
   }
 
   // Interpolado porque PRAGMA não aceita parâmetro; o valor é uma constante do

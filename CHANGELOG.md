@@ -2,6 +2,28 @@
 
 ---
 
+# Sessão de 2026-08-21 (uma play de RX passa a ser descrita por números de RX)
+
+Um `/rs` no Daycore RX saía com três números que não eram daquela play: o pp do perfil, o rank global e a estrela do mapa. Nenhum deles ficava vazio nem quebrado — saíam todos plausíveis, que é o que fez os três durarem tanto.
+
+## 🐛 Correções
+
+- **O cabeçalho fala do leaderboard da play, não do que o comando resolveu.** [`recent.js`](src/commands/recent.js)
+  - Com `modo: both` o `/recent` busca as duas listas e as mescla, mas a chave que o `resolvePlayer` devolve é a do **vanilla** (ver `modo.apply`: "os dois" não é uma chave que exista, e o VN é a metade que se mostra quando não dá para mostrar as duas). O perfil vinha dessa chave, e o cabeçalho ficava o mesmo em toda a lista — de propósito, para não piscar a cada virada de página.
+  - Só que o cabeçalho não descreve a lista, descreve a play que está na tela. Medido na conta que reportou: **7.112pp e #3 no vanilla, 14.324pp e #4 no RX**. Uma play de RX aparecia com os primeiros em cima. Estável e errado é pior do que acompanhar a página.
+  - O perfil de cada leaderboard agora é buscado **sob demanda e uma vez só** por interação. Fora do `modo: both` isso não gera requisição nenhuma: a chave buscada e a resolvida são a mesma, e o mapa já nasce com a resposta que o `fetchPlayer` trouxe. Falhar cai no perfil que já se tem, em vez de derrubar a página por causa da linha do autor.
+  - O link do autor continua o mesmo em VN e RX (ver `userUrl`) — o modo aqui decide o que se lê, não para onde se clica.
+
+- **A estrela de uma play de Relax sai do motor que pontuou a play.** [`pp.js`](src/pp.js), [`schema.js`](src/db/schema.js), [`mapCache.js`](src/db/mapCache.js), [`migrations.js`](src/db/migrations.js)
+  - O `getAdjustedStars` mandava **tudo** para o lazer-calculator. No vanilla isso é exatamente certo. No Relax não: quem pontuou o score foi o akatsuki-pp, e as duas contas não são a mesma.
+  - Nada estourava porque o lazer **tem** um caminho para o mod RX (zera a velocidade, corta o flashlight) — só que é o RX do osu!lazer, não o dos servidores de Relax. Saía um número plausível ao lado de um pp calculado por outro algoritmo.
+  - Como isso aparecia: `Cellar of Ghosts [shoyeu's Faint Whisper 260bpm]` **+HDRXNC** exibido como **7.15★** num mapa cujo valor sem mods é **8.945★** — nightcore acelera, e a estrela na tela era menor que a do mapa parado.
+  - O `getDifficultyAttrs` ganhou o eixo `relax`, e com ele a mesma divisão de mods que o `getFCpp` já fazia: o lazer recebe a lista colapsada (`stripImpliedDT`), o akatsuki-pp recebe o bitmask cru, porque ele lê a velocidade do bit do DT e tirá-lo apagaria o nightcore inteiro.
+  - **`map_difficulty` ganhou a coluna `engine`**, como a `fc_pp` já tinha. Na prática as chaves nunca chegaram a colidir (score de Relax sempre carrega o mod RX, e isso já as separava), mas as linhas com RX guardavam o que o **lazer** achava — e a tabela não tem TTL. A migração 3 → 4 preserva o resto do cache como `engine = 'lazer'` e **descarta só as linhas com RX**, que voltam sob demanda pelo motor certo.
+  - Sem o `akatsuki-pp-py` instalado, a estrela do RX cai na do vanilla sem mods, do mesmo jeito que o PP já caía em `?pp`.
+
+---
+
 # Sessão de 2026-08-21 (o `npm test` para de brigar consigo mesmo)
 
 O `npm test` falhava sozinho de vez em quando — 2 vezes em 21 rodadas da suíte inteira — sempre com `database is locked`, e sempre num arquivo que não tinha nada a ver com banco de dados. Nada no teste explicava a falha, porque a causa não estava nele.
