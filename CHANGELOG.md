@@ -22,6 +22,12 @@ Um `/rs` no Daycore RX saía com três números que não eram daquela play: o pp
   - **`map_difficulty` ganhou a coluna `engine`**, como a `fc_pp` já tinha. Na prática as chaves nunca chegaram a colidir (score de Relax sempre carrega o mod RX, e isso já as separava), mas as linhas com RX guardavam o que o **lazer** achava — e a tabela não tem TTL. A migração 3 → 4 preserva o resto do cache como `engine = 'lazer'` e **descarta só as linhas com RX**, que voltam sob demanda pelo motor certo.
   - Sem o `akatsuki-pp-py` instalado, a estrela do RX cai na do vanilla sem mods, do mesmo jeito que o PP já caía em `?pp`.
 
+- **O rank do país volta a aparecer em servidor com Shiina-Web.** [`banchoPyApi.js`](src/osu/banchoPyApi.js), [`servers.js`](src/servers.js)
+  - O cabeçalho saía como `nunca: 7.108,00pp (#3 KP)` — bandeira, país, e nenhuma posição dentro dele. O `author()` só escreve o rank regional quando ele existe, então o que estava faltando era o dado, não o desenho.
+  - A causa era a FONTE. Servidor com Shiina-Web lia o rank global do `get_rank_cache` do front-end, que responde o **histórico diário** do jogador — a posição de hoje é o último item da lista, e rank de país não existe naquela resposta. Só quem **não** tem Shiina-Web (o EZPP Farm) já caía na v1 do bancho.py-ex, que traz as duas de uma vez.
+  - Agora as duas saem da v1 em qualquer servidor bancho.py. **Custa a mesma requisição** que o `get_rank_cache` custava, e some um caminho de código: `temShiina` continua valendo para o que só o front-end tem (`get_player_scores`).
+  - Conferido no Daycore, que tem os dois: v1 e `get_rank_cache` dão o mesmo número, em VN (#3) e em RX (#4).
+
 ---
 
 # Sessão de 2026-08-21 (o `npm test` para de brigar consigo mesmo)

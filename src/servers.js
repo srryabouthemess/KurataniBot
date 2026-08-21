@@ -16,13 +16,13 @@
  * derivadas do domínio do site — `api.` e `a.` — e podem ser sobrescritas uma
  * a uma quando o servidor foge do padrão.
  *
- * ATENÇÃO ao que "suportar bancho.py" quer dizer: o rank global e as top plays
- * saíam de `get_rank_cache` e `get_player_scores`, que são da **Shiina-Web**,
- * não do bancho.py — por isso o campo `webApi` é separado da `api`.
+ * ATENÇÃO ao que "suportar bancho.py" quer dizer: as top plays saem de
+ * `get_player_scores`, que é da **Shiina-Web** e não do bancho.py — por isso o
+ * campo `webApi` é separado da `api`.
  *
  * Servidor com outro front-end (o EZPP Farm é um) declara `webApi: null`, ou
- * `SERVER_<chave>_WEB=none` no `.env`, e o adaptador busca as duas coisas no
- * próprio bancho.py. O campo continua existindo porque as duas fontes não são
+ * `SERVER_<chave>_WEB=none` no `.env`, e o adaptador busca no próprio
+ * bancho.py. O campo continua existindo porque as duas fontes não são
  * intercambiáveis: os endpoints têm o mesmo nome e devolvem formatos
  * diferentes, então quem lê precisa saber de qual está falando.
  *
@@ -111,7 +111,7 @@ function banchoPyServer({ key, label, site, api, avatars, webApi, covers = null,
     // campo existia sem nunca ser enviado a lugar nenhum — credencial parada só
     // aparece em backup e captura de tela. Se algum endpoint passar a exigir,
     // volta aqui junto do código que a usa.
-    // Shiina-Web: get_rank_cache, get_player_scores.
+    // Shiina-Web: get_player_scores.
     webApi,
     // bancho.py-ex: busca exata por nome (v1) e leitura de scores/mapas (v2).
     banchoV1:  `${api}/v1`,

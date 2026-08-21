@@ -6,11 +6,14 @@
  * `bestScores`, `recentScores`, `beatmapScores`, `userUrl`, `mapUrl` — para o
  * osuClient poder escolher um ou outro sem saber a diferença.
  *
- * ATENÇÃO: "bancho.py" aqui quer dizer a stack completa. O rank global e as top
- * plays vêm de `get_rank_cache` e `get_player_scores`, que são da Shiina-Web (o
- * front-end), não do bancho.py. Por isso `webApi` e `banchoV1/V2` são endereços
- * separados no registro: um servidor com outro front responde o resto e falha
- * nesses dois.
+ * ATENÇÃO: "bancho.py" aqui quer dizer a stack completa. As top plays vêm de
+ * `get_player_scores`, que é da Shiina-Web (o front-end) e não do bancho.py —
+ * por isso `webApi` e `banchoV1/V2` são endereços separados no registro: um
+ * servidor com outro front responde o resto e falha nessa.
+ *
+ * O rank global também saía de lá, do `get_rank_cache`, e deixou de sair: ele
+ * não existe fora da Shiina-Web e não traz o rank do país. As duas posições vêm
+ * da v1 do bancho.py-ex, que todo servidor desses tem (ver fetchUser).
  */
 
 const axios = require('axios');
@@ -48,9 +51,9 @@ const temShiina = (mode) => Boolean(servers.get(mode).webApi);
  * GET na API do front-end (Shiina-Web) do servidor.
  *
  * É um serviço DIFERENTE do bancho.py, apesar de conviverem no mesmo domínio:
- * `get_rank_cache` e `get_player_scores` existem aqui e não lá. Só chame
- * depois de conferir o `temShiina` — num servidor sem Shiina-Web este endereço
- * responde 200 com o HTML da página, que viraria "resposta vazia" silenciosa.
+ * o `get_player_scores` daqui não é o de lá. Só chame depois de conferir o
+ * `temShiina` — num servidor sem Shiina-Web este endereço responde 200 com o
+ * HTML da página, que viraria "resposta vazia" silenciosa.
  */
 async function webApiGet(mode, endpoint, params = {}) {
   const server = servers.get(mode);
@@ -835,30 +838,33 @@ async function fetchUser(username, mode) {
     banchoV2Get(mode, `/players/${idSegment(playerId)}/stats/${idSegment(modeNum)}`),
   ]);
 
-  // O endpoint de stats da v2 não retorna rank; de onde ele vem depende do
-  // front-end. Em qualquer um dos dois caminhos, falhar aqui deixa o rank em
-  // null (sai como "Unranked") em vez de derrubar a consulta inteira — o perfil
-  // inteiro não se perde por causa de uma posição.
+  // O endpoint de stats da v2 não retorna rank; quem tem as duas posições é a
+  // v1, dentro das estatísticas e indexadas por modo. Falhar aqui deixa os
+  // ranks em null (saem como "Unranked") em vez de derrubar a consulta inteira
+  // — o perfil não se perde por causa de uma posição.
+  //
+  // ── A Shiina-Web saiu deste caminho ───────────────────────────────────────
+  // O rank global vinha do `get_rank_cache` do front-end, que é de quando ele
+  // era a única fonte que o bot conhecia. Ele responde o HISTÓRICO diário do
+  // jogador, e a posição de hoje era o último item da lista — funcionava, e
+  // custava a mesma requisição que esta, com duas desvantagens: não existe fora
+  // da Shiina-Web (daí o servidor sem ela já ler a v1 aqui) e não traz o rank do
+  // PAÍS. Sem ele a linha do autor imprimia "#3 KP", com a bandeira e o país
+  // mas sem a posição neles — enquanto a v1 do mesmo servidor respondia
+  // `country_rank: 1` o tempo todo.
+  //
+  // Conferido no Daycore, que tem os dois: v1 e `get_rank_cache` dão o mesmo
+  // número, em VN e em RX.
   let globalRank = null;
   let countryRank = null;
 
   try {
-    if (temShiina(mode)) {
-      const rankRes = await webApiGet(mode, 'get_rank_cache', { id: playerId, mode: modeNum });
-      if (Array.isArray(rankRes) && rankRes.length > 0) {
-        globalRank = rankRes[rankRes.length - 1].rank ?? null;
-      }
-    } else {
-      // O bancho.py devolve as duas posições dentro das estatísticas, indexadas
-      // por modo — e de graça, já que é o mesmo endpoint do resolvePlayerId.
-      // Aqui sai o rank do país junto, que o `get_rank_cache` não dá.
-      const info = await banchoV1Get(mode, 'get_player_info', { id: playerId, scope: 'stats' });
-      const st = info?.player?.stats?.[modeNum];
-      // `|| null` e não `?? null`: quem nunca jogou aquele modo vem com zero, e
-      // "rank 0" na tela é pior do que "Unranked".
-      globalRank  = st?.rank || null;
-      countryRank = st?.country_rank || null;
-    }
+    const info = await banchoV1Get(mode, 'get_player_info', { id: playerId, scope: 'stats' });
+    const st = info?.player?.stats?.[modeNum];
+    // `|| null` e não `?? null`: quem nunca jogou aquele modo vem com zero, e
+    // "rank 0" na tela é pior do que "Unranked".
+    globalRank  = st?.rank || null;
+    countryRank = st?.country_rank || null;
   } catch {
     // segue sem rank
   }
@@ -900,9 +906,9 @@ const RANKING_MAX = 100;
  * O ranking de pp do servidor, do primeiro colocado para baixo.
  *
  * Este vem da API v1 do **bancho.py-ex**, e não da Shiina-Web como o
- * `get_rank_cache` e o `get_player_scores` logo acima — apesar do nome parecido,
- * `get_leaderboard` é do outro serviço, no host `api.`. Servidor com front-end
- * diferente continua respondendo este aqui.
+ * `get_player_scores` logo acima — apesar do nome parecido, `get_leaderboard` é
+ * do outro serviço, no host `api.`. Servidor com front-end diferente continua
+ * respondendo este aqui.
  *
  * O filtro de país é case-insensitive (conferido com `br` e `BR`); mandamos em
  * minúsculo, que é como o bancho.py guarda. País sem ninguém é lista vazia, e
