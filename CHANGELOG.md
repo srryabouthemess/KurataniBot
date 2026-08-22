@@ -2,6 +2,18 @@
 
 ---
 
+# Sessão de 2026-08-21 (o `all` do `/topscores` deixa de ser tudo-ou-nada)
+
+## ✨ Novos recursos
+
+- **A opção `all` do `/topscores` virou escolha: Cheating, Fuquila ou Ambos.** [`topscores.js`](src/commands/topscores.js)
+  - Antes era um booleano: `true` trazia de volta os dois grupos de uma vez, e não havia como olhar só um. O site do servidor tem um botão para cada, então o comando escondia uma distinção que o próprio Daycore faz.
+  - Agora cada valor inclui de volta **um** grupo (`Cheating`, `Fuquila`) e `Both` inclui os dois. Sem a opção, o comportamento é o de antes: os dois ficam de fora.
+  - O `estaOculto` passou a receber a lista de grupos ocultos daquela chamada, com os dois como padrão — quem chama sem o segundo argumento (os testes, por exemplo) continua vendo a regra antiga.
+  - O rodapé continua contando quantas plays ficaram de fora, agora do que sobrou de escondido.
+
+---
+
 # Sessão de 2026-08-21 (uma play de RX passa a ser descrita por números de RX)
 
 Um `/rs` no Daycore RX saía com três números que não eram daquela play: o pp do perfil, o rank global e a estrela do mapa. Nenhum deles ficava vazio nem quebrado — saíam todos plausíveis, que é o que fez os três durarem tanto.

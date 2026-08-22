@@ -123,6 +123,16 @@ test('só Cheating e Fuquila escondem a play', () => {
   assert.equal(topscores.estaOculto([]), false, 'sem grupo é "não sei", não "escondido"');
 });
 
+test('a opção `all` tira da lista de ocultos o grupo que ela inclui', () => {
+  // É o que cada escolha do comando faz: `cheating` deixa a lista com só
+  // `fuquila` dentro, e `both` a esvazia.
+  const g = (...nomes) => nomes.map(name => ({ emoji: '', name }));
+
+  assert.equal(topscores.estaOculto(g('Cheating'), ['fuquila']), false);
+  assert.equal(topscores.estaOculto(g('Fuquila'),  ['fuquila']), true);
+  assert.equal(topscores.estaOculto(g('Cheating', 'Fuquila'), []), false, 'both não esconde ninguém');
+});
+
 test('só o adaptador de bancho.py responde melhores scores do servidor', () => {
   // É a presença do método que o supportsTopScores consulta. O osu! oficial não
   // tem endpoint disso (o `top-plays` do site é HTML, não API) e o Ripple exige

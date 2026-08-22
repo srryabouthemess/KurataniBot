@@ -73,8 +73,28 @@ const GRUPOS_OCULTOS = ['cheating', 'fuquila'];
  * está no topo.
  */
 
-const estaOculto = (grupos) =>
-  grupos.some(g => GRUPOS_OCULTOS.includes(g.name.toLowerCase()));
+/**
+ * As escolhas da opção `all` — uma por botão do site, mais `both` para os dois.
+ *
+ * Nome de grupo é nome próprio do servidor e não se traduz; só `both` tem
+ * localização, porque ali a palavra é nossa.
+ */
+const ESCOLHAS_INCLUIR = [
+  { value: 'cheating', name: 'Cheating' },
+  { value: 'fuquila',  name: 'Fuquila'  },
+  {
+    value: 'both',
+    name: 'Both',
+    name_localizations: { 'pt-BR': 'Ambos', ru: 'Оба' },
+  },
+];
+
+/**
+ * `ocultos` é a lista de grupos que escondem a play NESTA chamada — o padrão são
+ * os dois, e a opção `all` tira dela o que a pessoa mandou incluir de volta.
+ */
+const estaOculto = (grupos, ocultos = GRUPOS_OCULTOS) =>
+  grupos.some(g => ocultos.includes(g.name.toLowerCase()));
 
 /**
  * Mapa e jogador de um score cru, na mesma viagem.
@@ -110,12 +130,13 @@ module.exports = {
         .setRequired(false)
         .addChoices(...servers.rootChoices())
     )
-    .addBooleanOption(option =>
+    .addStringOption(option =>
       option
         .setName('all')
-        .setDescription('Include plays from flagged accounts (Cheating/Fuquila)')
-        .setDescriptionLocalizations({ 'pt-BR': 'Incluir plays de contas marcadas (Cheating/Fuquila)' })
+        .setDescription('Also include plays from these flagged accounts (default: none)')
+        .setDescriptionLocalizations({ 'pt-BR': 'Incluir também as plays destas contas marcadas (padrão: nenhuma)' })
         .setRequired(false)
+        .addChoices(...ESCOLHAS_INCLUIR)
     )),
 
   async execute(interaction) {
@@ -148,16 +169,20 @@ module.exports = {
        * inteira do Daycore (313 scores) é de menos de dez pessoas, então são
        * menos de dez páginas de perfil, com cache de meia hora por cima.
        */
-      const incluirTodos = interaction.options.getBoolean('all') ?? false;
+      // Cada escolha da opção é um dos botões do site: inclui de volta UM grupo,
+      // e `both` inclui os dois. Sem opção, os dois continuam de fora.
+      const incluir = interaction.options.getString('all');
+      const ocultos = incluir === 'both' ? [] : GRUPOS_OCULTOS.filter(g => g !== incluir);
+
       let scores  = todos;
       let ocultas = 0;
 
-      if (!incluirTodos && osu.supportsPlayerGroups(mode)) {
+      if (ocultos.length > 0 && osu.supportsPlayerGroups(mode)) {
         const jogadores = [...new Set(todos.map(score => score.userid))];
         const grupos = await Promise.all(jogadores.map(id => osu.getPlayerGroups(id, mode)));
 
         const bloqueados = new Set(
-          jogadores.filter((_, i) => estaOculto(grupos[i]))
+          jogadores.filter((_, i) => estaOculto(grupos[i], ocultos))
         );
 
         scores  = todos.filter(score => !bloqueados.has(score.userid));
