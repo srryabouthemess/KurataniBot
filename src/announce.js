@@ -90,13 +90,22 @@ async function resolveChannel(client, id, contexto) {
 }
 
 /**
- * Capa do beatmapset, servida pelo CDN do osu! oficial.
+ * Capa do beatmapset, pelo espelho do servidor quando ele tem um.
  *
- * Vale para mapa de servidor privado também: o `set_id` é o mesmo do osu!, que
- * é de onde o mapa veio. Mapa que nunca existiu lá não tem capa, e aí o embed
- * simplesmente sai sem imagem — o Discord ignora URL que não resolve.
+ * Mapa registrado no proprio servidor recebe um `set_id` da faixa privada, que
+ * nao existe no CDN do osu!: pedir a capa la devolve 404 e o embed sai liso. O
+ * espelho extrai a capa do `.osz` guardado e redireciona para o assets.ppy.sh
+ * quando o id e oficial, entao a mesma URL cobre os dois casos. Sem espelho
+ * configurado (`SERVER_<chave>_COVERS`), continua valendo o CDN oficial.
+ *
+ * A base entra por parametro para o teste cobrir os dois caminhos sem depender
+ * do `.env` da maquina.
  */
-const coverUrl = setId => `https://assets.ppy.sh/beatmaps/${Number(setId)}/covers/cover.jpg`;
+const coverUrl = (setId, base = servers.get(osu.PRIVATE_MODE).covers) => (
+  base
+    ? `${base}/${Number(setId)}`
+    : `https://assets.ppy.sh/beatmaps/${Number(setId)}/covers/cover.jpg`
+);
 
 /**
  * Manda o anúncio, se estiver configurado e der.

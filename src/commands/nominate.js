@@ -10,7 +10,7 @@ const announce = require('../announce');
 const db = require('../db');
 const { registrarAcao } = require('../adminLog');
 const { md } = require('../markdown');
-const { t } = require('../i18n');
+const { t, forGuild } = require('../i18n');
 const { exigirSubcomando } = require('../subcommands');
 const { logError } = require('../logger');
 
@@ -200,8 +200,15 @@ async function applyStatus(diffs, status) {
  * rodou esperar a API do Discord entregar uma mensagem para outro canal. O
  * try/catch de dentro já impedia a exceção — não a demora.
  */
-function announceApplied(interaction, s, { setId, diffs, status, label, actorName, confirmed }) {
+function announceApplied(interaction, { setId, diffs, status, label, actorName, confirmed }) {
   if (confirmed.length === 0) return;
+
+  // Idioma do SERVIDOR, nao o da interacao: o embed vai para um canal publico,
+  // e quem le nao rodou comando nenhum. Usando o `s` daqui, um staff com a
+  // preferencia pessoal diferente da do servidor fazia o canal receber dois
+  // anuncios iguais em linguas diferentes -- o do comando na dele, o do rank
+  // in-game na do servidor (ver index.js).
+  const s = forGuild(process.env.DAYCORE_GUILD_ID);
 
   announce.announceStatus(interaction.client, {
     setId, diffs, status,
@@ -468,7 +475,7 @@ module.exports = {
           actorOsuName: staff.osuName,
         });
 
-        announceApplied(interaction, s, {
+        announceApplied(interaction, {
           setId, diffs, status, label, actorName: staff.osuName, confirmed,
         });
 
@@ -536,7 +543,7 @@ module.exports = {
         actorOsuName: staff.osuName,
       });
 
-      announceApplied(interaction, s, {
+      announceApplied(interaction, {
         setId, diffs, status: targetStatus, label,
         actorName: staff.osuName, confirmed,
       });

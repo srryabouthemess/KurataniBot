@@ -2,6 +2,23 @@
 
 ---
 
+# Sessão de 2026-08-29 (o anúncio de mapa rankeado sai certo para quem lê o canal)
+
+Os dois caminhos que anunciam um mapa rankeado — o `/nominate` e o rank feito dentro do jogo — caem no mesmo canal público, mas discordavam em duas coisas visíveis no embed. As duas apareceram lado a lado no canal depois do primeiro mapa enviado pelo editor.
+
+## 🐛 Correções
+
+- **O anúncio passa a falar o idioma do servidor, e não o de quem rodou o comando.** [`nominate.js`](src/commands/nominate.js)
+  - O `announceApplied` reaproveitava o `s` da interação, cuja prioridade começa na preferência pessoal (`usuário > servidor > pt`). O anúncio do rank in-game nunca teve interação atrás e já resolvia por `forGuild`.
+  - Bastava um staff com o idioma diferente do servidor para o canal receber dois anúncios iguais em línguas diferentes. Quem lê um canal público não escolheu nada, então os dois caminhos passam a usar `forGuild`.
+  - A resposta ao staff que rodou o comando continua no idioma dele — mudou só o embed público.
+
+- **A capa de mapa registrado no próprio servidor volta a aparecer.** [`announce.js`](src/announce.js)
+  - O `coverUrl` apontava fixo para `assets.ppy.sh`, assumindo que o `set_id` de mapa privado era o mesmo do osu!. Não é: o registro reescreve o id para a faixa privada (a partir de 100.000.000), que no CDN oficial dá 404 — e o embed saía sem imagem.
+  - Agora usa o espelho do servidor (`SERVER_<chave>_COVERS`), do jeito que o resto do bot já fazia com os scores: o espelho extrai a capa do `.osz` guardado e redireciona para o `assets.ppy.sh` quando o id é oficial, então a mesma URL cobre os dois casos. Sem espelho configurado, continua valendo o CDN oficial.
+
+---
+
 # Sessão de 2026-08-21 (o `all` do `/topscores` deixa de ser tudo-ou-nada)
 
 ## ✨ Novos recursos

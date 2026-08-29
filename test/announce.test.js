@@ -100,7 +100,18 @@ test('erro ao enviar também é contido', async () => {
 test('a capa sai do set id, não do beatmap id', () => {
   // Trocar os dois dá uma imagem de outro mapa — erro silencioso, porque o
   // Discord mostra a capa errada sem reclamar de nada.
-  assert.match(announce.coverUrl(2158809), /beatmaps\/2158809\/covers/);
+  assert.match(announce.coverUrl(2158809, null), /beatmaps\/2158809\/covers/);
+});
+
+test('mapa do servidor privado tira a capa do espelho, não do assets.ppy.sh', () => {
+  // O set id de mapa registrado aqui está na faixa privada e não existe no CDN
+  // do osu!: pedir a capa lá devolve 404 e o embed sai sem imagem. O espelho
+  // extrai a capa do próprio .osz, e redireciona para o assets.ppy.sh quando o
+  // id é oficial — então serve para os dois casos.
+  assert.equal(
+    announce.coverUrl(100000006, 'https://osu.daycore.org/mirror-cover'),
+    'https://osu.daycore.org/mirror-cover/100000006',
+  );
 });
 
 /**
