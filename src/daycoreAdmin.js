@@ -86,6 +86,7 @@ const CHANNELS = {
   RESTRICT:   'restrict',
   UNRESTRICT: 'unrestrict',
   WIPE:       'wipe',
+  SCOREWIPE:  'scorewipe',
   ADDPRIV:    'addpriv',
   REMOVEPRIV: 'removepriv',
 };
@@ -337,6 +338,43 @@ async function wipePlayer(targetOsuId, modeNum, actor, reason) {
   await publish(CHANNELS.WIPE, {
     id:      Number(targetOsuId),
     mode:    Number(modeNum),
+    adminId: Number(actor.osuId),
+    reason:  signReason(reason, actor),
+  });
+}
+
+/**
+ * O status em que o score apagado fica.
+ *
+ * Espelha o `WIPED_SCORE_STATUS` do bancho (app/api/utils.py). Não é 0: 0 é
+ * FAILED, e `plays` conta score falhado — em 0 o score apagado ficaria
+ * indistinguível de um fail de verdade. -1 está fora do `SubmissionStatus`, e é
+ * por isso que toda consulta que seleciona `status = 2` já o descarta.
+ */
+const WIPED_SCORE_STATUS = -1;
+
+/**
+ * Apaga UM score, em vez do perfil inteiro que o `wipePlayer` apaga.
+ *
+ * ── O que o servidor faz com isto ─────────────────────────────────────────────
+ * O `wipe_score` do bancho não faz DELETE: ele estaciona o score no
+ * `WIPED_SCORE_STATUS`, promove o próximo melhor score do jogador naquele mapa,
+ * reescreve a linha de `stats` sem a play e regrava o pp nos sorted sets do
+ * Redis. Ou seja, ao contrário do `wipePlayer`, isto TEM volta — um UPDATE
+ * devolve o score ao status anterior.
+ *
+ * Mas continua sendo ação de staff sem receptor que a filtre: o
+ * `channel_scorewipe_reciever` aceita qualquer publish, exatamente como o do
+ * `wipe`. Quem chama daqui é a única tranca, e por isso o comando exige
+ * DEVELOPER.
+ *
+ * O campo é `adminId` (e não `userId`): é o nome que o receptor lê para
+ * escrever o autor no log do servidor. Mesmo formato do `wipePlayer`, e pela
+ * mesma razão.
+ */
+async function wipeScore(scoreId, actor, reason) {
+  await publish(CHANNELS.SCOREWIPE, {
+    id:      Number(scoreId),
     adminId: Number(actor.osuId),
     reason:  signReason(reason, actor),
   });
@@ -722,6 +760,27 @@ async function verifyWiped(osuId, modeNum, { attempts = 3, delayMs = 1200 } = {}
 }
 
 /**
+ * Confirma que o score saiu: o `status` dele passou a ser o de score apagado.
+ *
+ * Mesma necessidade das outras verificações — pub/sub não devolve resultado.
+ * Aqui a leitura é mais direta que a do `verifyWiped`: o wipe de um score não
+ * zera nada visível no perfil (o pp cai, mas para um número que ninguém sabe de
+ * antemão), então o que se confere é o estado do próprio score.
+ */
+async function verifyScoreWiped(scoreId, { attempts = 3, delayMs = 1200 } = {}) {
+  for (let i = 0; i < attempts; i++) {
+    await sleep(delayMs);
+    try {
+      const score = await osu.getServerScore(scoreId);
+      if (score && Number(score.status) === WIPED_SCORE_STATUS) return true;
+    } catch {
+      // tenta de novo
+    }
+  }
+  return false;
+}
+
+/**
  * Confirma que o bit ficou (ou deixou de estar) ligado.
  *
  * Janela fixa, como a do verifyRestricted e ao contrário da de mapa: o alvo é
@@ -755,6 +814,9 @@ module.exports = {
   unrestrictPlayer,
   wipePlayer,
   verifyWiped,
+  wipeScore,
+  verifyScoreWiped,
+  WIPED_SCORE_STATUS,
   hasPriv,
   isStaff,
   STAFF_MASK,

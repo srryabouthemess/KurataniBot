@@ -170,6 +170,7 @@ caso('/nominate (recusa)', 'nominate.js', { map: '1' }, { subcommand: 'queue', e
 caso('/moderate (recusa)', 'moderate.js', { player: '1' }, { subcommand: 'log', esperaRecusa: true });
 caso('/staff    (recusa)', 'staff.js',    {}, { subcommand: 'list', esperaRecusa: true });
 caso('/wipe     (recusa)', 'wipe.js',     { player: '1', mode: '0', reason: 'x' }, { esperaRecusa: true });
+caso('/scorewipe (recusa)', 'scorewipe.js', { player: '1', mode: '0', reason: 'x' }, { esperaRecusa: true });
 caso('/role     (recusa)', 'role.js',     { player: '1', role: 'nominator', reason: 'x' }, { subcommand: 'give', esperaRecusa: true });
 
 (async () => {

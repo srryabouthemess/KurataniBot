@@ -838,6 +838,48 @@ async function getServerPlayerStats(playerId, modeNum, mode = PRIVATE_MODE) {
   return res?.data ?? null;
 }
 
+/**
+ * UM score pelo id, cru como a tabela guarda — inclusive o `status`.
+ *
+ * Existe para o /scorewipe, e o campo que importa é o `status`: é por ele que o
+ * comando confere que o score existe e é do jogador que o staff digitou, e é
+ * ele que a confirmação relê depois para dizer se o wipe pegou (o `wipe_score`
+ * do bancho estaciona o score apagado em -1, em vez de apagar a linha).
+ *
+ * Levanta em 404, como o `getServerMap` — score que não existe é resposta, e
+ * quem chama trata.
+ */
+async function getServerScore(scoreId, mode = PRIVATE_MODE) {
+  const res = await banchoV2Get(mode, `/scores/${idSegment(scoreId)}`);
+  return res?.data ?? null;
+}
+
+/**
+ * Os scores de um jogador num modo, COM o id de cada um.
+ *
+ * Existe porque o id do score não sobrevive à normalização que o resto do bot
+ * usa (ver `normalizeScorePrivate`): os embeds nunca precisaram dele. O
+ * /scorewipe precisa — é o que ele publica —, então aqui a linha vem crua.
+ *
+ * Vai pela v1 e não pela v2 por causa da ORDENAÇÃO: o `/v2/scores` devolve na
+ * ordem da tabela e obrigaria a puxar tudo do jogador para achar as dez
+ * maiores; o `get_player_scores` ordena no banco (pp para `best`, data para
+ * `recent`) e corta no `limit`.
+ *
+ * Cada linha já traz o mapa aninhado em `beatmap`, então listar não custa uma
+ * requisição por score.
+ */
+async function getServerPlayerScores(playerId, modeNum, scope = 'best', limit = 10, mode = PRIVATE_MODE) {
+  const res = await banchoV1Get(mode, 'get_player_scores', {
+    id:    playerId,
+    mode:  modeNum,
+    scope,
+    limit,
+  });
+
+  return Array.isArray(res?.scores) ? res.scores : [];
+}
+
 /** Um beatmap (dificuldade única) pelo ID. */
 async function getServerMap(mapId, mode = PRIVATE_MODE) {
   const res = await banchoV2Get(mode, `/maps/${idSegment(mapId)}`);
@@ -1014,6 +1056,8 @@ module.exports = {
   normalizeServerScore,
   getServerPlayerRaw,
   getServerPlayerStats,
+  getServerScore,
+  getServerPlayerScores,
   getServerProfilePage,
   getServerMap,
   getServerMapsBySet,

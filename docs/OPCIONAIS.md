@@ -187,7 +187,7 @@ O `venv` existe porque o `pip` costuma recusar instalação no Python do sistema
 
 ## Administração do servidor
 
-Habilita `/nominate`, `/moderate`, `/wipe` e `/staff`, que **mudam o servidor de jogo de verdade**. Só interessa a quem hospeda o bot junto de um bancho.py-ex; com as variáveis vazias, os comandos recusam tudo.
+Habilita `/nominate`, `/moderate`, `/wipe`, `/scorewipe` e `/staff`, que **mudam o servidor de jogo de verdade**. Só interessa a quem hospeda o bot junto de um bancho.py-ex; com as variáveis vazias, os comandos recusam tudo.
 
 > Esta parte atende **um servidor só**: o primeiro do `SERVERS`, travado num Discord específico.
 
@@ -236,6 +236,7 @@ O código vai no campo **"sobre mim"** do perfil daquela conta no site do servid
 /moderate restrict|unrestrict player:<nome> reason:<motivo>
 /moderate log                         → ações recentes feitas pelo bot
 /wipe player:<nome> mode:<modo> reason:<motivo>   → IRREVERSÍVEL, só Developer
+/scorewipe player:<nome> mode:<modo> reason:<motivo>  → um score só (reversível), só Developer
 ```
 
 Com `DAYCORE_ANNOUNCE_CHANNEL_ID` preenchido, todo mapa que vira **ranked** ou **loved** é anunciado nesse canal — inclusive os rankeados dentro do jogo com `!map`. Vazio desliga.
@@ -254,6 +255,8 @@ Do lado do servidor isso exige o fork publicar `ex:priv_change` no `!addpriv`/`!
 - **Permissões:** exige Administrador no Discord do `DAYCORE_GUILD_ID`, exceto o `confirm`, rodado pela própria pessoa. O `/link` comum **não** serve: ele é auto-declarado.
 - **`/nominate` aceita mapa que o servidor ainda não conhece.** As dificuldades vêm da API do osu!, e o bancho cadastra o mapa ao aplicar o status.
 - **`/wipe` apaga os scores de um modo e zera as estatísticas, sem volta.** Pede confirmação por botão mostrando o que será destruído, e o log guarda esses números — depois do wipe eles não existem em lugar nenhum. O bancho **não** confere privilégio nesse canal: a exigência de `DEVELOPER` é do bot, e é a única que existe.
+- **`/scorewipe` apaga UM score, e esse tem volta.** O `wipe_score` do bancho não apaga a linha: estaciona o score no status `-1`, fora do `SubmissionStatus`, e toda consulta que seleciona `status = 2` já o descarta. Junto vão as consequências que a submissão tinha deixado para trás: o próximo melhor score do jogador naquele mapa assume o `status = 2`, a linha de `stats` é reescrita sem a play (`plays`, `playtime`, `tscore` e `total_hits` subtraídos; `rscore`, `max_combo`, grades, `pp` e `acc` recalculados) e o pp novo vai para o Redis. Desfazer é um UPDATE no banco — o bot não tem comando para isso.
+- **Como escolher o score:** nem o site nem os embeds mostram id de score, então o comando lista as dez melhores plays (ou as dez mais recentes, com `list:recent`) e deixa escolher num menu. O `score:` existe para quem já tem o id em mãos. Nos dois caminhos o jogador e o modo são obrigatórios: no caminho do id eles viram conferência, e o comando recusa se o score for de outra pessoa ou de outro modo.
 - **Nenhum funciona no modo texto:** respondem em ephemeral, e o adaptador do prefixo precisa descartar essa flag.
 - **Confirmação.** O bot não recebe resposta ao publicar no Redis, então relê o estado depois e avisa quando não conseguiu confirmar, em vez de reportar sucesso no escuro. A janela cresce com o tamanho do set, porque o servidor baixa o `.osu` de cada dificuldade que não tem.
 - **Autor do anúncio in-game** só aparece se o fork incluir `author_id`/`author_name` no publish do `_map` (`app/commands.py`). Sem isso sai como "aplicado in-game".

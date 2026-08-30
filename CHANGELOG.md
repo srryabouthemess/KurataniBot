@@ -2,6 +2,31 @@
 
 ---
 
+# Sessão de 2026-08-30 (apagar um score só)
+
+O `/wipe` sempre foi grosso demais para o caso mais comum de moderação: uma play suja no meio de um perfil legítimo. A única forma de tirar aquela play era apagar todos os scores da conta naquele modo e zerar as estatísticas junto. Agora dá para tirar uma só — e, diferente do `/wipe`, essa dá para desfazer.
+
+## ✨ Novos recursos
+
+- **`/scorewipe player: mode: reason: [list:] [score:]` — apaga UM score.** [`scorewipe.js`](src/commands/scorewipe.js), [`daycoreAdmin.js`](src/daycoreAdmin.js), [`banchoPyApi.js`](src/osu/banchoPyApi.js)
+  - Publica no canal `scorewipe`, no mesmo formato dos outros comandos administrativos: `id` (do score), `adminId` e o motivo assinado.
+  - **Exige `DEVELOPER`, como o `/wipe`.** Não porque o estrago seja eterno — não é —, mas porque o receptor do canal aceita qualquer publish sem conferir privilégio. Quem chama é a única tranca que existe.
+  - **O id do score vem de um menu.** Nem o site nem os embeds do bot mostram id de score, então exigir o número seria exigir uma consulta ao banco antes de cada uso. O comando lista as dez melhores plays do alvo (ou as dez mais recentes, com `list:recent`), com mapa, pp, acurácia, mods e data em cada linha. O `score:` continua lá para quem já tem o id.
+  - **Jogador e modo são obrigatórios mesmo quando o id é digitado**, e viram conferência: o comando recusa se o score for de outra pessoa ou de outro modo. Um id errado apagaria a play de um terceiro sem que nada na tela denunciasse a troca.
+  - A confirmação avisa quando a play escolhida é o melhor score do jogador naquele mapa — nesse caso o segundo colocado assume o lugar, e o pp cai só pela diferença entre os dois.
+  - `getServerScore` e `getServerPlayerScores` são novos porque o id do score não sobrevive à normalização que o resto do bot usa: os embeds nunca precisaram dele. A lista vai pela v1 (`get_player_scores`) por causa da ordenação, que lá é feita no banco; a conferência do id vai pela v2 (`/scores/{id}`), que é a única que responde por um score específico.
+
+## 📝 Do lado do servidor
+
+- Exige o fork com o canal `scorewipe` e o `wipe_score` que o atende (`app/api/utils.py`, `app/api/start.py`). Sem isso o bot publica num canal que ninguém escuta: o comando responde "não confirmei o efeito", e nada acontece no servidor.
+- O `wipe_score` **não apaga a linha**: estaciona o score no status `-1`, promove o próximo melhor score do jogador naquele mapa, reescreve a linha de `stats` sem a play e regrava o pp no Redis. Desfazer é um UPDATE — o bot não tem comando para isso.
+
+## ✅ Testes
+
+- `test/scorewipe.test.js`: o privilégio exigido, o formato do publish, a assinatura do motivo, as duas conferências do id digitado e o sentinela `-1` batendo com o do servidor.
+
+---
+
 # Sessão de 2026-08-30 (a capa e o título de play de servidor privado)
 
 Os dois saíram do mesmo print de um `/rs` no Daycore.

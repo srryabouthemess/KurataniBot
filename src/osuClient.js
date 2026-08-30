@@ -511,6 +511,8 @@ module.exports = {
   resolvePlayerId:    banchoPyApi.resolvePlayerId,
   getServerPlayerRaw: banchoPyApi.getServerPlayerRaw,
   getServerPlayerStats: banchoPyApi.getServerPlayerStats,
+  getServerScore:     banchoPyApi.getServerScore,
+  getServerPlayerScores: banchoPyApi.getServerPlayerScores,
   getServerProfilePage: banchoPyApi.getServerProfilePage,
   getServerMap:       banchoPyApi.getServerMap,
   getServerMapsBySet: banchoPyApi.getServerMapsBySet,

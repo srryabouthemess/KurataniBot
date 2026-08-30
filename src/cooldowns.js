@@ -75,6 +75,7 @@ const COMMAND_BUCKET = {
   nominate: 'heavy',
   moderate: 'heavy',
   wipe:     'heavy',
+  scorewipe: 'heavy',
   staff:    'heavy',
 };
 
