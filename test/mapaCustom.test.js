@@ -73,11 +73,47 @@ test('mergeServerMap preenche o que a API oficial nao tem', async t => {
   });
 
   await t.test('capa do servidor quando ele tem uma; senao a do ppy', () => {
+    // Com `/list` no fim: o campo alimenta o setThumbnail do embed, que quer o
+    // 150x110, e a raiz do espelho responde a faixa de 900x250.
     const comEspelho = mergeServerMap(scoreVazio(), MAPA, 'https://osu.exemplo.org/mirror-cover');
-    assert.equal(comEspelho.beatmapset.covers.list, 'https://osu.exemplo.org/mirror-cover/100000002');
+    assert.equal(comEspelho.beatmapset.covers.list, 'https://osu.exemplo.org/mirror-cover/100000002/list');
 
     const sem = mergeServerMap(scoreVazio(), MAPA);
     assert.equal(sem.beatmapset.covers.list, 'https://assets.ppy.sh/x');
+  });
+});
+
+test('artista e titulo vem do mesmo lugar', async t => {
+  // O normalizeScorePrivate extrai os dois de "Artista - Titulo (Mapper) [Dif]"
+  // e a regex nao os separa: title fica com o artista grudado, artist fica vazio.
+  function scoreDoNomeDeArquivo() {
+    const score = scoreVazio();
+    score.beatmapset.title  = 't.A.T.u. - All The Things She Said (Ans Remix)';
+    score.beatmapset.artist = '';
+    return score;
+  }
+
+  await t.test('artista vazio troca o PAR inteiro, e nao so o artista', () => {
+    const p = mergeServerMap(scoreDoNomeDeArquivo(), MAPA);
+    assert.equal(p.beatmapset.artist, 't.A.T.u.');
+    // Antes: 't.A.T.u. - t.A.T.u. - All The Things She Said (Ans Remix)'
+    assert.equal(p.beatmapset.title, 'All The Things She Said (Ans Remix)');
+  });
+
+  await t.test('artista preenchido continua ganhando do servidor', () => {
+    const score = scoreVazio();
+    score.beatmapset.artist = 'Artista Oficial';
+    score.beatmapset.title  = 'Titulo Oficial';
+
+    const p = mergeServerMap(score, MAPA);
+    assert.equal(p.beatmapset.artist, 'Artista Oficial');
+    assert.equal(p.beatmapset.title,  'Titulo Oficial');
+  });
+
+  await t.test('sem artista dos dois lados, o titulo ainda aparece', () => {
+    const p = mergeServerMap(scoreDoNomeDeArquivo(), { ...MAPA, artist: '', title: '' });
+    assert.equal(p.beatmapset.artist, '');
+    assert.equal(p.beatmapset.title, 't.A.T.u. - All The Things She Said (Ans Remix)');
   });
 });
 

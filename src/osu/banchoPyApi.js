@@ -382,6 +382,27 @@ function mergeServerMap(score, map, coverBase = null) {
   // escrita, não um nome de dificuldade.
   const version = bm.version && bm.version !== '?' ? bm.version : (map.version ?? bm.version ?? '?');
 
+  // Artista e título andam JUNTOS, e por isso escapam da regra de "só preenche
+  // buraco" que vale para o resto da função.
+  //
+  // O normalizador extrai os dois de um nome de ARQUIVO ("Artista - Título
+  // (Mapper) [Dif]") e a regex não separa um do outro: o título sai com o
+  // artista grudado na frente e o campo `artist` sai vazio. Preenchendo só o
+  // artista a partir do mapa — que é o que "buraco vazio, mapa preenche"
+  // manda fazer — o nome aparecia duas vezes na tela:
+  //
+  //   sma$her - sma$her - VAI NO VAPOR [gamma 260]
+  //
+  // Um `artist` vazio é, então, a marca de que o par veio do nome de arquivo,
+  // e o par do `/v2/maps/{id}` (campos separados na origem) é melhor inteiro.
+  // Com artista preenchido nada muda: o score passou pelo enriquecimento
+  // oficial, e o dado de lá continua ganhando.
+  const doNomeDeArquivo = !set.artist;
+  const artist = doNomeDeArquivo ? (map.artist ?? '') : set.artist;
+  const title  = doNomeDeArquivo
+    ? (map.title || set.title || '???')
+    : (set.title || map.title || '???');
+
   return {
     ...score,
     beatmap: {
@@ -395,13 +416,20 @@ function mergeServerMap(score, map, coverBase = null) {
     beatmapset: {
       ...set,
       id:      setId,
-      title:   set.title   || map.title   || '???',
-      artist:  set.artist  || map.artist  || '',
+      title,
+      artist,
       creator: set.creator || map.creator || null,
       covers: {
         ...(set.covers ?? {}),
+        // `/list` e não a raiz: o espelho serve o `cover.jpg` do ppy (900x250,
+        // uma faixa) quando não se pede forma, e este campo alimenta o
+        // `setThumbnail` do embed, que quer o `list.jpg` (150x110). Sem o
+        // sufixo, toda play de servidor privado saía com a faixa espremida no
+        // canto — e o mapa parecia errado quando só a medida estava.
+        //
+        // O `/announce` continua chamando a raiz: lá a faixa é o formato certo.
         list: coverBase && setId !== null
-          ? `${coverBase}/${setId}`
+          ? `${coverBase}/${setId}/list`
           : (set.covers?.list ?? null),
       },
     },

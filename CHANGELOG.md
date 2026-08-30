@@ -2,6 +2,26 @@
 
 ---
 
+# Sessão de 2026-08-30 (a capa e o título de play de servidor privado)
+
+Os dois saíram do mesmo print de um `/rs` no Daycore.
+
+## 🐛 Correções
+
+- **A capa da play deixa de sair como uma faixa espremida.** [`banchoPyApi.js`](src/osu/banchoPyApi.js)
+  - O `covers.list` de um score de servidor privado apontava para a raiz do espelho (`SERVER_<chave>_COVERS/<set_id>`), e a raiz responde o `cover.jpg` do ppy — 900x250, uma faixa. O embed usa esse campo no `setThumbnail`, que é um quadro pequeno e quer o `list.jpg` (150x110).
+  - Ninguém tinha reparado porque a imagem era a **certa**: só a medida estava errada, e o resultado era uma tira escura no canto do embed.
+  - Passa a pedir `<espelho>/<set_id>/list`, a forma nova do espelho. O `/announce` continua na raiz: lá a faixa larga é o formato desejado, e a URL dele não mudou.
+  - Alcança toda play de servidor privado — `/rs`, `/score`, `/simulate`, `/topplays`. Play de servidor oficial nunca passou por aqui.
+  - **Exige o espelho atualizado.** Sem a rota `/list` no lado do servidor, a capa vira 404.
+
+- **O nome do mapa deixa de sair com o artista escrito duas vezes.** [`banchoPyApi.js`](src/osu/banchoPyApi.js)
+  - `sma$her - sma$her - VAI NO VAPOR [gamma 260]`. O normalizador extrai artista e título de um nome de arquivo (`Artista - Título (Mapper) [Dif]`) e a regex não separa os dois: o título saía com o artista grudado e o campo `artist` saía vazio.
+  - O `mergeServerMap` então preenchia só o `artist` a partir do `/v2/maps/{id}`, seguindo a regra de "buraco vazio, o mapa preenche" — e o nome aparecia de novo na frente do título.
+  - Artista e título passam a viajar juntos: `artist` vazio é a marca de que o par veio do nome de arquivo, e aí o par do servidor (campos separados na origem) entra inteiro. Com artista preenchido nada muda — o score passou pelo enriquecimento oficial, e o dado de lá continua ganhando.
+
+---
+
 # Sessão de 2026-08-29 (o anúncio de mapa rankeado sai certo para quem lê o canal)
 
 Os dois caminhos que anunciam um mapa rankeado — o `/nominate` e o rank feito dentro do jogo — caem no mesmo canal público, mas discordavam em duas coisas visíveis no embed. As duas apareceram lado a lado no canal depois do primeiro mapa enviado pelo editor.
