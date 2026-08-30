@@ -26,10 +26,15 @@
  *   3. O log de auditoria guarda o que foi apagado, e não só o id.
  *
  * ── O id vem de onde? ─────────────────────────────────────────────────────────
- * De lugar nenhum, para quem administra: nem o site nem os embeds do bot mostram
- * id de score. Por isso o comando lista as plays do alvo e deixa escolher — o
- * campo `score` existe para quem já tem o id em mãos (veio do banco, do log de
- * auditoria de um wipe anterior), e não é o caminho normal.
+ * Do site dá para tirar: a página de um score é `/scores/<id>`, então clicar numa
+ * linha da leaderboard do mapa e ler o número da URL funciona. O que isso não
+ * responde é a pergunta que a moderação faz — "qual das plays DELE?" —, porque
+ * exige achar o mapa certo antes, e não alcança o que não está numa leaderboard.
+ * Os embeds do bot não carregam o id em lugar nenhum.
+ *
+ * Por isso o comando lista as plays do alvo e deixa escolher; o campo `score`
+ * existe para quem já tem o id em mãos (da URL, do banco, do log de auditoria de
+ * um wipe anterior).
  *
  * O alvo e o modo são obrigatórios NOS DOIS caminhos, inclusive quando o id é
  * digitado: eles viram conferência. Um id errado apagaria a play de outra

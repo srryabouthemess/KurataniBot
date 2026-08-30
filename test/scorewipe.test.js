@@ -44,10 +44,11 @@ test('fica fora do modo texto', () => {
 });
 
 test('jogador, modo e motivo são obrigatórios; o id do score não', () => {
-  // O id é o caminho de exceção: quem administra não tem de onde tirar um id de
-  // score, então o normal é escolher na lista. Já o jogador e o modo são
-  // obrigatórios NOS DOIS caminhos, porque no caminho do id eles são a
-  // conferência que impede apagar a play de outra pessoa por engano.
+  // O id é o caminho de exceção: dá para lê-lo na URL da página do score no site
+  // (`/scores/<id>`), mas isso passa por achar o mapa certo primeiro, então o
+  // normal é escolher na lista. Já o jogador e o modo são obrigatórios NOS DOIS
+  // caminhos, porque no caminho do id eles são a conferência que impede apagar a
+  // play de outra pessoa por engano.
   const json = scorewipe.data.toJSON();
   const por = nome => json.options.find(o => o.name === nome);
 
