@@ -128,3 +128,36 @@ test('a leitura por mapa vai pela v1, com id, md5 e mode', () => {
   assert.match(fonteApi, /id:\s+playerId/);
   assert.match(fonteApi, /mode: modeNum/);
 });
+
+const fonteAdmin = require('fs').readFileSync(require.resolve('../src/daycoreAdmin'), 'utf8');
+
+test('publica no canal mapwipe com o formato que o receptor lê', async () => {
+  published.length = 0;
+  await daycore.wipeMapScores(7, 'c9557c9d6cc35fb6a0a43c37e226703e', 4, ACTOR, 'sessão suja');
+
+  const [canal, payload] = published[0];
+  assert.equal(canal, 'mapwipe');
+  // Aqui `id` é o JOGADOR, ao contrário do canal scorewipe, onde é o score.
+  // Trocar os dois apagaria o mapa da pessoa errada.
+  assert.equal(payload.id, 7);
+  assert.equal(payload.md5, 'c9557c9d6cc35fb6a0a43c37e226703e');
+  assert.equal(payload.mode, 4);
+  assert.equal(payload.adminId, 3);
+  assert.equal(payload.reason.startsWith('sessão suja'), true);
+});
+
+test('o motivo do lote também leva a assinatura do Discord', async () => {
+  published.length = 0;
+  await daycore.wipeMapScores(7, 'c9557c9d', 0, ACTOR, 'limpeza');
+
+  const { reason } = published[published.length - 1][1];
+  assert.match(reason, /via KurataniBot/);
+  assert.match(reason, /100000000000000002/);
+});
+
+test('o canal do lote não é o mesmo do score', () => {
+  // Publicar o payload do lote no canal `scorewipe` faria o receptor de lá ler
+  // `id` como id de score e apagar a play de outra pessoa.
+  assert.match(fonteAdmin, /MAPWIPE:\s+'mapwipe'/);
+  assert.match(fonteAdmin, /SCOREWIPE:\s+'scorewipe'/);
+});

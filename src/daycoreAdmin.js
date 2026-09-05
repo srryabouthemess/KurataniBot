@@ -87,6 +87,7 @@ const CHANNELS = {
   UNRESTRICT: 'unrestrict',
   WIPE:       'wipe',
   SCOREWIPE:  'scorewipe',
+  MAPWIPE:    'mapwipe',
   ADDPRIV:    'addpriv',
   REMOVEPRIV: 'removepriv',
 };
@@ -375,6 +376,30 @@ const WIPED_SCORE_STATUS = -1;
 async function wipeScore(scoreId, actor, reason) {
   await publish(CHANNELS.SCOREWIPE, {
     id:      Number(scoreId),
+    adminId: Number(actor.osuId),
+    reason:  signReason(reason, actor),
+  });
+}
+
+/**
+ * Apaga TODAS as plays de um jogador num mapa e num modo, de uma vez.
+ *
+ * Existe pelo log de auditoria do servidor, e não por atalho: o `wipe_score`
+ * faz um `post_audit_log` por chamada, então dez plays viram dez embeds no
+ * webhook. O `wipe_map_scores` do outro lado escreve um só, com a contagem e
+ * os ids.
+ *
+ * O `id` aqui é o JOGADOR — no canal `scorewipe` ele é o score. Trocar os dois
+ * não dá erro em lugar nenhum: o receptor lê o número que chegou.
+ *
+ * Os failed entram junto (o lote é `status >= 0` do lado de lá), porque eles
+ * contam em `plays`.
+ */
+async function wipeMapScores(targetOsuId, mapMd5, modeNum, actor, reason) {
+  await publish(CHANNELS.MAPWIPE, {
+    id:      Number(targetOsuId),
+    md5:     String(mapMd5),
+    mode:    Number(modeNum),
     adminId: Number(actor.osuId),
     reason:  signReason(reason, actor),
   });
@@ -815,6 +840,7 @@ module.exports = {
   wipePlayer,
   verifyWiped,
   wipeScore,
+  wipeMapScores,
   verifyScoreWiped,
   WIPED_SCORE_STATUS,
   hasPriv,
