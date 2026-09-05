@@ -203,3 +203,35 @@ test('lista vazia conta como apagado', async () => {
 test('a verificação do lote exige todas abaixo de zero', () => {
   assert.match(fonteAdmin, /linhas\.every\(row => Number\(row\.status\) < 0\)/);
 });
+
+test('as duas normalizações carregam o md5 do mapa', () => {
+  // Sem ele o botão do lote não tem o que publicar: `map_md5` é a chave que a
+  // tabela `scores` usa, e o id do beatmap não serve no lugar dela.
+  assert.match(fonte, /md5:\s+row\.map_md5/);
+  assert.match(fonte, /md5:\s+score\.map_md5/);
+});
+
+test('o botão do lote só existe com mais de uma play no mapa', () => {
+  // Com uma só, o /scorewipe normal já faz exatamente isso — e um botão a mais
+  // numa tela destrutiva é ruído com custo.
+  assert.match(fonte, /doMapa\.length > 1/);
+});
+
+test('a falha da contagem não derruba o /scorewipe', () => {
+  // O lote é um extra. Se o endpoint novo não estiver no ar, a tela de um score
+  // tem que continuar aparecendo.
+  assert.match(fonte, /getServerPlayerMapScores\([^)]*\)\.catch\(\(\) => \[\]\)/);
+});
+
+test('o clique no botão do lote não publica sozinho', () => {
+  // A publicação mora depois da SEGUNDA confirmação. Prova-se mostrando que o
+  // handler do primeiro clique DESVIA para `apagarOMapa` em vez de publicar —
+  // por isso ancora no `if` do clique, e não num slice entre nomes que caem
+  // dentro da própria `apagarOMapa` (abaixo de `module.exports`) e passariam
+  // de qualquer jeito.
+  assert.match(fonte, /clique\.customId === loteId\)[\s\S]{0,80}return apagarOMapa\(/);
+});
+
+test('o lote registra no admin_actions', () => {
+  assert.match(fonte, /registrarAcao\('mapwipe'/);
+});

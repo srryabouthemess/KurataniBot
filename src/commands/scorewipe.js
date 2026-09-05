@@ -109,6 +109,7 @@ function daLista(row, ownerId) {
     playTime: row.play_time,
     mapId:    row.beatmap?.id ?? null,
     mapLabel: nomeDoMapa(row.beatmap),
+    md5:      row.map_md5 ?? null,
   };
 }
 
@@ -125,6 +126,7 @@ function porId(score, map) {
     playTime: score.play_time,
     mapId:    map?.id ?? null,
     mapLabel: nomeDoMapa(map),
+    md5:      score.map_md5 ?? null,
   };
 }
 
@@ -138,6 +140,90 @@ function descrever(item, s) {
     item.grade,
     quando(item.playTime),
   );
+}
+
+/**
+ * A segunda confirmação, e a publicação do lote.
+ *
+ * Mora fora do `execute` porque é a terceira tela de um comando que já tinha
+ * duas; deixá-la inline faria a função principal passar de duzentas linhas e
+ * misturar três fluxos no mesmo escopo.
+ *
+ * O clique no botão do lote NÃO publica: ele traz para cá, e é só o confirmar
+ * daqui que manda. A ação é maior que a de um score e ganha confirmação
+ * própria, com as plays na tela.
+ */
+async function apagarOMapa(interaction, { s, staff, target, modeLabel, modeNum, reason, alvo, doMapa }) {
+  const mapLabel  = alvo.mapLabel ?? s.scorewipe_map_unknown;
+  const confirmId = `mapwipe_ok_${interaction.id}`;
+  const cancelId  = `mapwipe_no_${interaction.id}`;
+
+  const aviso = new EmbedBuilder()
+    .setColor(0xff6666)
+    .setTitle(s.mapwipe_confirm_title)
+    .setDescription(
+      s.mapwipe_confirm_body(target.name, target.id, modeLabel, mapLabel, doMapa.length) + '\n\n' +
+      // O teto de descrição do embed é 4096; o corte deixa folga para os dois
+      // avisos que vêm depois.
+      doMapa.map(item => descrever(item, s)).join('\n\n').slice(0, 2500) + '\n\n' +
+      s.mapwipe_includes_failed + '\n\n' +
+      s.scorewipe_reversible,
+    )
+    .setFooter({ text: s.nom_actor(staff.osuName) });
+
+  const botoes = new ActionRowBuilder().addComponents(
+    new ButtonBuilder().setCustomId(confirmId).setLabel(s.mapwipe_button_confirm(doMapa.length)).setStyle(ButtonStyle.Danger),
+    new ButtonBuilder().setCustomId(cancelId).setLabel(s.wipe_button_cancel).setStyle(ButtonStyle.Secondary),
+  );
+
+  const prompt = await interaction.editReply({ embeds: [aviso], components: [botoes] });
+
+  let clique;
+  try {
+    clique = await prompt.awaitMessageComponent({
+      filter: i => i.user.id === interaction.user.id,
+      time: CONFIRM_MS,
+    });
+  } catch {
+    return interaction.editReply({ content: s.scorewipe_expired, embeds: [], components: [] });
+  }
+
+  await clique.deferUpdate().catch(() => {});
+
+  if (clique.customId === cancelId) {
+    return interaction.editReply({ content: s.scorewipe_cancelled, embeds: [], components: [] });
+  }
+
+  await daycore.wipeMapScores(target.id, alvo.md5, modeNum, {
+    osuId:       staff.osuId,
+    discordId:   interaction.user.id,
+    discordName: interaction.user.username,
+  }, reason);
+
+  const confirmado = await daycore.verifyMapScoresWiped(target.id, alvo.md5, modeNum);
+
+  const registrado = registrarAcao('mapwipe', {
+    action: 'mapwipe',
+    target: target.id,
+    detail: `${target.name} | ${modeLabel} | ${doMapa.length} scores em ${mapLabel} | ${reason} | ` +
+            `${doMapa.map(item => item.id).join(',')} | ` +
+            (confirmado ? 'confirmado' : 'NAO confirmado'),
+    actorDiscordId: interaction.user.id,
+    actorOsuId: staff.osuId,
+    actorOsuName: staff.osuName,
+  });
+
+  const resultado = new EmbedBuilder()
+    .setColor(confirmado && registrado ? 0x99ff99 : 0xffcc66)
+    .setTitle(s.mapwipe_done_title)
+    .setDescription(
+      s.mapwipe_done_body(target.name, target.id, doMapa.length, mapLabel) + '\n\n' +
+      (confirmado ? s.mapwipe_confirmed : s.mapwipe_unconfirmed) +
+      (registrado ? '' : '\n\n' + s.admin_log_failed),
+    )
+    .setFooter({ text: s.nom_actor(staff.osuName) });
+
+  return interaction.editReply({ embeds: [resultado], components: [] });
 }
 
 module.exports = {
@@ -275,6 +361,23 @@ module.exports = {
         return interaction.editReply({ content: s.scorewipe_already(alvo.id), embeds: [], components: [] });
       }
 
+      // As outras plays do mesmo mapa e modo. É um extra: se o endpoint não
+      // estiver no ar, o /scorewipe de um score continua funcionando igual.
+      const linhasDoMapa = alvo.md5
+        ? await osu.getServerPlayerMapScores(target.id, alvo.md5, modeNum).catch(() => [])
+        : [];
+
+      const doMapa = linhasDoMapa
+        .filter(row => Number(row.status) >= 0)
+        .map(row => ({
+          ...daLista(row, target.id),
+          // A linha deste endpoint não traz o mapa aninhado — é sempre o mesmo
+          // mapa do score escolhido, então o rótulo vem de lá.
+          mapId:    alvo.mapId,
+          mapLabel: alvo.mapLabel,
+          md5:      alvo.md5,
+        }));
+
       const confirmId = `scorewipe_ok_${interaction.id}`;
       const cancelId  = `scorewipe_no_${interaction.id}`;
 
@@ -292,8 +395,14 @@ module.exports = {
         )
         .setFooter({ text: s.nom_actor(staff.osuName) });
 
+      const loteId  = `scorewipe_lote_${interaction.id}`;
+      const temLote = doMapa.length > 1;
+
       const botoes = new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId(confirmId).setLabel(s.scorewipe_button_confirm).setStyle(ButtonStyle.Danger),
+        ...(temLote
+          ? [new ButtonBuilder().setCustomId(loteId).setLabel(s.mapwipe_button(doMapa.length)).setStyle(ButtonStyle.Danger)]
+          : []),
         new ButtonBuilder().setCustomId(cancelId).setLabel(s.wipe_button_cancel).setStyle(ButtonStyle.Secondary),
       );
 
@@ -313,6 +422,12 @@ module.exports = {
 
       if (clique.customId === cancelId) {
         return interaction.editReply({ content: s.scorewipe_cancelled, embeds: [], components: [] });
+      }
+
+      if (clique.customId === loteId) {
+        return apagarOMapa(interaction, {
+          s, staff, target, modeLabel, modeNum, reason, alvo, doMapa,
+        });
       }
 
       await daycore.wipeScore(alvo.id, {
