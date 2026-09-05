@@ -161,3 +161,45 @@ test('o canal do lote não é o mesmo do score', () => {
   assert.match(fonteAdmin, /MAPWIPE:\s+'mapwipe'/);
   assert.match(fonteAdmin, /SCOREWIPE:\s+'scorewipe'/);
 });
+
+// Adaptação: o brief da Task 8 substitui `getServerPlayerMapScores` direto em
+// `require('../src/osu/banchoPyApi')`. Mas o `daycoreAdmin.js` não chama o
+// adaptador: ele chama `osu = require('./osuClient')`, e o `osuClient.js`
+// COPIA a referência da função para dentro do próprio module.exports no
+// require (`getServerPlayerMapScores: banchoPyApi.getServerPlayerMapScores`).
+// Sobrescrever a propriedade do lado do banchoPyApi não muda a cópia que o
+// osuClient já guardou, então o `daycoreAdmin` continuaria chamando a função
+// real — que tentaria rede sem servidor no ar, violando "nenhum teste pode
+// depender de rede" e sem provar a lógica do `every(status < 0)`.
+// A troca abaixo é no MESMO objeto que o `daycoreAdmin` de fato guarda
+// (`require` cacheia o módulo, então é a mesma referência), o que prova a
+// propriedade de verdade: a leitura do lote via `osu.getServerPlayerMapScores`.
+test('a verificação do lote só dá verde com nada acima de -1', async () => {
+  const osuClient = require('../src/osuClient');
+  const original = osuClient.getServerPlayerMapScores;
+
+  osuClient.getServerPlayerMapScores = async () => [{ id: 1, status: -1 }, { id: 2, status: -1 }];
+  assert.equal(await daycore.verifyMapScoresWiped(7, 'md5', 0, { attempts: 1, delayMs: 1 }), true);
+
+  // Uma sobrando é o caso que importa: o lote pegou parte, e o embed não pode
+  // sair verde dizendo que acabou.
+  osuClient.getServerPlayerMapScores = async () => [{ id: 1, status: -1 }, { id: 2, status: 2 }];
+  assert.equal(await daycore.verifyMapScoresWiped(7, 'md5', 0, { attempts: 1, delayMs: 1 }), false);
+
+  osuClient.getServerPlayerMapScores = original;
+});
+
+test('lista vazia conta como apagado', async () => {
+  // Nenhuma linha acima de -1 é exatamente o que se queria.
+  const osuClient = require('../src/osuClient');
+  const original = osuClient.getServerPlayerMapScores;
+
+  osuClient.getServerPlayerMapScores = async () => [];
+  assert.equal(await daycore.verifyMapScoresWiped(7, 'md5', 0, { attempts: 1, delayMs: 1 }), true);
+
+  osuClient.getServerPlayerMapScores = original;
+});
+
+test('a verificação do lote exige todas abaixo de zero', () => {
+  assert.match(fonteAdmin, /linhas\.every\(row => Number\(row\.status\) < 0\)/);
+});

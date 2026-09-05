@@ -806,6 +806,27 @@ async function verifyScoreWiped(scoreId, { attempts = 3, delayMs = 1200 } = {}) 
 }
 
 /**
+ * Confirma que o lote foi: nenhuma play do jogador naquele mapa e modo sobrou
+ * acima do status de apagado.
+ *
+ * Mesma janela do `verifyScoreWiped` — pub/sub não devolve resultado, e o que
+ * se confere é o estado que o servidor deixou. Lista vazia passa: nada acima de
+ * -1 é exatamente o que se pediu.
+ */
+async function verifyMapScoresWiped(playerId, md5, modeNum, { attempts = 3, delayMs = 1200 } = {}) {
+  for (let i = 0; i < attempts; i++) {
+    await sleep(delayMs);
+    try {
+      const linhas = await osu.getServerPlayerMapScores(playerId, md5, modeNum);
+      if (linhas.every(row => Number(row.status) < 0)) return true;
+    } catch {
+      // tenta de novo
+    }
+  }
+  return false;
+}
+
+/**
  * Confirma que o bit ficou (ou deixou de estar) ligado.
  *
  * Janela fixa, como a do verifyRestricted e ao contrário da de mapa: o alvo é
@@ -842,6 +863,7 @@ module.exports = {
   wipeScore,
   wipeMapScores,
   verifyScoreWiped,
+  verifyMapScoresWiped,
   WIPED_SCORE_STATUS,
   hasPriv,
   isStaff,
