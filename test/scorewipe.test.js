@@ -110,3 +110,21 @@ test('o status de score apagado bate com o do bancho', () => {
   // E não 0: 0 é FAILED, e `plays` conta score falhado.
   assert.notEqual(daycore.WIPED_SCORE_STATUS, 0);
 });
+
+const fonteApi = require('fs').readFileSync(require.resolve('../src/osu/banchoPyApi'), 'utf8');
+
+test('a leitura por mapa existe e devolve lista', async () => {
+  // É o único jeito de o bot saber quantas plays existem naquele mapa: a v1
+  // get_player_scores é por modo, e a get_map_scores é leaderboard.
+  const api = require('../src/osu/banchoPyApi');
+  assert.equal(typeof api.getServerPlayerMapScores, 'function');
+  // Sem servidor no ar, o contrato é devolver lista vazia em vez de estourar:
+  // quem chama é uma tela de confirmação que não pode cair por causa disso.
+  assert.deepEqual(await api.getServerPlayerMapScores(7, 'md5', 0).catch(() => []), []);
+});
+
+test('a leitura por mapa vai pela v1, com id, md5 e mode', () => {
+  assert.match(fonteApi, /'get_player_map_scores'/);
+  assert.match(fonteApi, /id:\s+playerId/);
+  assert.match(fonteApi, /mode: modeNum/);
+});

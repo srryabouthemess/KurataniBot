@@ -880,6 +880,26 @@ async function getServerPlayerScores(playerId, modeNum, scope = 'best', limit = 
   return Array.isArray(res?.scores) ? res.scores : [];
 }
 
+/**
+ * Todas as plays de um jogador num mapa, apagadas incluídas.
+ *
+ * O `getServerPlayerScores` é por modo e não alcança "as deste mapa"; a
+ * leaderboard do mapa traz um score por jogador. Nenhum dos dois responde a
+ * pergunta que o wipe de mapa faz.
+ *
+ * Sem cache de propósito: é leitura de confirmação de ação destrutiva, e um
+ * valor de meio minuto atrás responderia a pergunta errada.
+ */
+async function getServerPlayerMapScores(playerId, md5, modeNum, mode = PRIVATE_MODE) {
+  const res = await banchoV1Get(mode, 'get_player_map_scores', {
+    id:   playerId,
+    md5,
+    mode: modeNum,
+  });
+
+  return Array.isArray(res?.scores) ? res.scores : [];
+}
+
 /** Um beatmap (dificuldade única) pelo ID. */
 async function getServerMap(mapId, mode = PRIVATE_MODE) {
   const res = await banchoV2Get(mode, `/maps/${idSegment(mapId)}`);
@@ -1058,6 +1078,7 @@ module.exports = {
   getServerPlayerStats,
   getServerScore,
   getServerPlayerScores,
+  getServerPlayerMapScores,
   getServerProfilePage,
   getServerMap,
   getServerMapsBySet,
