@@ -87,6 +87,7 @@ const CHANNELS = {
   UNRESTRICT: 'unrestrict',
   WIPE:       'wipe',
   SCOREWIPE:  'scorewipe',
+  MAPWIPE:    'mapwipe',
   ADDPRIV:    'addpriv',
   REMOVEPRIV: 'removepriv',
 };
@@ -375,6 +376,30 @@ const WIPED_SCORE_STATUS = -1;
 async function wipeScore(scoreId, actor, reason) {
   await publish(CHANNELS.SCOREWIPE, {
     id:      Number(scoreId),
+    adminId: Number(actor.osuId),
+    reason:  signReason(reason, actor),
+  });
+}
+
+/**
+ * Apaga TODAS as plays de um jogador num mapa e num modo, de uma vez.
+ *
+ * Existe pelo log de auditoria do servidor, e não por atalho: o `wipe_score`
+ * faz um `post_audit_log` por chamada, então dez plays viram dez embeds no
+ * webhook. O `wipe_map_scores` do outro lado escreve um só, com a contagem e
+ * os ids.
+ *
+ * O `id` aqui é o JOGADOR — no canal `scorewipe` ele é o score. Trocar os dois
+ * não dá erro em lugar nenhum: o receptor lê o número que chegou.
+ *
+ * Os failed entram junto (o lote é `status >= 0` do lado de lá), porque eles
+ * contam em `plays`.
+ */
+async function wipeMapScores(targetOsuId, mapMd5, modeNum, actor, reason) {
+  await publish(CHANNELS.MAPWIPE, {
+    id:      Number(targetOsuId),
+    md5:     String(mapMd5),
+    mode:    Number(modeNum),
     adminId: Number(actor.osuId),
     reason:  signReason(reason, actor),
   });
@@ -781,6 +806,35 @@ async function verifyScoreWiped(scoreId, { attempts = 3, delayMs = 1200 } = {}) 
 }
 
 /**
+ * Confirma que o lote foi: nenhuma play do jogador naquele mapa e modo sobrou
+ * acima do status de apagado.
+ *
+ * Mesma janela do `verifyScoreWiped` — pub/sub não devolve resultado, e o que
+ * se confere é o estado que o servidor deixou. Lista vazia passa: nada acima de
+ * -1 é exatamente o que se pediu.
+ *
+ * Fail-closed como o `verifyScoreWiped`, e é por isso que o `null` importa: o
+ * `getServerPlayerMapScores` o devolve quando NÃO houve leitura (404 ou 422 do
+ * `banchoV1Get`, que não lança). Enquanto ele virava `[]`, o `.every()` era
+ * verdadeiro por vacuidade e o embed saía VERDE — "nenhuma play dele sobrou
+ * neste mapa" — sem que uma linha tivesse sido lida.
+ */
+async function verifyMapScoresWiped(playerId, md5, modeNum, { attempts = 3, delayMs = 1200 } = {}) {
+  for (let i = 0; i < attempts; i++) {
+    await sleep(delayMs);
+    try {
+      const linhas = await osu.getServerPlayerMapScores(playerId, md5, modeNum);
+      // `null` é "não li", e não "não sobrou nada": tenta de novo, e se a janela
+      // acabar assim o resultado é não confirmado.
+      if (Array.isArray(linhas) && linhas.every(row => Number(row.status) < 0)) return true;
+    } catch {
+      // tenta de novo
+    }
+  }
+  return false;
+}
+
+/**
  * Confirma que o bit ficou (ou deixou de estar) ligado.
  *
  * Janela fixa, como a do verifyRestricted e ao contrário da de mapa: o alvo é
@@ -815,7 +869,9 @@ module.exports = {
   wipePlayer,
   verifyWiped,
   wipeScore,
+  wipeMapScores,
   verifyScoreWiped,
+  verifyMapScoresWiped,
   WIPED_SCORE_STATUS,
   hasPriv,
   isStaff,

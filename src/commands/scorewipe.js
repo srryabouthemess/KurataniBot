@@ -25,6 +25,16 @@
  *      número de nove dígitos de cabeça.
  *   3. O log de auditoria guarda o que foi apagado, e não só o id.
  *
+ * ── E quando é o mapa inteiro? ────────────────────────────────────────────────
+ * Apagar dez plays uma a uma funciona, e custa dez embeds no log de auditoria do
+ * servidor: o `wipe_score` do bancho escreve um por chamada. Por isso existe o
+ * canal `mapwipe`, com um `post_audit_log` para o lote inteiro — e o botão que o
+ * aciona só aparece quando há mais de uma play, porque com uma só este comando
+ * já faz exatamente isso.
+ *
+ * O lote leva os failed junto. Eles contam em `plays`, e deixá-los de pé faria o
+ * mapa continuar somando tentativas depois de um wipe que se anunciou total.
+ *
  * ── O id vem de onde? ─────────────────────────────────────────────────────────
  * Do site dá para tirar: a página de um score é `/scores/<id>`, então clicar numa
  * linha da leaderboard do mapa e ler o número da URL funciona. O que isso não
@@ -64,6 +74,14 @@ const CONFIRM_MS = 60_000;
 
 /** Quantas plays a lista oferece. */
 const CANDIDATOS = 10;
+
+/**
+ * Teto da lista de plays dentro da descrição do embed.
+ *
+ * O limite do Discord é 4096; o resto da folga fica para o cabeçalho e os dois
+ * avisos que vêm depois da lista.
+ */
+const LISTA_MAX_CHARS = 2500;
 
 /** Só os modos que o bancho nomeia (ver GameModes em daycoreAdmin). */
 const MODE_CHOICES = Object.entries(daycore.GameModes)
@@ -109,6 +127,12 @@ function daLista(row, ownerId) {
     playTime: row.play_time,
     mapId:    row.beatmap?.id ?? null,
     mapLabel: nomeDoMapa(row.beatmap),
+    // O `get_player_scores` da v1 traz `t.map_md5` no SELECT, mas o handler
+    // remonta o dicionário campo a campo e o md5 sai só ANINHADO, junto do
+    // resto do mapa (`beatmap.md5`). Ler só o topo devolvia null em todo o
+    // caminho da lista — e, sem md5, o botão do lote nunca era montado, calado.
+    // O topo fica primeiro para o dia em que o upstream passar a mandá-lo.
+    md5:      row.map_md5 ?? row.beatmap?.md5 ?? null,
   };
 }
 
@@ -125,6 +149,7 @@ function porId(score, map) {
     playTime: score.play_time,
     mapId:    map?.id ?? null,
     mapLabel: nomeDoMapa(map),
+    md5:      score.map_md5 ?? null,
   };
 }
 
@@ -140,9 +165,132 @@ function descrever(item, s) {
   );
 }
 
+/**
+ * A segunda confirmação, e a publicação do lote.
+ *
+ * Mora fora do `execute` porque é a terceira tela de um comando que já tinha
+ * duas; deixá-la inline faria a função principal passar de duzentas linhas e
+ * misturar três fluxos no mesmo escopo.
+ *
+ * O clique no botão do lote NÃO publica: ele traz para cá, e é só o confirmar
+ * daqui que manda. A ação é maior que a de um score e ganha confirmação
+ * própria, com as plays na tela.
+ */
+async function apagarOMapa(interaction, { s, staff, target, modeLabel, modeNum, reason, alvo, doMapa }) {
+  const mapLabel  = alvo.mapLabel ?? s.scorewipe_map_unknown;
+  const confirmId = `mapwipe_ok_${interaction.id}`;
+  const cancelId  = `mapwipe_no_${interaction.id}`;
+
+  // A lista é cortada por ITEM inteiro, e não por caractere. Um corte no meio
+  // de uma linha entrega uma tela que parece completa — com o número certo no
+  // cabeçalho — e esconde que faltou coisa; quem confere uma ação destrutiva
+  // precisa saber que está vendo só uma parte, daí o "e mais N" no fim.
+  const linhas = [];
+  let usado = 0;
+  for (const item of doMapa) {
+    const linha = descrever(item, s);
+    // O +2 é o '\n\n' que junta esta linha à anterior.
+    if (usado + linha.length + 2 > LISTA_MAX_CHARS) break;
+    linhas.push(linha);
+    usado += linha.length + 2;
+  }
+  const omitidas = doMapa.length - linhas.length;
+  const lista = linhas.join('\n\n') + (omitidas > 0 ? `\n\n${s.mapwipe_more(omitidas)}` : '');
+
+  const aviso = new EmbedBuilder()
+    .setColor(0xff6666)
+    .setTitle(s.mapwipe_confirm_title)
+    .setDescription(
+      s.mapwipe_confirm_body(target.name, target.id, modeLabel, mapLabel, doMapa.length) + '\n\n' +
+      lista + '\n\n' +
+      s.mapwipe_includes_failed + '\n\n' +
+      s.scorewipe_reversible,
+    )
+    .setFooter({ text: s.nom_actor(staff.osuName) });
+
+  const botoes = new ActionRowBuilder().addComponents(
+    new ButtonBuilder().setCustomId(confirmId).setLabel(s.mapwipe_button_confirm(doMapa.length)).setStyle(ButtonStyle.Danger),
+    new ButtonBuilder().setCustomId(cancelId).setLabel(s.wipe_button_cancel).setStyle(ButtonStyle.Secondary),
+  );
+
+  const prompt = await interaction.editReply({ embeds: [aviso], components: [botoes] });
+
+  let clique;
+  try {
+    clique = await prompt.awaitMessageComponent({
+      // O filtro prende os ids DESTA tela, e não só o autor. Entre o
+      // `deferUpdate` do clique que trouxe até aqui e o coletor abaixo ficar de
+      // pé há uma janela de centenas de milissegundos em que o cliente ainda
+      // desenha os botões da tela anterior — e botão do Discord não desabilita
+      // ao ser clicado. Um duplo clique no botão do lote, que é comportamento
+      // humano normal, chegaria aqui carregando o customId de lá; sem esta
+      // linha, o coletor o aceitaria e a segunda confirmação seria atravessada
+      // sem ninguém tê-la lido.
+      filter: i => i.user.id === interaction.user.id &&
+                   (i.customId === confirmId || i.customId === cancelId),
+      time: CONFIRM_MS,
+    });
+  } catch {
+    return interaction.editReply({ content: s.scorewipe_expired, embeds: [], components: [] });
+  }
+
+  await clique.deferUpdate().catch(() => {});
+
+  // Checagem POSITIVA, e não `!== cancelId`: só o confirmar desta tela publica.
+  // Qualquer outra coisa que chegue até aqui cai no cancelamento, porque numa
+  // tela destrutiva o comportamento seguro por omissão é não fazer nada.
+  if (clique.customId !== confirmId) {
+    return interaction.editReply({ content: s.scorewipe_cancelled, embeds: [], components: [] });
+  }
+
+  // A contagem e a lista de ids abaixo foram lidas na montagem da tela anterior,
+  // até 60 segundos atrás; o `wipeMapScores` apaga por md5 e modo no servidor,
+  // então uma play enviada nesse intervalo é apagada junto sem aparecer no
+  // `detail`. É inerente ao desenho — a alternativa seria reler a lista aqui e
+  // confirmar um número diferente do que o staff acabou de aprovar — e o
+  // `verifyMapScoresWiped` continua conferindo o mapa inteiro, não esta lista.
+  await daycore.wipeMapScores(target.id, alvo.md5, modeNum, {
+    osuId:       staff.osuId,
+    discordId:   interaction.user.id,
+    discordName: interaction.user.username,
+  }, reason);
+
+  const confirmado = await daycore.verifyMapScoresWiped(target.id, alvo.md5, modeNum);
+
+  const registrado = registrarAcao('mapwipe', {
+    action: 'mapwipe',
+    target: target.id,
+    detail: `${target.name} | ${modeLabel} | ${doMapa.length} scores em ${mapLabel} | ${reason} | ` +
+            `${doMapa.map(item => item.id).join(',')} | ` +
+            (confirmado ? 'confirmado' : 'NAO confirmado'),
+    actorDiscordId: interaction.user.id,
+    actorOsuId: staff.osuId,
+    actorOsuName: staff.osuName,
+  });
+
+  const resultado = new EmbedBuilder()
+    .setColor(confirmado && registrado ? 0x99ff99 : 0xffcc66)
+    .setTitle(s.mapwipe_done_title)
+    .setDescription(
+      s.mapwipe_done_body(target.name, target.id, doMapa.length, mapLabel) + '\n\n' +
+      (confirmado ? s.mapwipe_confirmed : s.mapwipe_unconfirmed) +
+      (registrado ? '' : '\n\n' + s.admin_log_failed),
+    )
+    .setFooter({ text: s.nom_actor(staff.osuName) });
+
+  return interaction.editReply({ embeds: [resultado], components: [] });
+}
+
 module.exports = {
   // Como o /wipe: toda resposta é efêmera, e em texto a flag some.
   prefix: { slashOnly: true },
+
+  // Exposta só para o teste. O `md5` da normalização da v1 é o fio de que todo
+  // o lote pende — sem ele o botão some da tela sem quebrar nada, e um teste
+  // que só olha o texto do arquivo não percebe a mudança de formato do
+  // endpoint. O carregador de comandos ignora chaves extras: ele confere
+  // `data.name` e `execute`.
+  _daLista: daLista,
 
   data: new SlashCommandBuilder()
     .setName('scorewipe')
@@ -275,6 +423,27 @@ module.exports = {
         return interaction.editReply({ content: s.scorewipe_already(alvo.id), embeds: [], components: [] });
       }
 
+      // As outras plays do mesmo mapa e modo. É um extra: se o endpoint não
+      // estiver no ar, o /scorewipe de um score continua funcionando igual.
+      // Tolerante de propósito, ao contrário do `verifyMapScoresWiped`: aqui a
+      // resposta serve só para decidir se OFERECE o botão do lote. Não saber
+      // quantas plays há é motivo para não oferecer, e não para derrubar o
+      // comando — o `null` da leitura que falhou vira lista vazia.
+      const linhasDoMapa = (alvo.md5
+        ? await osu.getServerPlayerMapScores(target.id, alvo.md5, modeNum).catch(() => [])
+        : []) ?? [];
+
+      const doMapa = linhasDoMapa
+        .filter(row => Number(row.status) >= 0)
+        .map(row => ({
+          ...daLista(row, target.id),
+          // A linha deste endpoint não traz o mapa aninhado — é sempre o mesmo
+          // mapa do score escolhido, então o rótulo vem de lá.
+          mapId:    alvo.mapId,
+          mapLabel: alvo.mapLabel,
+          md5:      alvo.md5,
+        }));
+
       const confirmId = `scorewipe_ok_${interaction.id}`;
       const cancelId  = `scorewipe_no_${interaction.id}`;
 
@@ -292,8 +461,14 @@ module.exports = {
         )
         .setFooter({ text: s.nom_actor(staff.osuName) });
 
+      const loteId  = `scorewipe_lote_${interaction.id}`;
+      const temLote = doMapa.length > 1;
+
       const botoes = new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId(confirmId).setLabel(s.scorewipe_button_confirm).setStyle(ButtonStyle.Danger),
+        ...(temLote
+          ? [new ButtonBuilder().setCustomId(loteId).setLabel(s.mapwipe_button(doMapa.length)).setStyle(ButtonStyle.Danger)]
+          : []),
         new ButtonBuilder().setCustomId(cancelId).setLabel(s.wipe_button_cancel).setStyle(ButtonStyle.Secondary),
       );
 
@@ -302,7 +477,15 @@ module.exports = {
       let clique;
       try {
         clique = await prompt.awaitMessageComponent({
-          filter: i => i.user.id === interaction.user.id,
+          // Mesma regra da segunda tela (ver `apagarOMapa`): o filtro prende os
+          // ids DESTES botões, e não só o autor. O menu de seleção da tela
+          // anterior continua desenhado no cliente por centenas de
+          // milissegundos depois do `deferUpdate`, e uma escolha atrasada dele
+          // satisfaz `i.user.id` — entrava aqui e, com a decisão negativa que
+          // havia abaixo, caía direto na publicação. O score era apagado sem
+          // ninguém ter clicado em confirmar.
+          filter: i => i.user.id === interaction.user.id &&
+                       (i.customId === confirmId || i.customId === loteId || i.customId === cancelId),
           time: CONFIRM_MS,
         });
       } catch {
@@ -311,7 +494,20 @@ module.exports = {
 
       await clique.deferUpdate().catch(() => {});
 
-      if (clique.customId === cancelId) {
+      if (clique.customId === loteId) {
+        // `return await`, e não `return` puro: sem o await a rejeição escapa
+        // deste `try` e o catch local não chega a rodar — a falha do lote não
+        // viraria `admin_action_failed` com `logError`, e os botões ficariam na
+        // tela como se a tela ainda estivesse viva.
+        return await apagarOMapa(interaction, {
+          s, staff, target, modeLabel, modeNum, reason, alvo, doMapa,
+        });
+      }
+
+      // Checagem POSITIVA, como na segunda tela: só o confirmar DESTA tela
+      // publica. Qualquer outra coisa que chegue até aqui cai no cancelamento,
+      // porque numa tela destrutiva o seguro por omissão é não fazer nada.
+      if (clique.customId !== confirmId) {
         return interaction.editReply({ content: s.scorewipe_cancelled, embeds: [], components: [] });
       }
 

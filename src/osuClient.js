@@ -513,6 +513,7 @@ module.exports = {
   getServerPlayerStats: banchoPyApi.getServerPlayerStats,
   getServerScore:     banchoPyApi.getServerScore,
   getServerPlayerScores: banchoPyApi.getServerPlayerScores,
+  getServerPlayerMapScores: banchoPyApi.getServerPlayerMapScores,
   getServerProfilePage: banchoPyApi.getServerProfilePage,
   getServerMap:       banchoPyApi.getServerMap,
   getServerMapsBySet: banchoPyApi.getServerMapsBySet,

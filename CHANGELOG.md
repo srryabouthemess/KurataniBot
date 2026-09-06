@@ -2,6 +2,16 @@
 
 ---
 
+# Sessão de 2026-09-05 (apagar o mapa inteiro de uma vez)
+
+## ✨ Novos recursos
+
+- `/scorewipe` ganhou o botão de apagar todas as plays de um jogador num mapa de
+  uma vez. O servidor recebe isso por um canal próprio (`mapwipe`) e escreve uma
+  entrada só no log de auditoria, em vez de uma por score. Os failed entram junto.
+
+---
+
 # Sessão de 2026-08-30 (apagar um score só)
 
 O `/wipe` sempre foi grosso demais para o caso mais comum de moderação: uma play suja no meio de um perfil legítimo. A única forma de tirar aquela play era apagar todos os scores da conta naquele modo e zerar as estatísticas junto. Agora dá para tirar uma só — e, diferente do `/wipe`, essa dá para desfazer.
