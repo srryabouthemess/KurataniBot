@@ -889,6 +889,15 @@ async function getServerPlayerScores(playerId, modeNum, scope = 'best', limit = 
  *
  * Sem cache de propósito: é leitura de confirmação de ação destrutiva, e um
  * valor de meio minuto atrás responderia a pergunta errada.
+ *
+ * Devolve `null`, e não `[]`, quando não houve leitura: o `banchoV1Get` trata
+ * 404 e 422 como respostas normais e devolve `null` sem lançar (restart do
+ * servidor, 404 transitório de proxy, md5 que não tem os 32 caracteres que o
+ * endpoint valida). Achatar isso em lista vazia faria "não consegui ler" e
+ * "não há play nenhuma" chegarem iguais em quem chama — e o
+ * `verifyMapScoresWiped` daria verde por vacuidade, confirmando um lote que
+ * ninguém conferiu. Cada chamador decide: a tela que só OFERECE o botão
+ * trata `null` como zero plays; a verificação trata como "não confirmei".
  */
 async function getServerPlayerMapScores(playerId, md5, modeNum, mode = PRIVATE_MODE) {
   const res = await banchoV1Get(mode, 'get_player_map_scores', {
@@ -897,7 +906,7 @@ async function getServerPlayerMapScores(playerId, md5, modeNum, mode = PRIVATE_M
     mode: modeNum,
   });
 
-  return Array.isArray(res?.scores) ? res.scores : [];
+  return Array.isArray(res?.scores) ? res.scores : null;
 }
 
 /** Um beatmap (dificuldade única) pelo ID. */

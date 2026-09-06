@@ -812,13 +812,21 @@ async function verifyScoreWiped(scoreId, { attempts = 3, delayMs = 1200 } = {}) 
  * Mesma janela do `verifyScoreWiped` — pub/sub não devolve resultado, e o que
  * se confere é o estado que o servidor deixou. Lista vazia passa: nada acima de
  * -1 é exatamente o que se pediu.
+ *
+ * Fail-closed como o `verifyScoreWiped`, e é por isso que o `null` importa: o
+ * `getServerPlayerMapScores` o devolve quando NÃO houve leitura (404 ou 422 do
+ * `banchoV1Get`, que não lança). Enquanto ele virava `[]`, o `.every()` era
+ * verdadeiro por vacuidade e o embed saía VERDE — "nenhuma play dele sobrou
+ * neste mapa" — sem que uma linha tivesse sido lida.
  */
 async function verifyMapScoresWiped(playerId, md5, modeNum, { attempts = 3, delayMs = 1200 } = {}) {
   for (let i = 0; i < attempts; i++) {
     await sleep(delayMs);
     try {
       const linhas = await osu.getServerPlayerMapScores(playerId, md5, modeNum);
-      if (linhas.every(row => Number(row.status) < 0)) return true;
+      // `null` é "não li", e não "não sobrou nada": tenta de novo, e se a janela
+      // acabar assim o resultado é não confirmado.
+      if (Array.isArray(linhas) && linhas.every(row => Number(row.status) < 0)) return true;
     } catch {
       // tenta de novo
     }

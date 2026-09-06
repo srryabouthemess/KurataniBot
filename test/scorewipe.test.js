@@ -113,14 +113,15 @@ test('o status de score apagado bate com o do bancho', () => {
 
 const fonteApi = require('fs').readFileSync(require.resolve('../src/osu/banchoPyApi'), 'utf8');
 
-test('a leitura por mapa existe e devolve lista', async () => {
-  // É o único jeito de o bot saber quantas plays existem naquele mapa: a v1
-  // get_player_scores é por modo, e a get_map_scores é leaderboard.
-  const api = require('../src/osu/banchoPyApi');
-  assert.equal(typeof api.getServerPlayerMapScores, 'function');
-  // Sem servidor no ar, o contrato é devolver lista vazia em vez de estourar:
-  // quem chama é uma tela de confirmação que não pode cair por causa disso.
-  assert.deepEqual(await api.getServerPlayerMapScores(7, 'md5', 0).catch(() => []), []);
+test('a leitura por mapa devolve null quando não houve leitura', () => {
+  // O `banchoV1Get` aceita 404 e 422 como resposta normal e devolve `null` sem
+  // lançar. Achatar isso em `[]` fazia "não li" chegar igual a "não há play
+  // nenhuma" — e o `verifyMapScoresWiped` dava verde por vacuidade.
+  // Fica no texto porque provar por chamada exigiria rede: o teste que fazia
+  // isso batia na API de produção durante o `npm test` e não provava nada,
+  // porque `.catch(() => [])` devolve `[]` tanto para lista quanto para erro.
+  const corpo = fonteApi.slice(fonteApi.indexOf('async function getServerPlayerMapScores'));
+  assert.match(corpo.slice(0, corpo.indexOf('\n}')), /Array\.isArray\(res\?\.scores\) \? res\.scores : null/);
 });
 
 test('a leitura por mapa vai pela v1, com id, md5 e mode', () => {
@@ -189,6 +190,29 @@ test('a verificação do lote só dá verde com nada acima de -1', async () => {
   osuClient.getServerPlayerMapScores = original;
 });
 
+test('a verificação do lote NÃO dá verde quando a leitura falhou', async () => {
+  // O `getServerPlayerMapScores` devolve `null` quando o `banchoV1Get` viu 404
+  // ou 422 — restart do servidor dentro da janela, 404 transitório de proxy,
+  // md5 fora dos 32 caracteres que o endpoint valida. Enquanto isso virava
+  // `[]`, o `.every()` era verdadeiro por vacuidade e o embed saía VERDE
+  // dizendo que nenhuma play sobrou, sem que uma linha tivesse sido lida.
+  const osuClient = require('../src/osuClient');
+  const original = osuClient.getServerPlayerMapScores;
+
+  let chamadas = 0;
+  osuClient.getServerPlayerMapScores = async () => { chamadas++; return null; };
+  assert.equal(await daycore.verifyMapScoresWiped(7, 'md5', 0, { attempts: 2, delayMs: 1 }), false);
+  // E continua tentando: `null` é "ainda não confirmei", não uma resposta.
+  assert.equal(chamadas, 2);
+
+  // Um `null` no meio da janela não impede o verde quando a leitura seguinte vem.
+  chamadas = 0;
+  osuClient.getServerPlayerMapScores = async () => (++chamadas === 1 ? null : [{ id: 1, status: -1 }]);
+  assert.equal(await daycore.verifyMapScoresWiped(7, 'md5', 0, { attempts: 3, delayMs: 1 }), true);
+
+  osuClient.getServerPlayerMapScores = original;
+});
+
 test('lista vazia conta como apagado', async () => {
   // Nenhuma linha acima de -1 é exatamente o que se queria.
   const osuClient = require('../src/osuClient');
@@ -202,12 +226,20 @@ test('lista vazia conta como apagado', async () => {
 
 test('a verificação do lote exige todas abaixo de zero', () => {
   assert.match(fonteAdmin, /linhas\.every\(row => Number\(row\.status\) < 0\)/);
+  // E exige que tenha havido leitura: sem o `Array.isArray`, o `null` de uma
+  // leitura que não aconteceu só não dá verde por acidente — pelo TypeError que
+  // o `.every()` levanta e o catch da volta engole. O `verifyMapScoresWiped` é
+  // fail-closed de propósito, e não por tropeço.
+  assert.match(fonteAdmin, /if \(Array\.isArray\(linhas\) && linhas\.every\(/);
 });
 
 test('as duas normalizações carregam o md5 do mapa', () => {
   // Sem ele o botão do lote não tem o que publicar: `map_md5` é a chave que a
   // tabela `scores` usa, e o id do beatmap não serve no lugar dela.
-  assert.match(fonte, /md5:\s+row\.map_md5/);
+  // A da lista lê os dois lugares: a v1 devolve o md5 aninhado, e o topo fica
+  // como preparo para o dia em que o handler passar a expô-lo.
+  assert.match(fonte, /md5:\s+row\.map_md5 \?\? row\.beatmap\?\.md5/);
+  // A do id vem da v2, cujo modelo de score tem `map_md5` de verdade.
   assert.match(fonte, /md5:\s+score\.map_md5/);
 });
 
@@ -219,8 +251,55 @@ test('o botão do lote só existe com mais de uma play no mapa', () => {
 
 test('a falha da contagem não derruba o /scorewipe', () => {
   // O lote é um extra. Se o endpoint novo não estiver no ar, a tela de um score
-  // tem que continuar aparecendo.
+  // tem que continuar aparecendo — e desde que a leitura passou a devolver
+  // `null` em vez de `[]`, "não li" também precisa virar zero plays AQUI, que
+  // é o oposto do que o `verifyMapScoresWiped` faz com o mesmo `null`. Nesta
+  // tela não saber quantas plays há é motivo para não oferecer o lote; lá é
+  // motivo para não confirmar.
   assert.match(fonte, /getServerPlayerMapScores\([^)]*\)\.catch\(\(\) => \[\]\)/);
+  assert.match(fonte, /: \[\]\) \?\? \[\];/);
+});
+
+// A primeira tela de confirmação, recortada do `execute`: começa nos ids dela e
+// termina no catch do comando. Os testes abaixo são os gêmeos dos que travam a
+// segunda tela — o defeito era o mesmo, e ter as duas telas com regras opostas
+// no mesmo arquivo é pior que o defeito.
+const corpoDaPrimeira = (() => {
+  const inicio = fonte.indexOf('const confirmId = `scorewipe_ok_');
+  const fim    = fonte.indexOf('} catch (error) {');
+  assert.ok(inicio !== -1, 'a primeira tela monta os ids dela');
+  assert.ok(fim > inicio, 'a primeira tela fica dentro do try do execute');
+  return fonte.slice(inicio, fim);
+})();
+
+test('o coletor da PRIMEIRA tela só aceita os botões dela', () => {
+  // Com o filtro olhando só `i.user.id`, uma escolha atrasada do menu de
+  // seleção da tela ANTERIOR — que continua desenhado no cliente por centenas
+  // de milissegundos depois do `deferUpdate` — entrava aqui. Junto com a
+  // decisão negativa que havia abaixo, isso apagava o score sem ninguém ter
+  // clicado em confirmar.
+  const filtro = corpoDaPrimeira.slice(
+    corpoDaPrimeira.indexOf('filter:'),
+    corpoDaPrimeira.indexOf('time: CONFIRM_MS'),
+  );
+  assert.match(filtro, /i\.customId === confirmId/);
+  assert.match(filtro, /i\.customId === loteId/);
+  assert.match(filtro, /i\.customId === cancelId/);
+});
+
+test('só o confirmar da PRIMEIRA tela apaga o score', () => {
+  // Checagem POSITIVA, igual à da segunda tela. Com `=== cancelId` seguido de
+  // fall-through, qualquer customId que passasse pelo coletor caía direto no
+  // `wipeScore`.
+  assert.match(corpoDaPrimeira, /clique\.customId !== confirmId/);
+  assert.doesNotMatch(corpoDaPrimeira, /clique\.customId === cancelId/);
+
+  // E a decisão vem ANTES da publicação: um `!== confirmId` colocado depois do
+  // `wipeScore` passaria pelas duas linhas acima sem travar nada.
+  const decide  = corpoDaPrimeira.indexOf('clique.customId !== confirmId');
+  const publica = corpoDaPrimeira.indexOf('daycore.wipeScore(');
+  assert.ok(publica !== -1, 'o score é publicado nesta tela');
+  assert.ok(decide < publica, 'a checagem do confirmar vem antes do wipeScore');
 });
 
 test('o clique no botão do lote não publica sozinho', () => {
@@ -300,29 +379,55 @@ test('a lista da segunda tela avisa quando não coube tudo', () => {
   assert.match(corpoDoLote, /LISTA_MAX_CHARS/);
 });
 
+const MD5 = 'c9557c9d6cc35fb6a0a43c37e226703e';
+
+/** O resto da linha, igual nas duas formas; só o lugar do md5 muda. */
+const linhaBase = {
+  id: 4242,
+  mode: 0,
+  status: 2,
+  pp: 312.5,
+  acc: 98.44,
+  grade: 'S',
+  mods: 64,
+  play_time: '2026-09-01T12:34:56',
+};
+
 test('a linha da v1 sai da normalização com o md5 preenchido', () => {
-  // Todo o caminho do lote pende disto: sem `map_md5` na linha, `alvo.md5` fica
-  // nulo, `getServerPlayerMapScores` nunca é chamado e o botão do lote some da
-  // tela sem quebrar nada — some calado. O SELECT da v1 `get_player_scores`
-  // traz `t.map_md5` hoje; o dia em que isso mudar tem que aparecer aqui.
+  // Todo o caminho do lote pende disto: sem md5, `alvo.md5` fica nulo,
+  // `getServerPlayerMapScores` nunca é chamado e o botão do lote some da tela
+  // sem quebrar nada — some calado.
+  //
+  // A fixture é a resposta REAL do `get_player_scores`: o SELECT da v1 traz
+  // `t.map_md5`, mas o handler remonta o dicionário campo a campo e o md5 sai
+  // só ANINHADO, em `beatmap.md5`. A fixture anterior tinha `map_md5` no topo,
+  // formato que o endpoint nunca produziu — ela ficava verde sobre um caso que
+  // não acontece, enquanto o caminho da lista devolvia null em produção.
   const linhaV1 = {
-    id: 4242,
-    mode: 0,
-    status: 2,
-    pp: 312.5,
-    acc: 98.44,
-    grade: 'S',
-    mods: 64,
-    play_time: '2026-09-01T12:34:56',
-    map_md5: 'c9557c9d6cc35fb6a0a43c37e226703e',
-    beatmap: { id: 7331, artist: 'Artista', title: 'Titulo', version: 'Insane' },
+    ...linhaBase,
+    beatmap: { id: 7331, md5: MD5, artist: 'Artista', title: 'Titulo', version: 'Insane' },
   };
 
   const item = scorewipe._daLista(linhaV1, 7);
-  assert.equal(item.md5, 'c9557c9d6cc35fb6a0a43c37e226703e');
+  assert.equal(item.md5, MD5);
   // E o resto continua vindo junto, para o teste não passar com um objeto vazio
   // que por acaso tivesse só o md5.
   assert.equal(item.id, 4242);
   assert.equal(item.userId, 7);
+  assert.equal(item.mapId, 7331);
+});
+
+test('o md5 no topo da linha também serve, se o upstream passar a mandá-lo', () => {
+  // O caso que a fixture antiga cobria sozinha. Vale manter — o handler da v1
+  // pode passar a expor `map_md5` no topo — desde que não seja o único: os dois
+  // formatos têm que sair com o md5 preenchido.
+  const linhaV1 = {
+    ...linhaBase,
+    map_md5: MD5,
+    beatmap: { id: 7331, artist: 'Artista', title: 'Titulo', version: 'Insane' },
+  };
+
+  const item = scorewipe._daLista(linhaV1, 7);
+  assert.equal(item.md5, MD5);
   assert.equal(item.mapId, 7331);
 });

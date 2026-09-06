@@ -127,7 +127,12 @@ function daLista(row, ownerId) {
     playTime: row.play_time,
     mapId:    row.beatmap?.id ?? null,
     mapLabel: nomeDoMapa(row.beatmap),
-    md5:      row.map_md5 ?? null,
+    // O `get_player_scores` da v1 traz `t.map_md5` no SELECT, mas o handler
+    // remonta o dicionário campo a campo e o md5 sai só ANINHADO, junto do
+    // resto do mapa (`beatmap.md5`). Ler só o topo devolvia null em todo o
+    // caminho da lista — e, sem md5, o botão do lote nunca era montado, calado.
+    // O topo fica primeiro para o dia em que o upstream passar a mandá-lo.
+    md5:      row.map_md5 ?? row.beatmap?.md5 ?? null,
   };
 }
 
@@ -420,9 +425,13 @@ module.exports = {
 
       // As outras plays do mesmo mapa e modo. É um extra: se o endpoint não
       // estiver no ar, o /scorewipe de um score continua funcionando igual.
-      const linhasDoMapa = alvo.md5
+      // Tolerante de propósito, ao contrário do `verifyMapScoresWiped`: aqui a
+      // resposta serve só para decidir se OFERECE o botão do lote. Não saber
+      // quantas plays há é motivo para não oferecer, e não para derrubar o
+      // comando — o `null` da leitura que falhou vira lista vazia.
+      const linhasDoMapa = (alvo.md5
         ? await osu.getServerPlayerMapScores(target.id, alvo.md5, modeNum).catch(() => [])
-        : [];
+        : []) ?? [];
 
       const doMapa = linhasDoMapa
         .filter(row => Number(row.status) >= 0)
@@ -468,7 +477,15 @@ module.exports = {
       let clique;
       try {
         clique = await prompt.awaitMessageComponent({
-          filter: i => i.user.id === interaction.user.id,
+          // Mesma regra da segunda tela (ver `apagarOMapa`): o filtro prende os
+          // ids DESTES botões, e não só o autor. O menu de seleção da tela
+          // anterior continua desenhado no cliente por centenas de
+          // milissegundos depois do `deferUpdate`, e uma escolha atrasada dele
+          // satisfaz `i.user.id` — entrava aqui e, com a decisão negativa que
+          // havia abaixo, caía direto na publicação. O score era apagado sem
+          // ninguém ter clicado em confirmar.
+          filter: i => i.user.id === interaction.user.id &&
+                       (i.customId === confirmId || i.customId === loteId || i.customId === cancelId),
           time: CONFIRM_MS,
         });
       } catch {
@@ -476,10 +493,6 @@ module.exports = {
       }
 
       await clique.deferUpdate().catch(() => {});
-
-      if (clique.customId === cancelId) {
-        return interaction.editReply({ content: s.scorewipe_cancelled, embeds: [], components: [] });
-      }
 
       if (clique.customId === loteId) {
         // `return await`, e não `return` puro: sem o await a rejeição escapa
@@ -489,6 +502,13 @@ module.exports = {
         return await apagarOMapa(interaction, {
           s, staff, target, modeLabel, modeNum, reason, alvo, doMapa,
         });
+      }
+
+      // Checagem POSITIVA, como na segunda tela: só o confirmar DESTA tela
+      // publica. Qualquer outra coisa que chegue até aqui cai no cancelamento,
+      // porque numa tela destrutiva o seguro por omissão é não fazer nada.
+      if (clique.customId !== confirmId) {
+        return interaction.editReply({ content: s.scorewipe_cancelled, embeds: [], components: [] });
       }
 
       await daycore.wipeScore(alvo.id, {
