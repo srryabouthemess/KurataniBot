@@ -25,6 +25,16 @@
  *      número de nove dígitos de cabeça.
  *   3. O log de auditoria guarda o que foi apagado, e não só o id.
  *
+ * ── E quando é o mapa inteiro? ────────────────────────────────────────────────
+ * Apagar dez plays uma a uma funciona, e custa dez embeds no log de auditoria do
+ * servidor: o `wipe_score` do bancho escreve um por chamada. Por isso existe o
+ * canal `mapwipe`, com um `post_audit_log` para o lote inteiro — e o botão que o
+ * aciona só aparece quando há mais de uma play, porque com uma só este comando
+ * já faz exatamente isso.
+ *
+ * O lote leva os failed junto. Eles contam em `plays`, e deixá-los de pé faria o
+ * mapa continuar somando tentativas depois de um wipe que se anunciou total.
+ *
  * ── O id vem de onde? ─────────────────────────────────────────────────────────
  * Do site dá para tirar: a página de um score é `/scores/<id>`, então clicar numa
  * linha da leaderboard do mapa e ler o número da URL funciona. O que isso não
