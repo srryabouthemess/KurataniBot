@@ -42,6 +42,7 @@ const { logError } = require('./logger');
 
 const CHANNEL      = 'ex:map_status_change';
 const PRIV_CHANNEL = 'ex:priv_change';
+const CUSTOM_MAP_CHANNEL = 'ex:custom_map_change';
 
 /**
  * Só `rank` e `love` viram anúncio.
@@ -171,6 +172,44 @@ function parsePrivEvent(raw) {
   };
 }
 
+const CUSTOM_MAP_TYPES = new Set(['uploaded', 'deleted']);
+const CUSTOM_MAP_SOURCES = new Set(['web', 'editor', 'cli']);
+const cleanText = value => typeof value === 'string' && value.trim()
+  ? value.trim().slice(0, 256)
+  : null;
+
+function parseCustomMapEvent(raw) {
+  let data;
+  try { data = JSON.parse(raw); } catch { return null; }
+
+  const type = data?.type;
+  const source = data?.source;
+  const setId = data?.set_id;
+  if (!CUSTOM_MAP_TYPES.has(type) || !CUSTOM_MAP_SOURCES.has(source)) return null;
+  if (!Number.isSafeInteger(setId) || setId <= 0) return null;
+
+  const rawBeatmapIds = data?.beatmap_ids;
+  if (rawBeatmapIds !== undefined && !Array.isArray(rawBeatmapIds)) return null;
+  if (rawBeatmapIds?.some(id => !Number.isSafeInteger(id) || id <= 0)) return null;
+  const beatmapIds = (rawBeatmapIds ?? []).slice(0, 64);
+  const removed = data?.removed;
+  if (type === 'uploaded' && beatmapIds.length === 0) return null;
+  if (type === 'deleted' && (!Number.isSafeInteger(removed) || removed <= 0)) return null;
+
+  const actorId = data?.actor_id;
+  const status = data?.status;
+  return {
+    type, source, setId, beatmapIds,
+    artist: cleanText(data?.artist),
+    title: cleanText(data?.title),
+    creator: cleanText(data?.creator),
+    status: Number.isSafeInteger(status) ? status : null,
+    actorId: Number.isSafeInteger(actorId) && actorId > 0 ? actorId : null,
+    actorName: cleanText(data?.actor_name),
+    removed: type === 'deleted' ? removed : null,
+  };
+}
+
 /**
  * Começa a escutar. Idempotente: chamar de novo não abre uma segunda conexão.
  *
@@ -183,14 +222,15 @@ function parsePrivEvent(raw) {
  * @param {(evento: object) => Promise<void>|void} [handlers.onPrivChange]  cargo mexido in-game
  * @returns {Promise<boolean>} se a assinatura ficou de pé
  */
-async function listen({ onStatusChange, onPrivChange } = {}) {
+async function listen({ onStatusChange, onPrivChange, onCustomMapChange } = {}) {
   if (!isConfigured() || _client) return Boolean(_client);
   // Sem handler nenhum não há o que escutar, e abrir a conexão assim deixaria
   // um client em modo subscribe pendurado sem assinatura nenhuma.
-  if (!onStatusChange && !onPrivChange) return false;
+  if (!onStatusChange && !onPrivChange && !onCustomMapChange) return false;
 
+  let client = null;
   try {
-    const client = createClient({
+    client = createClient({
       socket: {
         host: process.env.REDIS_HOST,
         port: Number(process.env.REDIS_PORT || 6379),
@@ -229,9 +269,18 @@ async function listen({ onStatusChange, onPrivChange } = {}) {
       console.log(`[eventos] Escutando "${PRIV_CHANNEL}" para cargos mexidos no jogo.`);
     }
 
+    if (onCustomMapChange) {
+      await client.subscribe(
+        CUSTOM_MAP_CHANNEL,
+        despachar('daycoreEvents:custom-map', parseCustomMapEvent, onCustomMapChange),
+      );
+      console.log(`[eventos] Escutando "${CUSTOM_MAP_CHANNEL}" para mapas customizados.`);
+    }
+
     _client = client;
     return true;
   } catch (error) {
+    if (client?.isOpen) await client.quit().catch(() => {});
     logError('daycoreEvents:listen', error);
     return false;
   }
@@ -246,4 +295,5 @@ module.exports = {
   listen, close, isConfigured,
   parseEvent, CHANNEL, ANNOUNCED_TYPES,
   parsePrivEvent, PRIV_CHANNEL, PRIV_TYPES,
+  parseCustomMapEvent, CUSTOM_MAP_CHANNEL, CUSTOM_MAP_TYPES,
 };

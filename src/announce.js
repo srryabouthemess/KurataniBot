@@ -63,6 +63,14 @@ function isPrivLogConfigured() {
   return Boolean(privChannelId());
 }
 
+function customMapChannelId() {
+  return process.env.DAYCORE_CUSTOM_MAP_CHANNEL_ID || null;
+}
+
+function isCustomMapConfigured() {
+  return Boolean(customMapChannelId());
+}
+
 /**
  * O canal, se ele existir, for de texto e o bot puder falar nele.
  *
@@ -267,7 +275,46 @@ async function announcePrivChange(client, evento, s) {
   }
 }
 
+async function announceCustomMap(client, evento, s) {
+  const id = customMapChannelId();
+  if (!id) return false;
+
+  try {
+    const channel = await resolveChannel(client, id, 'announce:custom-map');
+    if (!channel) return false;
+
+    const uploaded = evento.type === 'uploaded';
+    const mapUrl = uploaded
+      ? osu.getMapUrl(evento.beatmapIds[0], evento.setId, osu.PRIVATE_MODE)
+      : null;
+    const label = uploaded
+      ? `${evento.artist ?? '?'} - ${evento.title ?? '?'} (${evento.creator ?? '?'})`
+      : `Set #${evento.setId}`;
+    const count = uploaded ? evento.beatmapIds.length : evento.removed;
+    const source = s.custom_map_source(evento.source);
+
+    const embed = new EmbedBuilder()
+      .setColor(uploaded ? 0x3498db : 0x992d22)
+      .setTitle(uploaded ? s.custom_map_uploaded : s.custom_map_deleted)
+      .setDescription(
+        `${uploaded ? `**[${md(label)}](${mapUrl})**` : `**${label}**`}\n` +
+        s.custom_map_diffs(count) + '\n' +
+        s.custom_map_source_line(source) +
+        (evento.actorName ? `\n${s.custom_map_by(md(evento.actorName))}` : ''),
+      )
+      .setTimestamp();
+
+    if (uploaded) embed.setURL(mapUrl).setImage(coverUrl(evento.setId));
+    await channel.send({ embeds: [embed] });
+    return true;
+  } catch (error) {
+    logError('announce:custom-map', error);
+    return false;
+  }
+}
+
 module.exports = {
   isConfigured, announceStatus, announceGameStatus, coverUrl,
   isPrivLogConfigured, announcePrivChange, avatarUrl,
+  isCustomMapConfigured, announceCustomMap,
 };

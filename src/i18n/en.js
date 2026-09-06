@@ -264,6 +264,12 @@ module.exports = ({ ADMIN }) => ({
   priv_ann_roles:          (roles) => `Roles: **${roles}**`,
   priv_ann_by_ingame:      (who) => `Applied by ${who}, in-game`,
   priv_ann_ingame_unknown: 'Applied in-game',
+  custom_map_uploaded:     'Beatmap uploaded to the server',
+  custom_map_deleted:      'Beatmap removed from the server',
+  custom_map_diffs:        (n) => `${n} difficult${n === 1 ? 'y' : 'ies'}`,
+  custom_map_source:       (source) => ({ web: 'website', editor: 'osu! editor', cli: 'command line' }[source] ?? source),
+  custom_map_source_line:  (source) => `Source: **${source}**`,
+  custom_map_by:           (who) => `By **${who}**`,
 
   nom_invalid_map:         '❌ Could not identify that map. Use the beatmap/set ID or a link.',
   nom_map_not_found:       `❌ Map not found on ${ADMIN} or on osu!.`,

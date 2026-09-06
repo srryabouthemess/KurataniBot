@@ -225,3 +225,47 @@ test('falha do Discord no log de cargo vira false, não exceção', async () => 
   const client = { channels: { fetch: async () => { throw new Error('Unknown Channel'); } } };
   assert.equal(await announce.announcePrivChange(client, PRIV, s), false);
 });
+
+const CUSTOM_MAP = {
+  type: 'uploaded', source: 'editor', setId: 100000001,
+  beatmapIds: [100000002, 100000003], artist: 'Camellia',
+  title: 'Test Map', creator: 'mapper', status: 0,
+  actorId: 42, actorName: 'mapper', removed: null,
+};
+
+test.beforeEach(() => { delete process.env.DAYCORE_CUSTOM_MAP_CHANNEL_ID; });
+
+test('evento de mapa customizado usa canal separado', async () => {
+  process.env.DAYCORE_CUSTOM_MAP_CHANNEL_ID = '789';
+  const sent = [];
+
+  assert.equal(await announce.announceCustomMap(fakeClient({ sent }), CUSTOM_MAP, s), true);
+  const embed = sent[0].embeds[0].data;
+  assert.match(embed.title, /enviado/i);
+  assert.match(embed.description, /Camellia/);
+  assert.match(embed.description, /2 dificuldades/);
+  assert.match(embed.description, /editor/i);
+  assert.match(embed.description, /mapper/);
+  assert.match(embed.image.url, /100000001/);
+});
+
+test('remoção de mapa customizado não inventa metadados apagados', async () => {
+  process.env.DAYCORE_CUSTOM_MAP_CHANNEL_ID = '789';
+  const sent = [];
+
+  await announce.announceCustomMap(fakeClient({ sent }), {
+    ...CUSTOM_MAP, type: 'deleted', source: 'web', beatmapIds: [],
+    artist: null, title: null, creator: null, removed: 2,
+  }, s);
+  const embed = sent[0].embeds[0].data;
+  assert.match(embed.title, /removido/i);
+  assert.match(embed.description, /100000001/);
+  assert.match(embed.description, /2 dificuldades/);
+  assert.equal(embed.image, undefined);
+});
+
+test('falha do Discord no mapa customizado não afeta a operação concluída', async () => {
+  process.env.DAYCORE_CUSTOM_MAP_CHANNEL_ID = '789';
+  const client = { channels: { fetch: async () => { throw new Error('Unknown Channel'); } } };
+  assert.equal(await announce.announceCustomMap(client, CUSTOM_MAP, s), false);
+});

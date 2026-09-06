@@ -161,3 +161,44 @@ test('payload quebrado no canal de cargo também não derruba nada', () => {
   assert.equal(parsePrivEvent('null'), null);
   assert.equal(parsePrivEvent(''), null);
 });
+
+const { parseCustomMapEvent } = require('../src/daycoreEvents');
+
+const customMap = (extra = {}) => JSON.stringify({
+  type: 'uploaded', source: 'editor', set_id: 100000001,
+  beatmap_ids: [100000002, 100000003], artist: 'Camellia',
+  title: 'Test Map', creator: 'mapper', status: 0,
+  actor_id: 42, actor_name: 'mapper', ...extra,
+});
+
+test('upload de mapa customizado preserva os dados do evento', () => {
+  assert.deepEqual(parseCustomMapEvent(customMap()), {
+    type: 'uploaded', source: 'editor', setId: 100000001,
+    beatmapIds: [100000002, 100000003], artist: 'Camellia',
+    title: 'Test Map', creator: 'mapper', status: 0,
+    actorId: 42, actorName: 'mapper', removed: null,
+  });
+});
+
+test('remoção de mapa customizado aceita somente contagem positiva', () => {
+  const event = parseCustomMapEvent(customMap({
+    type: 'deleted', source: 'web', beatmap_ids: undefined, removed: 2,
+  }));
+  assert.equal(event.type, 'deleted');
+  assert.equal(event.removed, 2);
+  assert.deepEqual(event.beatmapIds, []);
+  assert.equal(parseCustomMapEvent(customMap({ type: 'deleted', removed: 0 })), null);
+});
+
+test('evento customizado inválido ou hostil é descartado', () => {
+  assert.equal(parseCustomMapEvent('não é json'), null);
+  assert.equal(parseCustomMapEvent(customMap({ type: 'edited' })), null);
+  assert.equal(parseCustomMapEvent(customMap({ source: 'desconhecido' })), null);
+  assert.equal(parseCustomMapEvent(customMap({ set_id: 0 })), null);
+  assert.equal(parseCustomMapEvent(customMap({ beatmap_ids: [] })), null);
+  assert.equal(parseCustomMapEvent(customMap({ set_id: true })), null);
+  assert.equal(parseCustomMapEvent(customMap({ set_id: '100000001' })), null);
+  assert.equal(parseCustomMapEvent(customMap({ beatmap_ids: [true] })), null);
+  assert.equal(parseCustomMapEvent(customMap({ type: 'deleted', removed: true })), null);
+  assert.equal(parseCustomMapEvent(customMap({ type: 'deleted', removed: '2' })), null);
+});

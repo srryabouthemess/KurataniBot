@@ -156,6 +156,11 @@ client.once('clientReady', async () => {
     await daycoreEvents.listen({
       onStatusChange: evento => announceGameRank(client, evento),
       onPrivChange:   evento => announceGamePriv(client, evento),
+      onCustomMapChange: evento => announce.announceCustomMap(
+        client,
+        evento,
+        forGuild(process.env.DAYCORE_GUILD_ID),
+      ),
     });
   } catch (error) {
     // Extra: sem isto o bot segue inteiro, só não anuncia o que foi feito

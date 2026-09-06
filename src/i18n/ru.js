@@ -264,6 +264,12 @@ module.exports = ({ ADMIN }) => ({
   priv_ann_roles:          (roles) => `Роли: **${roles}**`,
   priv_ann_by_ingame:      (who) => `Применил ${who}, из игры`,
   priv_ann_ingame_unknown: 'Применено из игры',
+  custom_map_uploaded:     'Карта отправлена на сервер',
+  custom_map_deleted:      'Карта удалена с сервера',
+  custom_map_diffs:        (n) => `Сложностей: ${n}`,
+  custom_map_source:       (source) => ({ web: 'сайт', editor: 'редактор osu!', cli: 'командная строка' }[source] ?? source),
+  custom_map_source_line:  (source) => `Источник: **${source}**`,
+  custom_map_by:           (who) => `Автор: **${who}**`,
 
   nom_invalid_map:         '❌ Не удалось определить карту. Укажите ID карты/сета или ссылку.',
   nom_map_not_found:       `❌ Карта не найдена ни на ${ADMIN}, ни на osu!.`,

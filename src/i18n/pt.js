@@ -282,6 +282,12 @@ module.exports = ({ ADMIN }) => ({
   priv_ann_roles:          (roles) => `Cargos: **${roles}**`,
   priv_ann_by_ingame:      (who) => `Aplicado por ${who}, in-game`,
   priv_ann_ingame_unknown: 'Aplicado in-game',
+  custom_map_uploaded:     'Beatmap enviado ao servidor',
+  custom_map_deleted:      'Beatmap removido do servidor',
+  custom_map_diffs:        (n) => `${n} dificuldade${n === 1 ? '' : 's'}`,
+  custom_map_source:       (source) => ({ web: 'site', editor: 'editor do osu!', cli: 'linha de comando' }[source] ?? source),
+  custom_map_source_line:  (source) => `Origem: **${source}**`,
+  custom_map_by:           (who) => `Por **${who}**`,
 
   nom_invalid_map:         '❌ Não entendi qual mapa é esse. Use o ID do beatmap/set ou um link.',
   nom_map_not_found:       `❌ Mapa não encontrado no ${ADMIN} nem no osu!.`,
