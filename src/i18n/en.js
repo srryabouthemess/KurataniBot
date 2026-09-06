@@ -344,6 +344,7 @@ module.exports = ({ ADMIN }) => ({
   mapwipe_confirm_body:    (name, id, mode, map, n) =>
     `Target: **${name}** (\`${id}\`)\nMode: **${mode}**\nMap: **${map}**\n\n**${n} plays** are going:`,
   mapwipe_includes_failed: 'Failed plays go too: they count towards `plays`, and leaving them standing would keep the map adding attempts after a wipe that announced itself as total.',
+  mapwipe_more:            (n) => `_...and ${n} more play(s) that did not fit on screen. All of them are in the batch._`,
   mapwipe_button_confirm:  (n) => `Erase all ${n}`,
   mapwipe_done_title:      'Map plays erased',
   mapwipe_done_body:       (name, id, n, map) => `**${name}** (\`${id}\`) — **${n} plays** on **${map}**`,

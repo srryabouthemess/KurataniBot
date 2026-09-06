@@ -364,6 +364,7 @@ module.exports = ({ ADMIN }) => ({
   mapwipe_confirm_body:    (name, id, mode, map, n) =>
     `Alvo: **${name}** (\`${id}\`)\nModo: **${mode}**\nMapa: **${map}**\n\nVão embora **${n} plays**:`,
   mapwipe_includes_failed: 'Entram também as plays falhadas: elas contam em `plays`, e deixá-las de pé faria o mapa continuar somando tentativas depois de um wipe total.',
+  mapwipe_more:            (n) => `_...e mais ${n} play(s) que não couberam na tela. Todas entram no lote._`,
   mapwipe_button_confirm:  (n) => `Apagar as ${n}`,
   mapwipe_done_title:      'Plays do mapa apagadas',
   mapwipe_done_body:       (name, id, n, map) => `**${name}** (\`${id}\`) — **${n} plays** em **${map}**`,

@@ -229,9 +229,100 @@ test('o clique no botão do lote não publica sozinho', () => {
   // por isso ancora no `if` do clique, e não num slice entre nomes que caem
   // dentro da própria `apagarOMapa` (abaixo de `module.exports`) e passariam
   // de qualquer jeito.
-  assert.match(fonte, /clique\.customId === loteId\)[\s\S]{0,80}return apagarOMapa\(/);
+  // Entre o `if` e o `return` só se admite comentário: qualquer outra coisa ali
+  // seria trabalho acontecendo antes da segunda tela.
+  assert.match(fonte, /clique\.customId === loteId\) \{\n(?:\s*\/\/[^\n]*\n)*\s*return await apagarOMapa\(/);
 });
 
 test('o lote registra no admin_actions', () => {
   assert.match(fonte, /registrarAcao\('mapwipe'/);
+});
+
+// O corpo da `apagarOMapa`, isolado do resto do arquivo: ela é a última função
+// antes do `module.exports`, então este recorte não pega nada do `execute`.
+// Ancorar aqui é o que separa "a segunda tela existe no arquivo" de "a segunda
+// tela está no caminho da publicação".
+const corpoDoLote = (() => {
+  const inicio = fonte.indexOf('async function apagarOMapa');
+  const fim    = fonte.indexOf('module.exports');
+  assert.ok(inicio !== -1, 'a apagarOMapa precisa existir');
+  assert.ok(fim > inicio, 'a apagarOMapa fica acima do module.exports');
+  return fonte.slice(inicio, fim);
+})();
+
+test('a segunda tela é ESPERADA antes de o lote ser publicado', () => {
+  // O teste que existia antes provava só a delegação: se a `apagarOMapa` fosse
+  // reescrita chamando o `wipeMapScores` na primeira linha, sem coletor nenhum,
+  // ele continuava verde. Esta é a garantia que a tela inteira existe para dar
+  // — a ordem dentro da função —, e é ela que precisa estar travada.
+  const espera  = corpoDoLote.indexOf('awaitMessageComponent');
+  const publica = corpoDoLote.indexOf('wipeMapScores');
+
+  assert.ok(espera !== -1, 'a segunda tela espera um clique');
+  assert.ok(publica !== -1, 'o lote é publicado dentro da apagarOMapa');
+  assert.ok(espera < publica, 'a espera do clique vem ANTES da publicação do lote');
+});
+
+test('o coletor da segunda tela só aceita os botões dela', () => {
+  // Botão do Discord não desabilita ao ser clicado, e entre o `deferUpdate` do
+  // clique anterior e este coletor o cliente ainda desenha a tela velha. Com o
+  // filtro olhando só `i.user.id`, um duplo clique no botão do lote — que é
+  // comportamento humano normal — entrava aqui com o customId de lá.
+  const filtro = corpoDoLote.slice(
+    corpoDoLote.indexOf('filter:'),
+    corpoDoLote.indexOf('time: CONFIRM_MS'),
+  );
+  assert.match(filtro, /i\.customId === confirmId/);
+  assert.match(filtro, /i\.customId === cancelId/);
+});
+
+test('só o confirmar da segunda tela publica o lote', () => {
+  // Checagem POSITIVA. Com `!== cancelId`, qualquer customId que passasse pelo
+  // coletor publicava — inclusive o do botão do lote, chegando atrasado da tela
+  // anterior. Numa tela destrutiva o default tem que ser não fazer nada.
+  assert.match(corpoDoLote, /clique\.customId !== confirmId/);
+  assert.doesNotMatch(corpoDoLote, /clique\.customId === cancelId/);
+});
+
+test('a falha do lote cai no catch do /scorewipe', () => {
+  // Sem o `await`, a promessa devolvida escapa do `try` do `execute`: a falha
+  // não vira `admin_action_failed` com `logError` e os botões ficam na tela.
+  assert.match(fonte, /return await apagarOMapa\(/);
+});
+
+test('a lista da segunda tela avisa quando não coube tudo', () => {
+  // O `.slice(0, 2500)` cortava no meio de uma linha e não sinalizava nada: o
+  // staff via uma lista aparentemente completa, com o número certo no
+  // cabeçalho, e confirmava sem saber que faltava play na tela.
+  assert.doesNotMatch(corpoDoLote, /\.slice\(0, 2500\)/);
+  assert.match(corpoDoLote, /s\.mapwipe_more\(/);
+  // Corte por item inteiro, e não por caractere.
+  assert.match(corpoDoLote, /LISTA_MAX_CHARS/);
+});
+
+test('a linha da v1 sai da normalização com o md5 preenchido', () => {
+  // Todo o caminho do lote pende disto: sem `map_md5` na linha, `alvo.md5` fica
+  // nulo, `getServerPlayerMapScores` nunca é chamado e o botão do lote some da
+  // tela sem quebrar nada — some calado. O SELECT da v1 `get_player_scores`
+  // traz `t.map_md5` hoje; o dia em que isso mudar tem que aparecer aqui.
+  const linhaV1 = {
+    id: 4242,
+    mode: 0,
+    status: 2,
+    pp: 312.5,
+    acc: 98.44,
+    grade: 'S',
+    mods: 64,
+    play_time: '2026-09-01T12:34:56',
+    map_md5: 'c9557c9d6cc35fb6a0a43c37e226703e',
+    beatmap: { id: 7331, artist: 'Artista', title: 'Titulo', version: 'Insane' },
+  };
+
+  const item = scorewipe._daLista(linhaV1, 7);
+  assert.equal(item.md5, 'c9557c9d6cc35fb6a0a43c37e226703e');
+  // E o resto continua vindo junto, para o teste não passar com um objeto vazio
+  // que por acaso tivesse só o md5.
+  assert.equal(item.id, 4242);
+  assert.equal(item.userId, 7);
+  assert.equal(item.mapId, 7331);
 });

@@ -344,6 +344,7 @@ module.exports = ({ ADMIN }) => ({
   mapwipe_confirm_body:    (name, id, mode, map, n) =>
     `Цель: **${name}** (\`${id}\`)\nРежим: **${mode}**\nКарта: **${map}**\n\nУйдёт **${n} скоров**:`,
   mapwipe_includes_failed: 'Проваленные скоры тоже уйдут: они считаются в `plays`, и оставить их значило бы, что карта продолжит считать попытки после полного удаления.',
+  mapwipe_more:            (n) => `_...и ещё ${n} скор(ов), которые не поместились на экране. Все они входят в пакет._`,
   mapwipe_button_confirm:  (n) => `Удалить все ${n}`,
   mapwipe_done_title:      'Скоры на карте удалены',
   mapwipe_done_body:       (name, id, n, map) => `**${name}** (\`${id}\`) — **${n} скоров** на **${map}**`,
