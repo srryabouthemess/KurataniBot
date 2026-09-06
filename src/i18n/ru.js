@@ -349,7 +349,7 @@ module.exports = ({ ADMIN }) => ({
   mapwipe_done_title:      'Скоры на карте удалены',
   mapwipe_done_body:       (name, id, n, map) => `**${name}** (\`${id}\`) — **${n} скоров** на **${map}**`,
   mapwipe_confirmed:       '✅ Подтверждено: ни одного его скора на этой карте не осталось.',
-  mapwipe_unconfirmed:     '⚠️ Опубликовано, но эффект пока не подтвердил. Проверьте профиль перед повтором.',
+  mapwipe_unconfirmed:     '⚠️ Опубликовано, но эффект пока не подтверждён. Проверьте профиль перед повтором.',
   mod_already_restricted:  (name) => `❌ **${name}** уже ограничен.`,
   mod_not_currently_restricted: (name) => `❌ **${name}** не ограничен.`,
   mod_restrict_title:      'Игрок ограничен',
