@@ -37,6 +37,7 @@ const ALIASES = {
   profile:     ['osu'],
   recent:      ['rs'],
   topplays:    ['top'],
+  nochoke:     ['nc'],
   score:       ['c', 'choke'],
   whatif:      ['wi'],
   leaderboard: ['lb'],
