@@ -256,9 +256,10 @@ module.exports = ({ ADMIN }) => ({
 
   nochoke_none:            'Nenhuma play encontrada.',
   nochoke_no_chokes:       (name) => `**${name}** não tem choke no top 100 — nada a corrigir.`,
-  nochoke_gain:            (before, after, gain, count) =>
-    `**${count}** choke(s) desfeito(s) → o PP vai de **${before} → ${after}** (**+${gain}pp**).`,
-  nochoke_footer:          (page, total, label) => `Página ${page}/${total} · ${label} · reordenado pelo PP de FC`,
+  nochoke_gain:            (before, after, gain) =>
+    `**Total pp:** ${before} → **${after}pp** (**+${gain}**)`,
+  nochoke_removed:         'Removidos',
+  nochoke_footer:          (page, total, label) => `Página ${page}/${total} · ${label}`,
   nochoke_error:           'Erro ao montar o top sem choke.',
 
   // ── Administração do servidor (/nominate, /moderate) ──────────────────────

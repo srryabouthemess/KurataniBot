@@ -34,6 +34,8 @@ test('reordena pelo FC pp e conta os chokes desfeitos', () => {
   assert.deepEqual(r.entries.map(e => e.pp), [400, 300, 200]);
   assert.deepEqual(r.entries.map(e => e.unchoked), [true, false, false]);
   assert.equal(r.corrigidos, 1);
+  // origIndex é a posição na ordem de pp da API (antes do sort): b era a #2.
+  assert.deepEqual(r.entries.map(e => e.origIndex), [2, 1, 3]);
 });
 
 test('o offset do perfil é preservado no total novo', () => {

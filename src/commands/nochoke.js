@@ -8,6 +8,9 @@ const playEmbed = require('../embeds/play');
 const { paginate } = require('../pagination');
 const { mapLimit } = require('../concurrency');
 const { weightedPP } = require('../weightedPP');
+const { formatMods } = require('../mods');
+const { md } = require('../markdown');
+const emojis = require('../emojis');
 const { t } = require('../i18n');
 const { logError } = require('../logger');
 const { safeEditReply } = require('../replies');
@@ -24,11 +27,31 @@ const FC_CONCURRENCY = 5;
 // e o top "sem choke" deixava de descrever o jogador. Fica no valor real.
 const MISS_LIMIT     = 20;
 
-/** Misses da play, nos dois formatos que a normalização pode deixar. */
-const missCount = (play) => {
-  const st = play?.statistics ?? {};
-  return st.count_miss ?? st.miss ?? 0;
-};
+/** Os quatro acertos da play, nos dois formatos que a normalização deixa. */
+function hitCounts(play) {
+  const h = play?.statistics ?? {};
+  return {
+    n300: h.count_300 ?? h.great ?? 0,
+    n100: h.count_100 ?? h.ok    ?? 0,
+    n50:  h.count_50  ?? h.meh    ?? 0,
+    nmiss: h.count_miss ?? h.miss ?? 0,
+  };
+}
+
+/** Acurácia (0–100) a partir dos hits; e a que a play teria com os misses virando 300. */
+function accPair(play) {
+  const { n300, n100, n50, nmiss } = hitCounts(play);
+  const objetos = n300 + n100 + n50 + nmiss;
+  if (!objetos) {
+    const bruto = Number(play?.accuracy) * 100;
+    const val = Number.isFinite(bruto) ? bruto : 0;
+    return { real: val, fc: val };
+  }
+  return {
+    real: (300 * n300 + 100 * n100 + 50 * n50) / (3 * objetos),
+    fc:   (300 * (n300 + nmiss) + 100 * n100 + 50 * n50) / (3 * objetos),
+  };
+}
 
 /**
  * Reordena as top plays trocando cada choke pelo PP que ele teria com FC.
@@ -39,23 +62,28 @@ const missCount = (play) => {
  * de volta como um desvio calculado uma vez. O ganho não passa pelo offset
  * porque é uma diferença e ele se cancela; é o mesmo raciocínio do whatif.js.
  *
- * @param {{pp: number}[]} plays  top plays JÁ ORDENADAS por pp decrescente (como a API devolve)
- * @param {(number|null)[]} fcpps paralelo a `plays`: o PP de FC, ou null quando a play já é FC
- * @param {number} profilePP      `user.statistics.pp` — o total publicado no perfil
+ * Cada entry leva o `origIndex` (posição 1-based na lista ANTES do sort, que é
+ * a ordem de pp da API) — o embed mostra a posição de origem da play, não o
+ * lugar dela na lista reordenada.
  *
  * Play com mais de `MISS_LIMIT` misses fica no pp real: acima disso o FC não é
  * mais "o mesmo jogador sem o choke".
- * @returns {{entries: {play: object, pp: number, unchoked: boolean}[],
+ *
+ * @param {{pp: number}[]} plays  top plays JÁ ORDENADAS por pp decrescente (como a API devolve)
+ * @param {(number|null)[]} fcpps paralelo a `plays`: o PP de FC, ou null quando a play já é FC
+ * @param {number} profilePP      `user.statistics.pp` — o total publicado no perfil
+ * @returns {{entries: {play: object, pp: number, unchoked: boolean, origIndex: number}[],
  *            totalAntes: number, totalDepois: number, ganho: number, corrigidos: number}}
  */
 function unchoke(plays, fcpps, profilePP) {
   const entries = plays.map((play, i) => {
     const fc = fcpps[i];
+    const { nmiss } = hitCounts(play);
     // Só conta como choke desfeito quando o FC pagaria MAIS. Um FC que daria
     // menos (possível no Relax, onde o motor é outro) não é correção nenhuma.
     // E play acima do MISS_LIMIT fica de fora — o FC dela é fantasia.
-    const unchoked = Number.isFinite(fc) && fc > play.pp && missCount(play) <= MISS_LIMIT;
-    return { play, pp: unchoked ? fc : play.pp, unchoked };
+    const unchoked = Number.isFinite(fc) && fc > play.pp && nmiss <= MISS_LIMIT;
+    return { play, pp: unchoked ? fc : play.pp, unchoked, origIndex: i + 1 };
   });
 
   entries.sort((a, b) => b.pp - a.pp);
@@ -72,6 +100,45 @@ function unchoke(plays, fcpps, profilePP) {
     ganho:       depois - antes,
     corrigidos:  entries.filter(e => e.unchoked).length,
   };
+}
+
+/** Uma play no embed — três linhas no estilo do Bathbot. */
+async function linhaPlay(entry, mode, s) {
+  const { play, pp: fcPP, unchoked, origIndex } = entry;
+
+  const aj    = await osu.getAdjustedStars(play.beatmap?.id, play.mods, mode);
+  const st    = parseFloat(aj ?? play.beatmap?.difficulty_rating);
+  const stars = Number.isFinite(st) && st > 0 ? ` [${st.toFixed(2)}★]` : '';
+
+  const grade  = emojis.rankLabel(play.rank);
+  const mods   = `**${formatMods(play.mods)}**`;
+  const titulo = md(playEmbed.mapTitle(play));
+  const url    = osu.getMapUrl(play.beatmap?.id, play.beatmapset?.id, mode);
+  const cabec  = url
+    ? `**#${origIndex}** [${titulo}](${url}) ${mods}${stars}`
+    : `**#${origIndex}** ${grade} ${mods}${stars}`;
+
+  const realPP    = Number.isFinite(play.pp) ? play.pp.toFixed(2) : '?';
+  const { real: accReal, fc: accFC } = accPair(play);
+  const comboReal = play.max_combo ?? 0;
+  const mapCombo  = play.beatmap?.max_combo ?? null;
+
+  const ms     = new Date(play.created_at).getTime();
+  const quando = Number.isFinite(ms) ? `<t:${Math.floor(ms / 1000)}:R>` : '';
+
+  let linhaPP;
+  let linhaCombo;
+  if (unchoked) {
+    linhaPP = `${grade} \`${realPP} → ${fcPP.toFixed(2)}pp\` • \`${accReal.toFixed(2)}% → ${accFC.toFixed(2)}%\``;
+    const alvo = mapCombo ?? comboReal;
+    linhaCombo = `\`[ ${comboReal}x → ${alvo}x/${alvo}x ]\` · ${s.nochoke_removed} ${hitCounts(play).nmiss} ❌`;
+  } else {
+    linhaPP = `${grade} \`${realPP}pp\` • \`${accReal.toFixed(2)}%\``;
+    linhaCombo = `\`[ ${comboReal}x/${mapCombo ?? '?'}x ]\``;
+  }
+  if (quando) linhaCombo += ` · ${quando}`;
+
+  return `${cabec}\n${linhaPP}\n${linhaCombo}`;
 }
 
 module.exports = {
@@ -140,11 +207,10 @@ module.exports = {
       }
 
       const totalPages = Math.ceil(entries.length / PAGE_SIZE);
-      const gainLine   = s.nochoke_gain(
+      const totalLine  = s.nochoke_gain(
         ppLegivel(totalAntes,  s.locale),
         ppLegivel(totalDepois, s.locale),
         ppLegivel(ganho,       s.locale),
-        corrigidos,
       );
 
       // Mapa do topo de cada página, para o /score sem argumento (mapContext).
@@ -153,29 +219,21 @@ module.exports = {
       const fatia = page => entries.slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE);
 
       async function buildEmbed(page) {
-        const itens     = fatia(page);
-        // As plays já vieram enriquecidas antes do cálculo de FC; aqui só o
-        // enrichBeatmapData de novo (idempotente, cache quente) para garantir
-        // estrela e combo do mapa na renderização.
+        const itens = fatia(page);
+        // As plays já vieram enriquecidas; o enrichBeatmapData de novo é
+        // idempotente (cache quente) e garante combo e estrela do mapa.
         const pagePlays = await osu.enrichBeatmapData(itens.map(e => e.play));
+        const comMapa   = itens.map((e, i) => ({ ...e, play: pagePlays[i] }));
 
         pageMapId.set(page, pagePlays[0]?.beatmap?.id ?? null);
 
-        const blocos = await Promise.all(pagePlays.map((play, index) =>
-          playEmbed.listItem(play, {
-            mode,
-            // Posição na lista JÁ reordenada — aqui o #1 é a melhor play depois
-            // de desfazer os chokes, que é justamente o que o comando mostra.
-            index:  page * PAGE_SIZE + index + 1,
-            mapUrl: osu.getMapUrl(play.beatmap.id, play.beatmapset.id, mode),
-          })
-        ));
+        const blocos = await Promise.all(comMapa.map(e => linhaPlay(e, mode, s)));
 
         return new EmbedBuilder()
           .setColor(playEmbed.COLOR)
           .setAuthor(playEmbed.author(user, mode, s))
           .setThumbnail(user.avatar_url ?? null)
-          .setDescription(`${gainLine}\n\n${blocos.join('\n\n')}`)
+          .setDescription(`${totalLine}\n\n${blocos.join('\n\n')}`)
           .setFooter({ text: s.nochoke_footer(page + 1, totalPages, osu.getModeLabel(mode)) });
       }
 

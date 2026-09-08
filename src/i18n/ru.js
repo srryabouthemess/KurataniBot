@@ -243,9 +243,10 @@ module.exports = ({ ADMIN }) => ({
 
   nochoke_none:            'Плеи не найдены.',
   nochoke_no_chokes:       (name) => `У **${name}** нет чоков в топ 100 — исправлять нечего.`,
-  nochoke_gain:            (before, after, gain, count) =>
-    `**${count}** чок(ов) исправлено → pp меняется **${before} → ${after}** (**+${gain}pp**).`,
-  nochoke_footer:          (page, total, label) => `Страница ${page}/${total} · ${label} · отсортировано по FC pp`,
+  nochoke_gain:            (before, after, gain) =>
+    `**Total pp:** ${before} → **${after}pp** (**+${gain}**)`,
+  nochoke_removed:         'Удалено',
+  nochoke_footer:          (page, total, label) => `Страница ${page}/${total} · ${label}`,
   nochoke_error:           'Ошибка при сборке топа без чоков.',
 
   // ── Администрирование сервера (/nominate, /moderate) ──────────────────────

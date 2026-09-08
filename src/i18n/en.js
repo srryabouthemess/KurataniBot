@@ -243,9 +243,10 @@ module.exports = ({ ADMIN }) => ({
 
   nochoke_none:            'No plays found.',
   nochoke_no_chokes:       (name) => `**${name}** has no chokes in their top 100 — nothing to fix.`,
-  nochoke_gain:            (before, after, gain, count) =>
-    `**${count}** choke(s) unchoked → pp goes **${before} → ${after}** (**+${gain}pp**).`,
-  nochoke_footer:          (page, total, label) => `Page ${page}/${total} · ${label} · re-ordered by FC pp`,
+  nochoke_gain:            (before, after, gain) =>
+    `**Total pp:** ${before} → **${after}pp** (**+${gain}**)`,
+  nochoke_removed:         'Removed',
+  nochoke_footer:          (page, total, label) => `Page ${page}/${total} · ${label}`,
   nochoke_error:           'Error building the no-choke top.',
 
   // ── Server administration (/nominate, /moderate) ──────────────────────────
