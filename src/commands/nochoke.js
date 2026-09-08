@@ -103,15 +103,23 @@ module.exports = {
       if (!user) return interaction.editReply(s.player_not_found);
       if (plays.length === 0) return interaction.editReply(s.nochoke_none);
 
+      // O `getBestScores` devolve score CRU — e no bancho.py-ex + Shiina-Web
+      // (Daycore) o cru é só pp, acc e mods, sem hits nem combo. Sem enriquecer,
+      // o getFCpp não tem como saber se a play foi choke e devolve null para
+      // todas — "nenhum choke" para qualquer jogador. O enrichScores resolve o
+      // detalhe de cada score (scoreDetail, cache de 1h) e o enrichBeatmapData
+      // traz o combo do mapa, que é o que o getFCpp compara.
+      const enriched = await osu.enrichBeatmapData(await osu.enrichScores(plays, mode));
+
       // O FC de cada play, com o teto de chamadas em voo. O getFCpp devolve
       // null de graça para quem já é FC (sem tocar no motor), e guarda o
       // resultado em cache.db — a segunda passada do mesmo jogador é barata.
-      const fcpps = await mapLimit(plays, FC_CONCURRENCY, play =>
+      const fcpps = await mapLimit(enriched, FC_CONCURRENCY, play =>
         osu.getFCpp(play, mode).catch(() => null),
       );
 
       const { entries, totalAntes, totalDepois, ganho, corrigidos } =
-        unchoke(plays, fcpps, user.statistics?.pp);
+        unchoke(enriched, fcpps, user.statistics?.pp);
 
       if (corrigidos === 0) {
         return interaction.editReply(s.nochoke_no_chokes(user.username));
@@ -131,9 +139,11 @@ module.exports = {
       const fatia = page => entries.slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE);
 
       async function buildEmbed(page) {
-        const itens      = fatia(page);
-        const scoredPage = await osu.enrichScores(itens.map(e => e.play), mode);
-        const pagePlays  = await osu.enrichBeatmapData(scoredPage);
+        const itens     = fatia(page);
+        // As plays já vieram enriquecidas antes do cálculo de FC; aqui só o
+        // enrichBeatmapData de novo (idempotente, cache quente) para garantir
+        // estrela e combo do mapa na renderização.
+        const pagePlays = await osu.enrichBeatmapData(itens.map(e => e.play));
 
         pageMapId.set(page, pagePlays[0]?.beatmap?.id ?? null);
 
