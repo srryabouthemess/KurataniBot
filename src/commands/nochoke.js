@@ -19,6 +19,16 @@ const FETCH_LIMIT    = 100;
 // Teto de chamadas ao motor de PP em voo. Mesma razão do concurrency.js: sem
 // ele, um top 100 cheio de choke dispararia 100 cálculos de FC de uma vez.
 const FC_CONCURRENCY = 5;
+// Acima disto a play não é mais "um choke" e sim outra corrida: o FC vira uma
+// fantasia (rafs tinha play de 169 miss pagando 1048pp de FC contra 64 reais),
+// e o top "sem choke" deixava de descrever o jogador. Fica no valor real.
+const MISS_LIMIT     = 20;
+
+/** Misses da play, nos dois formatos que a normalização pode deixar. */
+const missCount = (play) => {
+  const st = play?.statistics ?? {};
+  return st.count_miss ?? st.miss ?? 0;
+};
 
 /**
  * Reordena as top plays trocando cada choke pelo PP que ele teria com FC.
@@ -32,6 +42,9 @@ const FC_CONCURRENCY = 5;
  * @param {{pp: number}[]} plays  top plays JÁ ORDENADAS por pp decrescente (como a API devolve)
  * @param {(number|null)[]} fcpps paralelo a `plays`: o PP de FC, ou null quando a play já é FC
  * @param {number} profilePP      `user.statistics.pp` — o total publicado no perfil
+ *
+ * Play com mais de `MISS_LIMIT` misses fica no pp real: acima disso o FC não é
+ * mais "o mesmo jogador sem o choke".
  * @returns {{entries: {play: object, pp: number, unchoked: boolean}[],
  *            totalAntes: number, totalDepois: number, ganho: number, corrigidos: number}}
  */
@@ -40,7 +53,8 @@ function unchoke(plays, fcpps, profilePP) {
     const fc = fcpps[i];
     // Só conta como choke desfeito quando o FC pagaria MAIS. Um FC que daria
     // menos (possível no Relax, onde o motor é outro) não é correção nenhuma.
-    const unchoked = Number.isFinite(fc) && fc > play.pp;
+    // E play acima do MISS_LIMIT fica de fora — o FC dela é fantasia.
+    const unchoked = Number.isFinite(fc) && fc > play.pp && missCount(play) <= MISS_LIMIT;
     return { play, pp: unchoked ? fc : play.pp, unchoked };
   });
 

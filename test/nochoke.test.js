@@ -71,6 +71,26 @@ test('FC que pagaria menos não é correção', () => {
   assert.deepEqual(r.entries.map(e => e.pp), [300, 250]);
 });
 
+test('play acima de 20 misses não é desfeita, mesmo com FC maior', () => {
+  const plays = [
+    { pp: 300, statistics: { count_miss: 5 } },
+    { pp: 250, statistics: { count_miss: 21 } },
+    { pp: 200, statistics: { count_miss: 20 } },
+  ];
+  // Todas teriam FC bem maior; só as de <=20 miss entram.
+  const r = unchoke(plays, [800, 900, 700], 1000);
+
+  assert.deepEqual(r.entries.map(e => e.unchoked).sort(), [false, true, true]);
+  assert.equal(r.corrigidos, 2);
+  // A de 21 miss ficou no pp real.
+  assert.ok(r.entries.some(e => e.pp === 250 && !e.unchoked));
+});
+
+test('sem statistics na play, o limite de miss não barra (conta como 0)', () => {
+  const r = unchoke([{ pp: 100 }], [400], 500);
+  assert.equal(r.corrigidos, 1);
+});
+
 test('sem pp de perfil, o offset é zero (cai na soma ponderada)', () => {
   const plays = [{ pp: 300 }, { pp: 200 }];
   const fcpps = [null, 500];
