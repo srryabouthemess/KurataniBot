@@ -49,6 +49,7 @@ module.exports = ({ ADMIN }) => ({
   help_cmd_profile:        "Player profile: ranks, accuracy and their top play.",
   help_cmd_recent:         'Latest plays, failed ones included.',
   help_cmd_topplays:       'Best plays, 5 per page.',
+  help_cmd_nochoke:        'Top plays re-scored as if every choke had been an FC.',
   help_cmd_score:          'Scores on a map, with the PP each would be worth on FC.',
   help_cmd_compare:        'Compare two players side by side.',
   help_cmd_leaderboard:    "The server's pp ranking, 10 per page.",
@@ -239,6 +240,13 @@ module.exports = ({ ADMIN }) => ({
     `Their pp would change by **+${gain}pp**, going to **${total}pp**.`,
   whatif_top5:             'Top 5 (with the simulation):',
   whatif_hypothetical:     'hypothetical',
+
+  nochoke_none:            'No plays found.',
+  nochoke_no_chokes:       (name) => `**${name}** has no chokes in their top 100 — nothing to fix.`,
+  nochoke_gain:            (before, after, gain, count) =>
+    `**${count}** choke(s) unchoked → pp goes **${before} → ${after}** (**+${gain}pp**).`,
+  nochoke_footer:          (page, total, label) => `Page ${page}/${total} · ${label} · re-ordered by FC pp`,
+  nochoke_error:           'Error building the no-choke top.',
 
   // ── Server administration (/nominate, /moderate) ──────────────────────────
   admin_not_configured:    '❌ Admin commands are not configured on this bot (missing `DAYCORE_GUILD_ID` in `.env`).',

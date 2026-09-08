@@ -49,6 +49,7 @@ module.exports = ({ ADMIN }) => ({
   help_cmd_profile:        'Профиль игрока: ранки, точность и лучший плей.',
   help_cmd_recent:         'Последние плеи, включая проваленные.',
   help_cmd_topplays:       'Лучшие плеи, по 5 на странице.',
+  help_cmd_nochoke:        'Топ плеи пересчитаны так, будто каждый чок был FC.',
   help_cmd_score:          'Скоры на карте и сколько PP дал бы каждый при FC.',
   help_cmd_compare:        'Сравнение двух игроков.',
   help_cmd_leaderboard:    'Рейтинг pp сервера, по 10 на странице.',
@@ -239,6 +240,13 @@ module.exports = ({ ADMIN }) => ({
     `PP изменился бы на **+${gain}pp**, до **${total}pp**.`,
   whatif_top5:             'Топ 5 (с симуляцией):',
   whatif_hypothetical:     'гипотетический',
+
+  nochoke_none:            'Плеи не найдены.',
+  nochoke_no_chokes:       (name) => `У **${name}** нет чоков в топ 100 — исправлять нечего.`,
+  nochoke_gain:            (before, after, gain, count) =>
+    `**${count}** чок(ов) исправлено → pp меняется **${before} → ${after}** (**+${gain}pp**).`,
+  nochoke_footer:          (page, total, label) => `Страница ${page}/${total} · ${label} · отсортировано по FC pp`,
+  nochoke_error:           'Ошибка при сборке топа без чоков.',
 
   // ── Администрирование сервера (/nominate, /moderate) ──────────────────────
   admin_not_configured:    '❌ Административные команды не настроены на этом боте (отсутствует `DAYCORE_GUILD_ID` в `.env`).',

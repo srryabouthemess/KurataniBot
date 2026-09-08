@@ -53,6 +53,7 @@ module.exports = ({ ADMIN }) => ({
   help_cmd_profile:        'Perfil do jogador: ranks, acc e a melhor play.',
   help_cmd_recent:         'Últimas plays, incluindo as que falharam.',
   help_cmd_topplays:       'Melhores plays, 5 por página.',
+  help_cmd_nochoke:        'Top plays recalculadas como se todo choke tivesse sido FC.',
   help_cmd_score:          'Scores num mapa, com o PP que cada um valeria com FC.',
   help_cmd_compare:        'Compara dois jogadores lado a lado.',
   help_cmd_leaderboard:    'Ranking de pp do servidor, 10 por página.',
@@ -252,6 +253,13 @@ module.exports = ({ ADMIN }) => ({
     `O PP dele(a) mudaria em **+${gain}pp**, indo para **${total}pp**.`,
   whatif_top5:             'Top 5 (com a simulação):',
   whatif_hypothetical:     'hipotética',
+
+  nochoke_none:            'Nenhuma play encontrada.',
+  nochoke_no_chokes:       (name) => `**${name}** não tem choke no top 100 — nada a corrigir.`,
+  nochoke_gain:            (before, after, gain, count) =>
+    `**${count}** choke(s) desfeito(s) → o PP vai de **${before} → ${after}** (**+${gain}pp**).`,
+  nochoke_footer:          (page, total, label) => `Página ${page}/${total} · ${label} · reordenado pelo PP de FC`,
+  nochoke_error:           'Erro ao montar o top sem choke.',
 
   // ── Administração do servidor (/nominate, /moderate) ──────────────────────
   admin_not_configured:    '❌ Os comandos administrativos não estão configurados neste bot (falta `DAYCORE_GUILD_ID` no `.env`).',
