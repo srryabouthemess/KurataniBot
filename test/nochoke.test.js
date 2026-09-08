@@ -10,7 +10,7 @@
 const test = require('node:test');
 const assert = require('node:assert');
 
-const { unchoke } = require('../src/commands/nochoke');
+const { unchoke, fcGrade } = require('../src/commands/nochoke');
 const { weightedPP, WEIGHT } = require('../src/weightedPP');
 
 // Referência independente da soma ponderada, para não comparar a peça com ela
@@ -91,6 +91,24 @@ test('play acima de 20 misses não é desfeita, mesmo com FC maior', () => {
 test('sem statistics na play, o limite de miss não barra (conta como 0)', () => {
   const r = unchoke([{ pp: 100 }], [400], 500);
   assert.equal(r.corrigidos, 1);
+});
+
+test('fcGrade: os misses viram 300 e a grade sobe', () => {
+  // 950 de 1000 objetos em 300, 10 miss → com FC vira 960/1000 = 96% de 300 → S.
+  const play = { mods: [], statistics: { count_300: 950, count_100: 40, count_50: 0, count_miss: 10 } };
+  assert.equal(fcGrade(play), 'S');
+});
+
+test('fcGrade: HD/FL deixam o S e o SS pratas', () => {
+  const s  = { mods: ['HD'], statistics: { count_300: 950, count_100: 40, count_50: 0, count_miss: 10 } };
+  const ss = { mods: ['FL'], statistics: { count_300: 980, count_100: 0, count_50: 0, count_miss: 20 } };
+  assert.equal(fcGrade(s), 'SH');
+  assert.equal(fcGrade(ss), 'XH');
+});
+
+test('fcGrade: 82% de 300 no FC é A', () => {
+  const play = { mods: [], statistics: { count_300: 800, count_100: 180, count_50: 0, count_miss: 20 } };
+  assert.equal(fcGrade(play), 'A');
 });
 
 test('sem pp de perfil, o offset é zero (cai na soma ponderada)', () => {

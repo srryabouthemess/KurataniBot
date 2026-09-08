@@ -54,6 +54,32 @@ function accPair(play) {
 }
 
 /**
+ * A grade que a play teria com FC: misses viram 300, sem quebra de combo.
+ *
+ * Regras do osu! std — razão de 300s sobre o total, com S/SS pratas (H) quando
+ * há HD ou FL. Como no FC não há miss, os limiares de A/B/C colapsam nos de
+ * "sem miss": A > 80% de 300, B > 70%, C > 60%.
+ */
+function fcGrade(play) {
+  const { n300, n100, n50, nmiss } = hitCounts(play);
+  const total = n300 + n100 + n50 + nmiss;
+  if (!total) return play.rank;
+
+  const g300 = n300 + nmiss;
+  const r300 = g300 / total;
+  const r50  = n50 / total;
+  const mods = (play.mods ?? []).map(m => String(m).toUpperCase());
+  const prata = mods.includes('HD') || mods.includes('FL');
+
+  if (g300 === total)                 return prata ? 'XH' : 'X';
+  if (r300 > 0.9 && r50 <= 0.01)      return prata ? 'SH' : 'S';
+  if (r300 > 0.8)                     return 'A';
+  if (r300 > 0.7)                     return 'B';
+  if (r300 > 0.6)                     return 'C';
+  return 'D';
+}
+
+/**
  * Reordena as top plays trocando cada choke pelo PP que ele teria com FC.
  *
  * Exportada para teste: é a única parte que faz conta, e ela precisa concordar
@@ -110,7 +136,8 @@ async function linhaPlay(entry, mode, s) {
   const st    = parseFloat(aj ?? play.beatmap?.difficulty_rating);
   const stars = Number.isFinite(st) && st > 0 ? ` [${st.toFixed(2)}★]` : '';
 
-  const grade  = emojis.rankLabel(play.rank);
+  // Choke desfeito mostra a grade do score HIPOTÉTICO (FC); o resto, a real.
+  const grade  = emojis.rankLabel(unchoked ? fcGrade(play) : play.rank);
   const mods   = `**${formatMods(play.mods)}**`;
   const titulo = md(playEmbed.mapTitle(play));
   const url    = osu.getMapUrl(play.beatmap?.id, play.beatmapset?.id, mode);
@@ -143,6 +170,7 @@ async function linhaPlay(entry, mode, s) {
 
 module.exports = {
   unchoke,
+  fcGrade,
 
   data: modo.addOption(new SlashCommandBuilder()
     .setName('nochoke')
