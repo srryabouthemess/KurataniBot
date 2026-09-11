@@ -64,6 +64,7 @@ module.exports = ({ ADMIN }) => ({
   help_cmd_moderate:       'Inspect and restrict accounts.',
   help_cmd_wipe:           "Erase an account's scores in one mode (irreversible).",
   help_cmd_scorewipe:      'Erase a single score of a player, or every play they have on one map.',
+  help_cmd_invitecode:     'Generate a Daycore invite code.',
   help_cmd_staff:          'Manage staff links.',
   help_cmd_role:           'Grant and remove server roles.',
   help_servers:            '🌐 Available servers',
@@ -316,6 +317,12 @@ module.exports = ({ ADMIN }) => ({
     `**${name}** (\`${id}\`)\nRole: **${role}**\nReason: ${reason}`,
   role_already_has:        (name, role) => `❌ **${name}** already has **${role}**.`,
   role_missing:            (name, role) => `❌ **${name}** does not have **${role}**.`,
+
+  invitecode_unconfigured: `❌ Invite code generation is not configured on this bot (missing \`DAYCORE_MYSQL_HOST\` in \`.env\`).`,
+  invitecode_unreachable:  `❌ Could not reach the ${ADMIN} database right now. No code was created.`,
+  invitecode_done_title:   '🎫 Invite code generated',
+  invitecode_done_body:    (code, maxUses, expiresDays) =>
+    `\`\`\`${code}\`\`\`\nAllowed uses: **${maxUses}**\nExpires: **${expiresDays ? `${expiresDays} day(s)` : 'never'}**`,
 
   wipe_confirm_title:      '⚠️ Confirm score deletion',
   wipe_confirm_body:       (name, id, mode) => `Target: **${name}** (\`${id}\`)\nMode: **${mode}**`,

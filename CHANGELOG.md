@@ -2,6 +2,31 @@
 
 ---
 
+# Sessão de 2026-09-11 (código de convite)
+
+O Daycore passou a exigir código de convite para registro. Quem gera é o
+Shiina (site), com um `INSERT` direto na tabela `invite_codes` do MySQL — não
+há rota HTTP nem canal Redis para isso, diferente das outras ações
+administrativas do bot.
+
+## ✨ Novos recursos
+
+- `/invitecode` gera um código de convite idêntico, em formato e
+  comportamento, a um criado pelo painel do site: mesmo alfabeto (33
+  caracteres, sem `I/O/0/1`), mesmo tamanho (10), gravado na mesma tabela.
+  Exige **Administrator** no Daycore — o mesmo privilégio que o site exige no
+  formulário. Opções: `max_uses` (padrão 1), `expires_days` (padrão: nunca
+  expira), `note`.
+
+## ⚙️ Configuração
+
+- Novas variáveis opcionais `DAYCORE_MYSQL_HOST/PORT/USER/PASS/DATABASE` no
+  `.env` — vazio desliga o comando sem afetar o resto do bot. Requer um
+  usuário MySQL dedicado, só com `INSERT, SELECT` em `bancho.invite_codes`
+  (comando `GRANT` documentado no `.env.example`).
+
+---
+
 # Sessão de 2026-09-05 (apagar o mapa inteiro de uma vez)
 
 ## ✨ Novos recursos

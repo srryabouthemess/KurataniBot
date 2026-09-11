@@ -68,6 +68,7 @@ module.exports = ({ ADMIN }) => ({
   help_cmd_moderate:       'Consulta e restringe contas.',
   help_cmd_wipe:           'Apaga os scores de uma conta num modo (irreversível).',
   help_cmd_scorewipe:      'Apaga um único score de um jogador, ou todas as plays dele num mapa.',
+  help_cmd_invitecode:     'Gera um código de convite do Daycore.',
   help_cmd_staff:          'Gerencia os vínculos de staff.',
   help_cmd_role:           'Dá e tira cargos do servidor.',
   help_servers:            '🌐 Servidores disponíveis',
@@ -336,6 +337,12 @@ module.exports = ({ ADMIN }) => ({
     `**${name}** (\`${id}\`)\nCargo: **${role}**\nMotivo: ${reason}`,
   role_already_has:        (name, role) => `❌ **${name}** já tem **${role}**.`,
   role_missing:            (name, role) => `❌ **${name}** não tem **${role}**.`,
+
+  invitecode_unconfigured: `❌ A geração de convites não está configurada neste bot (falta \`DAYCORE_MYSQL_HOST\` no \`.env\`).`,
+  invitecode_unreachable:  `❌ Não consegui falar com o banco do ${ADMIN} agora. Nenhum código foi criado.`,
+  invitecode_done_title:   '🎫 Código de convite gerado',
+  invitecode_done_body:    (code, maxUses, expiresDays) =>
+    `\`\`\`${code}\`\`\`\nUsos permitidos: **${maxUses}**\nExpira em: **${expiresDays ? `${expiresDays} dia(s)` : 'nunca'}**`,
 
   wipe_confirm_title:      '⚠️ Confirmar exclusão de scores',
   wipe_confirm_body:       (name, id, mode) => `Alvo: **${name}** (\`${id}\`)\nModo: **${mode}**`,

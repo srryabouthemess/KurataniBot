@@ -172,6 +172,7 @@ caso('/staff    (recusa)', 'staff.js',    {}, { subcommand: 'list', esperaRecusa
 caso('/wipe     (recusa)', 'wipe.js',     { player: '1', mode: '0', reason: 'x' }, { esperaRecusa: true });
 caso('/scorewipe (recusa)', 'scorewipe.js', { player: '1', mode: '0', reason: 'x' }, { esperaRecusa: true });
 caso('/role     (recusa)', 'role.js',     { player: '1', role: 'nominator', reason: 'x' }, { subcommand: 'give', esperaRecusa: true });
+caso('/invitecode (recusa)', 'invitecode.js', {}, { esperaRecusa: true });
 
 (async () => {
   let falhas = 0;

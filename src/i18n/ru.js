@@ -64,6 +64,7 @@ module.exports = ({ ADMIN }) => ({
   help_cmd_moderate:       'Просмотр и ограничение аккаунтов.',
   help_cmd_wipe:           'Удаление скоров аккаунта в одном режиме (необратимо).',
   help_cmd_scorewipe:      'Удаляет один скор игрока или все его скоры на одной карте.',
+  help_cmd_invitecode:     'Создаёт код приглашения Daycore.',
   help_cmd_staff:          'Управление привязками стаффа.',
   help_cmd_role:           'Выдача и снятие ролей сервера.',
   help_servers:            '🌐 Доступные серверы',
@@ -316,6 +317,12 @@ module.exports = ({ ADMIN }) => ({
     `**${name}** (\`${id}\`)\nРоль: **${role}**\nПричина: ${reason}`,
   role_already_has:        (name, role) => `❌ У **${name}** уже есть **${role}**.`,
   role_missing:            (name, role) => `❌ У **${name}** нет **${role}**.`,
+
+  invitecode_unconfigured: `❌ Генерация кодов приглашения не настроена на этом боте (отсутствует \`DAYCORE_MYSQL_HOST\` в \`.env\`).`,
+  invitecode_unreachable:  `❌ Сейчас нет связи с базой данных ${ADMIN}. Код не создан.`,
+  invitecode_done_title:   '🎫 Код приглашения создан',
+  invitecode_done_body:    (code, maxUses, expiresDays) =>
+    `\`\`\`${code}\`\`\`\nДоступно использований: **${maxUses}**\nИстекает: **${expiresDays ? `через ${expiresDays} дн.` : 'никогда'}**`,
 
   wipe_confirm_title:      '⚠️ Подтвердите удаление скоров',
   wipe_confirm_body:       (name, id, mode) => `Цель: **${name}** (\`${id}\`)\nРежим: **${mode}**`,
