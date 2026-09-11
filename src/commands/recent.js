@@ -147,11 +147,47 @@ module.exports = {
           });
       }
 
+      // Identidade de um score cru: bancho.py/ripple usam `score_id`, a API
+      // oficial usa `id` (sobrevive ao normalizeScore por causa do `...raw`
+      // — ver officialApi.js). Sem casar por isto o refresh não teria como
+      // saber, dentro da lista nova, qual item é "a mesma play".
+      const scoreIdOf = (score) => score?.score_id ?? score?.id ?? null;
+
+      /**
+       * Busca de novo a lista de recentes da CHAVE de onde a play da página
+       * veio, e troca só aquele item — o resto de `recents` (as outras
+       * páginas) fica como estava. Reaproveita `osu.getRecentScores`, o mesmo
+       * fetch cru do carregamento inicial; `buildEmbed` reenriquece sozinho
+       * a partir do que for deixado em `recents[page]`.
+       */
+      async function refreshPlay(page) {
+        const current = recents[page];
+        if (!current) throw new Error(`recent refresh: sem play na página ${page}`);
+
+        const playMode = current._mode;
+        const scoreId  = scoreIdOf(current);
+
+        const freshList = await osu.getRecentScores(user.id, FETCH_LIMIT, playMode);
+        const match = scoreId != null
+          ? freshList.find(score => scoreIdOf(score) === scoreId)
+          : null;
+
+        if (!match) {
+          // Sem id pra casar, ou a play caiu fora da janela das últimas
+          // FETCH_LIMIT — não dá pra confirmar que ainda é a mesma play.
+          // Melhor recusar o refresh do que trocar a página por outra coisa.
+          throw new Error('recent refresh: play não encontrada na busca nova');
+        }
+
+        recents[page] = { ...match, _mode: playMode };
+      }
+
       await paginate(interaction, {
         id: 'recent',
         totalPages,
         buildEmbed,
         strings: s,
+        onRefresh: refreshPlay,
         // O contexto do canal acompanha a página em que os botões pararam —
         // no modo da PLAY, pro /score sem argumento procurar no leaderboard
         // certo (ver mapContext.js).

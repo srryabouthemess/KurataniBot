@@ -99,6 +99,7 @@ module.exports = ({ ADMIN }) => ({
   topplays_bad_mods:       (input) => `❌ \`${input}\` has no mods I recognize. Use acronyms like \`HDDT\`, or \`NM\` for no mods.`,
   topplays_error:          'Error fetching top plays.',
   pagination_not_yours:    "❌ Only the person who ran the command can navigate the pages.",
+  pagination_refresh_error: "⚠️ Couldn't refresh this play — showing the last data fetched.",
 
   // ── /leaderboard ──────────────────────────────────────────────────────────
   // Each ranking row is numbers with their unit only ("12,753.00pp", "95.74%",

@@ -107,6 +107,7 @@ module.exports = ({ ADMIN }) => ({
   topplays_bad_mods:       (input) => `❌ Não reconheci nenhum mod em \`${input}\`. Use os acrônimos (\`HDDT\`), ou \`NM\` para plays sem mod.`,
   topplays_error:          'Erro ao buscar as top plays.',
   pagination_not_yours:    '❌ Apenas quem usou o comando pode navegar entre as páginas.',
+  pagination_refresh_error: '⚠️ Não deu para atualizar essa play — mostrando os últimos dados buscados.',
 
   // ── /leaderboard ──────────────────────────────────────────────────────────
   // A linha de cada colocado não passa por aqui: ela é só número com unidade

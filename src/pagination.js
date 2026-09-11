@@ -18,19 +18,38 @@ const { logError } = require('./logger');
 // pessoa navegando devagar não perde os botões no meio.
 const IDLE_MS = 120_000;
 
-function buildRow(id, page, totalPages) {
-  return new ActionRowBuilder().addComponents(
+function buildRow(id, page, totalPages, { onRefresh, refreshing } = {}) {
+  const row = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
       .setCustomId(`${id}_prev`)
       .setEmoji('◀️')
       .setStyle(ButtonStyle.Secondary)
       .setDisabled(page === 0),
+  );
+
+  // Só existe quando o comando passa `onRefresh` — /topplays e /score continuam
+  // com o par de botões de sempre até decidirem pedir o refresh também.
+  if (onRefresh) {
+    row.addComponents(
+      new ButtonBuilder()
+        .setCustomId(`${id}_refresh`)
+        .setEmoji('🔄')
+        .setStyle(ButtonStyle.Secondary)
+        // Desabilitado durante a própria busca — clique de spam não empilha
+        // requisição em cima de requisição.
+        .setDisabled(!!refreshing),
+    );
+  }
+
+  row.addComponents(
     new ButtonBuilder()
       .setCustomId(`${id}_next`)
       .setEmoji('▶️')
       .setStyle(ButtonStyle.Secondary)
       .setDisabled(page === totalPages - 1),
   );
+
+  return row;
 }
 
 /**
@@ -44,8 +63,13 @@ function buildRow(id, page, totalPages) {
  * @param {object}   options.strings      i18n já resolvido (para o aviso de dono)
  * @param {(page: number) => void} [options.onPage]   chamado a cada página exibida
  * @param {(page: number) => void} [options.prefetch] aquece a página seguinte
+ * @param {(page: number) => Promise<void>} [options.onRefresh]
+ *   busca dados novos da play atual e atualiza o estado de onde `buildEmbed`
+ *   lê (ex: substitui o item correspondente no array de plays já buscado).
+ *   Sem isto o botão 🔄 nem aparece. Erros aqui não derrubam a página: o
+ *   embed atual fica como está e a pessoa recebe um aviso discreto.
  */
-async function paginate(interaction, { id, totalPages, buildEmbed, strings, onPage, prefetch }) {
+async function paginate(interaction, { id, totalPages, buildEmbed, strings, onPage, prefetch, onRefresh }) {
   // Memoiza a página montada: voltar para uma anterior não deve refazer o
   // enriquecimento nem o cálculo de PP.
   const cache = new Map();
@@ -71,10 +95,15 @@ async function paginate(interaction, { id, totalPages, buildEmbed, strings, onPa
   }
 
   let page = 0;
+  // true enquanto um 🔄 está em voo — trava o próprio botão pra clique de spam
+  // não empilhar requisição em cima de requisição (ver o ramo `_refresh`).
+  let refreshing = false;
+  const row = (p) => buildRow(id, p, totalPages, { onRefresh, refreshing });
+
   const embed = await getEmbed(page);
   const message = await interaction.editReply({
     embeds: [embed],
-    components: totalPages > 1 ? [buildRow(id, page, totalPages)] : [],
+    components: totalPages > 1 ? [row(page)] : [],
   });
 
   if (totalPages <= 1) return message;
@@ -95,6 +124,49 @@ async function paginate(interaction, { id, totalPages, buildEmbed, strings, onPa
         .catch(() => {});
     }
 
+    if (i.customId === `${id}_refresh`) {
+      if (!onRefresh) return i.deferUpdate().catch(() => {});
+      // Já tem uma busca em andamento: o clique extra não dispara outra —
+      // só confirma a interaction pra não sobrar "falhou" na tela do Discord.
+      if (refreshing) return i.deferUpdate().catch(() => {});
+
+      refreshing = true;
+      const meu = ++clique;
+      await i.deferUpdate().catch(() => {});
+      // Feedback imediato de que o refresh começou, antes da rede responder.
+      await interaction.editReply({ components: [row(page)] }).catch(() => {});
+
+      let fresh = null;
+      let failed = false;
+      try {
+        // O comando atualiza o estado de onde `buildEmbed` lê (ex: substitui
+        // a play no array já buscado); a página em cache não pode sobreviver
+        // a isso, senão o refresh mostraria o mesmo dado de antes.
+        await onRefresh(page);
+        cache.delete(page);
+        fresh = await getEmbed(page);
+      } catch (error) {
+        logError('pagination:refresh', error);
+        failed = true;
+      }
+
+      refreshing = false;
+      // Quem navegou pra outra página enquanto isto buscava já viu a página
+      // certa por outro handler — nada aqui deveria sobrescrever a tela dela.
+      if (meu !== clique) return;
+
+      if (failed) {
+        // Embed atual preservado — nada de sobrescrever com dado inválido.
+        await interaction.editReply({ components: [row(page)] }).catch(() => {});
+        await i
+          .followUp({ content: strings.pagination_refresh_error, flags: MessageFlags.Ephemeral })
+          .catch(() => {});
+      } else {
+        await interaction.editReply({ embeds: [fresh], components: [row(page)] }).catch(() => {});
+      }
+      return;
+    }
+
     // Guardado antes de mexer no cursor: montar a página seguinte faz rede e
     // cálculo de PP, e pode falhar. Sem voltar atrás, o `page` ficaria numa
     // página que nunca chegou à tela e o clique seguinte partiria do lugar
@@ -113,7 +185,7 @@ async function paginate(interaction, { id, totalPages, buildEmbed, strings, onPa
       // depois é que representa o que a pessoa quer ver agora.
       if (meu !== clique) return;
 
-      await interaction.editReply({ embeds: [next], components: [buildRow(id, page, totalPages)] });
+      await interaction.editReply({ embeds: [next], components: [row(page)] });
       warmNext(page);
     } catch (error) {
       // Sem este catch a promise do handler rejeitava solta: o clique já tinha
@@ -125,7 +197,7 @@ async function paginate(interaction, { id, totalPages, buildEmbed, strings, onPa
       page = shown;
       // A página em cache não falha de novo; devolve os botões ao estado certo.
       await interaction
-        .editReply({ components: [buildRow(id, page, totalPages)] })
+        .editReply({ components: [row(page)] })
         .catch(() => {});
     }
   });
