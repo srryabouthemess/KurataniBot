@@ -130,8 +130,6 @@ test('a leitura por mapa vai pela v1, com id, md5 e mode', () => {
   assert.match(fonteApi, /mode: modeNum/);
 });
 
-const fonteAdmin = require('fs').readFileSync(require.resolve('../src/daycoreAdmin'), 'utf8');
-
 test('publica no canal mapwipe com o formato que o receptor lê', async () => {
   published.length = 0;
   await daycore.wipeMapScores(7, 'c9557c9d6cc35fb6a0a43c37e226703e', 4, ACTOR, 'sessão suja');
@@ -159,8 +157,8 @@ test('o motivo do lote também leva a assinatura do Discord', async () => {
 test('o canal do lote não é o mesmo do score', () => {
   // Publicar o payload do lote no canal `scorewipe` faria o receptor de lá ler
   // `id` como id de score e apagar a play de outra pessoa.
-  assert.match(fonteAdmin, /MAPWIPE:\s+'mapwipe'/);
-  assert.match(fonteAdmin, /SCOREWIPE:\s+'scorewipe'/);
+  assert.equal(daycore.CHANNELS.MAPWIPE, 'mapwipe');
+  assert.equal(daycore.CHANNELS.SCOREWIPE, 'scorewipe');
 });
 
 // Adaptação: o brief da Task 8 substitui `getServerPlayerMapScores` direto em
@@ -224,13 +222,16 @@ test('lista vazia conta como apagado', async () => {
   osuClient.getServerPlayerMapScores = original;
 });
 
+// O fonte de onde o `verifyMapScoresWiped` mora desde a divisão do daycoreAdmin.
+const fonteVerify = require('fs').readFileSync(require.resolve('../src/daycoreAdmin/verify'), 'utf8');
+
 test('a verificação do lote exige todas abaixo de zero', () => {
-  assert.match(fonteAdmin, /linhas\.every\(row => Number\(row\.status\) < 0\)/);
+  assert.match(fonteVerify, /linhas\.every\(row => Number\(row\.status\) < 0\)/);
   // E exige que tenha havido leitura: sem o `Array.isArray`, o `null` de uma
   // leitura que não aconteceu só não dá verde por acidente — pelo TypeError que
   // o `.every()` levanta e o catch da volta engole. O `verifyMapScoresWiped` é
   // fail-closed de propósito, e não por tropeço.
-  assert.match(fonteAdmin, /if \(Array\.isArray\(linhas\) && linhas\.every\(/);
+  assert.match(fonteVerify, /if \(Array\.isArray\(linhas\) && linhas\.every\(/);
 });
 
 test('as duas normalizações carregam o md5 do mapa', () => {
