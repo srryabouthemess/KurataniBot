@@ -24,10 +24,13 @@ redis.createClient = () => ({
 
 const daycore = require('../src/daycoreAdmin');
 const scorewipe = require('../src/commands/admin/scorewipe');
+const { commandSource } = require('./helpers');
 
 const ACTOR = { osuId: 3, discordId: '100000000000000002', discordName: 'staff-dois' };
 
-const fonte = require('fs').readFileSync(require.resolve('../src/commands/admin/scorewipe'), 'utf8');
+// O comando inteiro (é uma pasta): a garantia é do /scorewipe, não de um arquivo dele.
+const fonte = commandSource('admin/scorewipe');
+const { daLista } = require('../src/commands/admin/scorewipe/format');
 
 test('exige DEVELOPER, e não ADMINISTRATOR', () => {
   // Mesma razão do /wipe: o receptor do canal não confere privilégio nenhum, só
@@ -319,16 +322,17 @@ test('o lote registra no admin_actions', () => {
   assert.match(fonte, /registrarAcao\('mapwipe'/);
 });
 
-// O corpo da `apagarOMapa`, isolado do resto do arquivo: ela é a última função
-// antes do `module.exports`, então este recorte não pega nada do `execute`.
-// Ancorar aqui é o que separa "a segunda tela existe no arquivo" de "a segunda
-// tela está no caminho da publicação".
+// O corpo da `apagarOMapa`, isolado do resto do comando: ela mora sozinha no
+// mapwipe.js, então o recorte até o `module.exports` de lá não pega nada do
+// `execute`. Ancorar aqui é o que separa "a segunda tela existe no comando" de
+// "a segunda tela está no caminho da publicação".
 const corpoDoLote = (() => {
-  const inicio = fonte.indexOf('async function apagarOMapa');
-  const fim    = fonte.indexOf('module.exports');
+  const mapwipe = require('fs').readFileSync(require.resolve('../src/commands/admin/scorewipe/mapwipe'), 'utf8');
+  const inicio = mapwipe.indexOf('async function apagarOMapa');
+  const fim    = mapwipe.indexOf('module.exports');
   assert.ok(inicio !== -1, 'a apagarOMapa precisa existir');
   assert.ok(fim > inicio, 'a apagarOMapa fica acima do module.exports');
-  return fonte.slice(inicio, fim);
+  return mapwipe.slice(inicio, fim);
 })();
 
 test('a segunda tela é ESPERADA antes de o lote ser publicado', () => {
@@ -410,7 +414,7 @@ test('a linha da v1 sai da normalização com o md5 preenchido', () => {
     beatmap: { id: 7331, md5: MD5, artist: 'Artista', title: 'Titulo', version: 'Insane' },
   };
 
-  const item = scorewipe._daLista(linhaV1, 7);
+  const item = daLista(linhaV1, 7);
   assert.equal(item.md5, MD5);
   // E o resto continua vindo junto, para o teste não passar com um objeto vazio
   // que por acaso tivesse só o md5.
@@ -429,7 +433,7 @@ test('o md5 no topo da linha também serve, se o upstream passar a mandá-lo', (
     beatmap: { id: 7331, artist: 'Artista', title: 'Titulo', version: 'Insane' },
   };
 
-  const item = scorewipe._daLista(linhaV1, 7);
+  const item = daLista(linhaV1, 7);
   assert.equal(item.md5, MD5);
   assert.equal(item.mapId, 7331);
 });
