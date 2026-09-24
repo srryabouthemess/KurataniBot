@@ -82,7 +82,7 @@ test('o desafio sozinho não vincula nada', t => {
 });
 
 test('o código não usa caracteres que se confundem na digitação', () => {
-  const { CODE_ALPHABET } = require('../src/commands/admin/staff');
+  const { CODE_ALPHABET } = require('../src/commands/admin/staff/proof');
 
   // Quem lê da tela e digita no site erra justamente nestes, e um código
   // recusado por engano manda a pessoa refazer tudo.
@@ -92,7 +92,7 @@ test('o código não usa caracteres que se confundem na digitação', () => {
 });
 
 test('o código tem forma estável e não se repete', () => {
-  const { generateCode, CODE_ALPHABET } = require('../src/commands/admin/staff');
+  const { generateCode, CODE_ALPHABET } = require('../src/commands/admin/staff/proof');
   const forma = new RegExp(`^KB-[${CODE_ALPHABET}]{8}$`);
 
   const vistos = new Set();
@@ -113,12 +113,12 @@ test('o código tem forma estável e não se repete', () => {
 // provar de novo o que já foi provado, para recriar o que já está no banco.
 
 test('conta livre pede a prova', () => {
-  const { decideRegister } = require('../src/commands/admin/staff');
+  const { decideRegister } = require('../src/commands/admin/staff/proof');
   assert.equal(decideRegister(null, '111'), 'challenge');
 });
 
 test('vínculo idêntico não pede nada', () => {
-  const { decideRegister } = require('../src/commands/admin/staff');
+  const { decideRegister } = require('../src/commands/admin/staff/proof');
   const existente = { discord_id: '111', osu_id: 6 };
   assert.equal(decideRegister(existente, '111'), 'unchanged');
 });
@@ -126,7 +126,7 @@ test('vínculo idêntico não pede nada', () => {
 test('conta de outro Discord é recusada, não sobrescrita', () => {
   // O caso que o furo original explorava: apontar o próprio Discord para a
   // conta de outro staff.
-  const { decideRegister } = require('../src/commands/admin/staff');
+  const { decideRegister } = require('../src/commands/admin/staff/proof');
   const existente = { discord_id: '999', osu_id: 6 };
   assert.equal(decideRegister(existente, '111'), 'taken');
 });
@@ -135,7 +135,7 @@ test('trocar de conta de jogo ainda pede a prova da nova', () => {
   // @X vinculado a osu 13 e sendo registrado em osu 6, que está livre: o
   // getStaffLinkByOsuId(6) devolve null, então a prova é exigida — a conta nova
   // nunca foi provada por ninguém.
-  const { decideRegister } = require('../src/commands/admin/staff');
+  const { decideRegister } = require('../src/commands/admin/staff/proof');
   assert.equal(decideRegister(null, '111'), 'challenge');
 });
 
@@ -150,7 +150,7 @@ test('trocar de conta de jogo ainda pede a prova da nova', () => {
 const daycorePath = require.resolve('../src/daycoreAdmin');
 const dbPath      = require.resolve('../src/db');
 
-/** Carrega o staff.js com db e daycoreAdmin trocados. */
+/** Carrega a prova de posse do /staff com db e daycoreAdmin trocados. */
 function comMocks({ link, priv }) {
   const daycoreReal = require('../src/daycoreAdmin');
 
@@ -166,8 +166,8 @@ function comMocks({ link, priv }) {
     },
   };
 
-  delete require.cache[require.resolve('../src/commands/admin/staff')];
-  return require('../src/commands/admin/staff');
+  delete require.cache[require.resolve('../src/commands/admin/staff/proof')];
+  return require('../src/commands/admin/staff/proof');
 }
 
 const P = require('../src/daycoreAdmin').Privileges;
@@ -227,8 +227,8 @@ function comPerfil({ html, erro = null }) {
       },
     },
   };
-  delete require.cache[require.resolve('../src/commands/admin/staff')];
-  return require('../src/commands/admin/staff');
+  delete require.cache[require.resolve('../src/commands/admin/staff/proof')];
+  return require('../src/commands/admin/staff/proof');
 }
 
 test('acha o código na página renderizada', async () => {
@@ -322,7 +322,7 @@ test('o bloco sobrevive a div dentro do userpage', async () => {
 });
 
 test('o recorte devolve só o que está dentro do bloco', async () => {
-  const { userpageBlock } = require('../src/commands/admin/staff');
+  const { userpageBlock } = require('../src/commands/admin/staff/proof');
 
   const bloco = userpageBlock(paginaCom({ userpage: 'DENTRO', resto: 'FORA' }));
   assert.ok(bloco.includes('DENTRO'));
