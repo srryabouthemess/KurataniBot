@@ -25,8 +25,8 @@
 
 const { spawn } = require('child_process');
 const path = require('path');
-const { logErrorOnce } = require('./logger');
-const config = require('./config');
+const { logErrorOnce } = require('../lib/logger');
+const config = require('../config');
 
 const SCRIPT = path.join(__dirname, 'pp_calc.py');
 

@@ -11,8 +11,8 @@ const servers = require('../servers');
 const config = require('../config');
 const rateLimiter = require('../rateLimiter');
 const { modSettings } = require('../mods');
-const { urlSegment, idSegment } = require('../urlSafe');
-const { withRetry } = require('../retry');
+const { urlSegment, idSegment } = require('../lib/urlSafe');
+const { withRetry } = require('../lib/retry');
 
 // ─── Token OAuth ──────────────────────────────────────────────────────────────
 // `_tokenPromise` guarda a renovação em andamento: sem ela, N requisições que

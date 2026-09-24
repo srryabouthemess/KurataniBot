@@ -14,13 +14,13 @@
 
 const axios = require('axios');
 
-const db = require('./db');
-const metrics = require('./metrics');
-const rateLimiter = require('./rateLimiter');
-const { dedupe } = require('./inflight');
-const { idSegment } = require('./urlSafe');
-const { withRetry } = require('./retry');
-const servers = require('./servers');
+const db = require('../db');
+const metrics = require('../lib/metrics');
+const rateLimiter = require('../rateLimiter');
+const { dedupe } = require('../lib/inflight');
+const { idSegment } = require('../lib/urlSafe');
+const { withRetry } = require('../lib/retry');
+const servers = require('../servers');
 
 // 16MB. O maior `.osu` do cache real tem alguns poucos MB (mapa de maratona com
 // dezenas de milhares de objetos), então o teto é generoso o bastante para nunca

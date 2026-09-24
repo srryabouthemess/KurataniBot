@@ -20,7 +20,7 @@
 const path = require('path');
 const { Worker } = require('node:worker_threads');
 
-const { logErrorOnce } = require('./logger');
+const { logErrorOnce } = require('../lib/logger');
 
 const SCRIPT = path.join(__dirname, 'rosuWorkerThread.js');
 

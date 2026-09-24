@@ -1,6 +1,6 @@
 const config = require('./config');
 const { Client, Collection, GatewayIntentBits, REST, Routes, MessageFlags } = require('discord.js');
-const { logError } = require('./logger');
+const { logError } = require('./lib/logger');
 const { t, forGuild } = require('./i18n');
 const { loadCommands, commandsPayload, hashCommands } = require('./bot/loadCommands');
 const db = require('./db');

@@ -17,7 +17,7 @@
 const test = require('node:test');
 const assert = require('node:assert');
 
-const lazerWorker = require('../src/lazerWorker');
+const lazerWorker = require('../src/pp/lazerWorker');
 const { mapaSintetico } = require('./helpers');
 
 test.after(() => lazerWorker.close());

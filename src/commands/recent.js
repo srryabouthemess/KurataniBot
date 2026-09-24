@@ -10,7 +10,7 @@ const playEmbed = require('../embeds/play');
 const { md } = require('../markdown');
 const { paginate } = require('../pagination');
 const { t } = require('../i18n');
-const { logError } = require('../logger');
+const { logError } = require('../lib/logger');
 const { safeEditReply } = require('../replies');
 
 const FETCH_LIMIT = 50;

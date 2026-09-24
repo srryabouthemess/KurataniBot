@@ -63,7 +63,7 @@ const { decodeMods, formatMods } = require('../mods');
 const { resolveStaff, checkRedisOrError } = require('../staffGuard');
 const { registrarAcao } = require('../adminLog');
 const { t } = require('../i18n');
-const { logError } = require('../logger');
+const { logError } = require('../lib/logger');
 
 const REASON_MAX_LENGTH = 200;
 

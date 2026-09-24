@@ -34,7 +34,7 @@ const daycore = require('../daycoreAdmin');
 const { resolveStaff } = require('../staffGuard');
 const { registrarAcao } = require('../adminLog');
 const { t } = require('../i18n');
-const { logError } = require('../logger');
+const { logError } = require('../lib/logger');
 
 const NOTE_MAX_LENGTH = 255; // mesmo teto da coluna `note` no banco.
 

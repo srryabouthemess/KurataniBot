@@ -12,7 +12,7 @@
 
 const servers = require('./servers');
 const { dateOf } = require('./topFilter');
-const { logErrorOnce } = require('./logger');
+const { logErrorOnce } = require('./lib/logger');
 
 /**
  * O par VN/RX do mesmo namespace que uma chave pertence.

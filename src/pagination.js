@@ -12,7 +12,7 @@
  */
 
 const { ActionRowBuilder, ButtonBuilder, ButtonStyle, MessageFlags } = require('discord.js');
-const { logError } = require('./logger');
+const { logError } = require('./lib/logger');
 
 // Inatividade, não tempo absoluto: o contador reinicia a cada clique, então uma
 // pessoa navegando devagar não perde os botões no meio.

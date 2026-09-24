@@ -36,7 +36,7 @@ process.env.KURATANI_DATA_DIR = DATA_DIR;
 // porque é dele a escolha entre um motor e outro.
 
 const chamadasLazer = [];
-const lazerPath = require.resolve('../src/lazerWorker');
+const lazerPath = require.resolve('../src/pp/lazerWorker');
 require.cache[lazerPath] = {
   id: lazerPath, filename: lazerPath, loaded: true,
   exports: {
@@ -50,7 +50,7 @@ require.cache[lazerPath] = {
 };
 
 const chamadasPython = [];
-const pythonPath = require.resolve('../src/pythonWorker');
+const pythonPath = require.resolve('../src/pp/pythonWorker');
 require.cache[pythonPath] = {
   id: pythonPath, filename: pythonPath, loaded: true,
   exports: {
@@ -64,7 +64,7 @@ require.cache[pythonPath] = {
 };
 
 // O .osu não interessa aqui, e baixá-lo tornaria o teste dependente de rede.
-const filePath = require.resolve('../src/beatmapFile');
+const filePath = require.resolve('../src/pp/beatmapFile');
 require.cache[filePath] = {
   id: filePath, filename: filePath, loaded: true,
   exports: { getBeatmapFile: async () => new Uint8Array([0]) },

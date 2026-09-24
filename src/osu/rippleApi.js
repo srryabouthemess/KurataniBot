@@ -29,8 +29,8 @@ const axios = require('axios');
 const servers = require('../servers');
 const rateLimiter = require('../rateLimiter');
 const { decodeMods } = require('../mods');
-const { idSegment, urlSegment } = require('../urlSafe');
-const { withRetry } = require('../retry');
+const { idSegment, urlSegment } = require('../lib/urlSafe');
+const { withRetry } = require('../lib/retry');
 
 /** Base da API daquele servidor. O Ripple serve tudo do próprio host. */
 function apiBase(mode) {

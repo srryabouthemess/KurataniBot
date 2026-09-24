@@ -25,7 +25,7 @@
 const fs     = require('fs');
 const path   = require('path');
 const crypto = require('crypto');
-const { logError } = require('../logger');
+const { logError } = require('../lib/logger');
 const ALIASES = require('./aliases');
 
 const COMMANDS_DIR = path.join(__dirname, '..', 'commands');

@@ -26,7 +26,7 @@ const { execFileSync } = require('child_process');
 // Antes do require do worker: é o env deste processo que o filho herda.
 process.env.PYTHONPATH = path.join(__dirname, 'fixtures');
 
-const worker = require('../src/pythonWorker');
+const worker = require('../src/pp/pythonWorker');
 
 /**
  * Sem Python não há o que testar aqui, e falhar seria mentira: o bot trata a

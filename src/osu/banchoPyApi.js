@@ -19,13 +19,13 @@
 const axios = require('axios');
 const servers = require('../servers');
 const rateLimiter = require('../rateLimiter');
-const metrics = require('../metrics');
+const metrics = require('../lib/metrics');
 const { decodeMods } = require('../mods');
-const { idSegment } = require('../urlSafe');
-const { withRetry } = require('../retry');
-const { dedupe } = require('../inflight');
-const { TtlCache } = require('../ttlCache');
-const { logErrorOnce } = require('../logger');
+const { idSegment } = require('../lib/urlSafe');
+const { withRetry } = require('../lib/retry');
+const { dedupe } = require('../lib/inflight');
+const { TtlCache } = require('../lib/ttlCache');
+const { logErrorOnce } = require('../lib/logger');
 
 // O servidor padrão de quem consulta sem dizer qual. Hoje só os comandos
 // administrativos, que operam uma instância só.

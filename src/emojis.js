@@ -21,7 +21,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const { logError } = require('./logger');
+const { logError } = require('./lib/logger');
 
 // Fora de src/: emoji é conteúdo, não fonte (ver paths.js).
 const ASSETS_DIR = path.join(require('./paths').ASSETS, 'emojis');

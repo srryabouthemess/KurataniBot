@@ -22,7 +22,7 @@
 const path = require('path');
 const { fork } = require('node:child_process');
 
-const { logErrorOnce } = require('./logger');
+const { logErrorOnce } = require('../lib/logger');
 
 const SCRIPT = path.join(__dirname, 'lazerWorkerChild.js');
 

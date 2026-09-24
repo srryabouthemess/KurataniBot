@@ -8,7 +8,7 @@
 const test = require('node:test');
 const assert = require('node:assert');
 
-const { TtlCache } = require('../src/ttlCache');
+const { TtlCache } = require('../src/lib/ttlCache');
 
 test('entrada vencida some na leitura', async () => {
   const cache = new TtlCache({ ttlMs: 40, max: 10 });

@@ -21,7 +21,7 @@ for (const [caminho, exports] of Object.entries({
   '../src/daycoreAdmin': {
     checkConnection: async () => ({ ok: false, reason: 'unreachable', error: DETALHE }),
   },
-  '../src/logger': {
+  '../src/lib/logger': {
     logError: (contexto, erro) => { logado.push(`${contexto}: ${erro?.message}`); },
     logErrorOnce: () => {},
   },

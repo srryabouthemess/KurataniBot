@@ -1,8 +1,8 @@
 const { REST, Routes } = require('discord.js');
-const config = require('./config');
-const db = require('./db');
-const { logError } = require('./logger');
-const { loadCommands, commandsPayload, hashCommands } = require('./bot/loadCommands');
+const config = require('../src/config');
+const db = require('../src/db');
+const { logError } = require('../src/lib/logger');
+const { loadCommands, commandsPayload, hashCommands } = require('../src/bot/loadCommands');
 
 // Estrito, ao contrário do boot: registrar uma lista sem o comando que não
 // carregou o apagaria do Discord. Aqui qualquer falha aborta antes do PUT.

@@ -13,7 +13,7 @@
 const test = require('node:test');
 const assert = require('node:assert');
 
-const { logError, logErrorOnce, BODY_MAX, CAUSAS_MAX } = require('../src/logger');
+const { logError, logErrorOnce, BODY_MAX, CAUSAS_MAX } = require('../src/lib/logger');
 
 /** Roda o logError capturando o que ele mandaria para o console. */
 function capture(context, error) {

@@ -34,7 +34,7 @@
  */
 
 const db = require('./db');
-const { logError } = require('./logger');
+const { logError } = require('./lib/logger');
 
 /**
  * Registra a ação administrativa, sem deixar uma falha de escrita derrubar o

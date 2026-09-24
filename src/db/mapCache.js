@@ -17,7 +17,7 @@
  *   fc_pp           teto por idade      — cresce por SCORE, não por mapa
  */
 
-const metrics = require('../metrics');
+const metrics = require('../lib/metrics');
 const config = require('../config');
 const { db } = require('./connection');
 

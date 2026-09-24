@@ -37,7 +37,7 @@
 
 const { createClient } = require('redis');
 
-const { logError } = require('./logger');
+const { logError } = require('./lib/logger');
 const config = require('./config');
 
 const CHANNEL      = 'ex:map_status_change';

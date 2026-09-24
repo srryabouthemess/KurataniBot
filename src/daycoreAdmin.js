@@ -31,8 +31,8 @@
 const { createClient } = require('redis');
 const osu = require('./osuClient');
 const servers = require('./servers');
-const { logError } = require('./logger');
-const { mapLimit } = require('./concurrency');
+const { logError } = require('./lib/logger');
+const { mapLimit } = require('./lib/concurrency');
 const config = require('./config');
 
 // ─── Constantes espelhadas do bancho.py-ex ────────────────────────────────────

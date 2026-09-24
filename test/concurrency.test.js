@@ -9,7 +9,7 @@
 const test = require('node:test');
 const assert = require('node:assert');
 
-const { mapLimit } = require('../src/concurrency');
+const { mapLimit } = require('../src/lib/concurrency');
 
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 

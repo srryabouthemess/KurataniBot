@@ -8,7 +8,7 @@ const playEmbed = require('../embeds/play');
 const { paginate } = require('../pagination');
 const topFilter = require('../topFilter');
 const { t } = require('../i18n');
-const { logError } = require('../logger');
+const { logError } = require('../lib/logger');
 const { safeEditReply } = require('../replies');
 
 const PAGE_SIZE   = 5;

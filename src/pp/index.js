@@ -11,15 +11,15 @@
  * A dependência é de mão única — o osuClient importa daqui, e não o contrário.
  */
 
-const db = require('./db');
-const servers = require('./servers');
+const db = require('../db');
+const servers = require('../servers');
 const {
   modsToBits, stripClassic, stripImpliedDT, difficultyMods, canonicalMods,
   clockRate, modAcronym,
-} = require('./mods');
-const { logErrorOnce } = require('./logger');
+} = require('../mods');
+const { logErrorOnce } = require('../lib/logger');
 const { getBeatmapFile } = require('./beatmapFile');
-const { TtlCache } = require('./ttlCache');
+const { TtlCache } = require('../lib/ttlCache');
 const pythonWorker = require('./pythonWorker');
 const rosuWorker = require('./rosuWorker');
 const lazerWorker = require('./lazerWorker');
@@ -449,7 +449,7 @@ async function simulatePP(beatmapId, mods, hits, mode = DEFAULT_MODE, { classic 
       // "parei no objeto N". Devolver o valor do mapa completo para uma play
       // interrompida seria inventar; melhor admitir que não sabe.
       if (passed !== null) return null;
-      // -1 é o "não sei" que o pp_calc.py entende (ver src/pp_calc.py).
+      // -1 é o "não sei" que o pp_calc.py entende (ver pp_calc.py, ao lado).
       return await calcPPPython(beatmapId, modsToBits(mods), n300 ?? -1, n100, n50, misses, combo);
     }
 

@@ -46,7 +46,7 @@ process.env.KURATANI_DATA_DIR = DATA_DIR;
  * `pp` que este teste quer exercitar de verdade — ele é quem decide os mods.
  */
 const chamadasMotor = [];
-const lazerPath = require.resolve('../src/lazerWorker');
+const lazerPath = require.resolve('../src/pp/lazerWorker');
 require.cache[lazerPath] = {
   id: lazerPath, filename: lazerPath, loaded: true,
   exports: {

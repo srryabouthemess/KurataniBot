@@ -12,7 +12,7 @@ const { registrarAcao } = require('../adminLog');
 const { md } = require('../markdown');
 const { t, forGuild } = require('../i18n');
 const { exigirSubcomando } = require('../subcommands');
-const { logError } = require('../logger');
+const { logError } = require('../lib/logger');
 const config = require('../config');
 
 // Quantas nomeações distintas um set precisa antes de ser aplicado de fato

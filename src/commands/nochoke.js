@@ -6,13 +6,13 @@ const { resolvePlayer, fetchPlayer } = require('../userLink');
 const mapContext = require('../mapContext');
 const playEmbed = require('../embeds/play');
 const { paginate } = require('../pagination');
-const { mapLimit } = require('../concurrency');
+const { mapLimit } = require('../lib/concurrency');
 const { weightedPP } = require('../weightedPP');
 const { formatMods } = require('../mods');
 const { md } = require('../markdown');
 const emojis = require('../emojis');
 const { t } = require('../i18n');
-const { logError } = require('../logger');
+const { logError } = require('../lib/logger');
 const { safeEditReply } = require('../replies');
 
 const { ppLegivel } = playEmbed;

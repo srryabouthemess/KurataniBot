@@ -10,7 +10,7 @@ const db = require('../db');
 const { registrarAcao } = require('../adminLog');
 const { t } = require('../i18n');
 const { exigirSubcomando } = require('../subcommands');
-const { logError } = require('../logger');
+const { logError } = require('../lib/logger');
 
 // Texto livre que acaba num embed (limite de 4096 no description) e no log de
 // auditoria. Sem teto, um motivo muito longo faria o embed estourar e o

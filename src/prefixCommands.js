@@ -22,7 +22,7 @@ const { GatewayIntentBits, InteractionContextType, PermissionFlagsBits } = requi
 
 const { t } = require('./i18n');
 const cooldowns = require('./cooldowns');
-const { logError } = require('./logger');
+const { logError } = require('./lib/logger');
 const { PREFIX, ENABLED } = require('./prefix/config');
 const { tokenize } = require('./prefix/tokenize');
 const { buildSpec } = require('./prefix/spec');

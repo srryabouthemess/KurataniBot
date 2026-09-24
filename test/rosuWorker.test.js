@@ -25,7 +25,7 @@ const test = require('node:test');
 const assert = require('node:assert');
 
 const rosu = require('rosu-pp-js');
-const rosuWorker = require('../src/rosuWorker');
+const rosuWorker = require('../src/pp/rosuWorker');
 const { mapaSintetico } = require('./helpers');
 
 test.after(() => rosuWorker.close());

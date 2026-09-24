@@ -23,7 +23,7 @@ const assert = require('node:assert');
 // reais dele para conferir que cada host tem o seu (ver item 3 acima).
 const limiterReal = require('../src/rateLimiter');
 
-const metrics = require('../src/metrics');
+const metrics = require('../src/lib/metrics');
 
 /** Estado que cada teste arma antes de chamar. */
 let responder = null;
@@ -60,7 +60,7 @@ for (const [caminho, exports] of Object.entries(stubs)) {
   require.cache[resolvido] = { id: resolvido, filename: resolvido, loaded: true, exports };
 }
 
-const { getBeatmapFile, HOSTS } = require('../src/beatmapFile');
+const { getBeatmapFile, HOSTS } = require('../src/pp/beatmapFile');
 
 const BYTES = new Uint8Array([111, 115, 117, 33]); // "osu!"
 

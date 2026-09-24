@@ -145,7 +145,7 @@ test('o que o score ja sabe nao e sobrescrito', async t => {
 });
 
 test('espelho de .osu do servidor entra na fila de download', async t => {
-  const { HOSTS } = require('../src/beatmapFile');
+  const { HOSTS } = require('../src/pp/beatmapFile');
 
   await t.test('depois dos tres publicos, nunca antes', () => {
     const nomes = HOSTS.map(h => h.nome);

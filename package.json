@@ -7,12 +7,12 @@
     "start": "node src/index.js",
     "test": "node --require ./test/setup.js --test test/*.test.js",
     "lint": "eslint .",
-    "smoke": "node test/smoke.js",
-    "deploy": "node src/deploy-commands.js",
+    "smoke": "node scripts/smoke.js",
+    "deploy": "node scripts/deploy-commands.js",
     "config:check": "node src/config.js",
-    "smoke:commands": "node test/smokeCommands.js",
-    "post": "node test/postEmbeds.js",
-    "notices": "node src/gerar-notices.js"
+    "smoke:commands": "node scripts/smokeCommands.js",
+    "post": "node scripts/postEmbeds.js",
+    "notices": "node scripts/gerar-notices.js"
   },
   "keywords": [],
   "author": "",

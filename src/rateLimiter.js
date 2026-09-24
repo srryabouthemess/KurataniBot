@@ -17,7 +17,7 @@
  * waiters acordariam do mesmo setTimeout e consumiriam o mesmo token.
  */
 
-const metrics = require('./metrics');
+const metrics = require('./lib/metrics');
 const servers = require('./servers');
 
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));

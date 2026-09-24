@@ -38,7 +38,7 @@
  */
 
 const crypto = require('node:crypto');
-const { logError } = require('./logger');
+const { logError } = require('./lib/logger');
 const config = require('./config');
 
 // Mesmo alfabeto do CreateInvite.java — não mude sem checar o fork primeiro.

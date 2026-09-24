@@ -29,7 +29,7 @@ const servers = require('./servers');
 const daycore = require('./daycoreAdmin');
 const config = require('./config');
 const { md } = require('./markdown');
-const { logError } = require('./logger');
+const { logError } = require('./lib/logger');
 
 // Cores por status: verde para ranked, rosa para loved, cinza para unranked.
 // Mesma leitura do osu! oficial, para quem bate o olho não precisar ler.

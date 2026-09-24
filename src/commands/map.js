@@ -23,7 +23,7 @@ const mapContext = require('../mapContext');
 const playEmbed = require('../embeds/play');
 const { stripClassic, formatMods } = require('../mods');
 const { t } = require('../i18n');
-const { logError } = require('../logger');
+const { logError } = require('../lib/logger');
 const { safeEditReply } = require('../replies');
 
 /**

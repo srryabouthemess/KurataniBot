@@ -6,7 +6,7 @@ const { getLink } = require('../db');
 const { resolveServer, resolveSecondServer } = require('../userLink');
 const { md } = require('../markdown');
 const { t } = require('../i18n');
-const { logError } = require('../logger');
+const { logError } = require('../lib/logger');
 const { safeEditReply } = require('../replies');
 
 // O Discord mobile NÃO rola code block na horizontal: ele quebra a linha, e

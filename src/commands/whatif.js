@@ -7,7 +7,7 @@ const playEmbed = require('../embeds/play');
 const { ppLegivel } = playEmbed;
 const { md } = require('../markdown');
 const { t } = require('../i18n');
-const { logError } = require('../logger');
+const { logError } = require('../lib/logger');
 const { safeEditReply } = require('../replies');
 
 // A soma ponderada e a inserção da play hipotética moram no weightedPP.js: o

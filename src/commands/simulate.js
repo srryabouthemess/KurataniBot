@@ -5,7 +5,7 @@ const modo = require('../modo');
 const mapContext = require('../mapContext');
 const { stripClassic, formatMods } = require('../mods');
 const { t } = require('../i18n');
-const { logError } = require('../logger');
+const { logError } = require('../lib/logger');
 const { safeEditReply } = require('../replies');
 
 module.exports = {

@@ -18,7 +18,7 @@
 
 const osu = require('./osuClient');
 const servers = require('./servers');
-const { TtlCache } = require('./ttlCache');
+const { TtlCache } = require('./lib/ttlCache');
 
 // Uma conversa esfria bem antes disso; o TTL existe mais para o mapa de ontem
 // não voltar do além num canal parado do que para economizar memória.

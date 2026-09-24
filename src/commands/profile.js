@@ -6,7 +6,7 @@ const { resolvePlayer, fetchPlayer } = require('../userLink');
 const emojis = require('../emojis');
 const { md } = require('../markdown');
 const { t } = require('../i18n');
-const { logError } = require('../logger');
+const { logError } = require('../lib/logger');
 const { safeEditReply } = require('../replies');
 
 const toDiscordTimestamp = (dateString, format = 'R') => {

@@ -9,7 +9,7 @@
 const test = require('node:test');
 const assert = require('node:assert');
 
-const metrics = require('../src/metrics');
+const metrics = require('../src/lib/metrics');
 const diag = require('../src/commands/diag');
 
 test.beforeEach(() => metrics.reset());

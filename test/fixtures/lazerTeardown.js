@@ -10,7 +10,7 @@
  * testes, um crash aqui contaminaria os outros arquivos.
  */
 const path = require('path');
-const lazerWorker = require(path.join(__dirname, '..', '..', 'src', 'lazerWorker'));
+const lazerWorker = require(path.join(__dirname, '..', '..', 'src', 'pp', 'lazerWorker'));
 const { mapaSintetico } = require(path.join(__dirname, '..', 'helpers'));
 
 const MAPA = mapaSintetico(120);

@@ -1,7 +1,7 @@
 # Avisos de terceiros — KurataniBot
 
 <!-- GERADO por `npm run notices` a partir do package-lock.json. Não edite à mão: -->
-<!-- a próxima geração desfaz. Para mudar o formato, mexa em src/gerar-notices.js. -->
+<!-- a próxima geração desfaz. Para mudar o formato, mexa em scripts/gerar-notices.js. -->
 
 O KurataniBot é MIT (veja [LICENSE](LICENSE)), mas ele não roda sozinho: o que
 está abaixo é de outras pessoas, e MIT, BSD e Apache pedem que o aviso de
@@ -31,7 +31,7 @@ redistribui o binário dela, e pede que quem receba possa **trocar a biblioteca*
 por outra versão.
 
 O desenho do bot já satisfaz isso sem esforço, e não por acaso: ele carrega o
-calculador como binário separado, num processo filho ([`lazerWorker.js`](src/lazerWorker.js)),
+calculador como binário separado, num processo filho ([`lazerWorker.js`](src/pp/lazerWorker.js)),
 e o pacote vem do npm em vez de compilado junto. Quem clona o repositório troca a
 versão mexendo no `package.json` — o código do bot não é obra derivada dele, e o
 próprio `npm install` pula o pacote em plataforma sem binário, com o bot
@@ -2866,7 +2866,7 @@ fora disso. Elas entram aqui à mão, pela mesma razão que o resto do arquivo e
 Calcula o PP das plays de **Relax**, que usa outro sistema de PP. É opcional e
 quem opera o bot instala na própria máquina (veja [`docs/OPCIONAIS.md`](docs/OPCIONAIS.md)),
 então o repositório não a redistribui — mas ela é dependência do código do mesmo
-jeito: [`src/pp_calc.py`](src/pp_calc.py) a importa, e sem ela o PP do RX sai como `?pp`.
+jeito: [`src/pp/pp_calc.py`](src/pp/pp_calc.py) a importa, e sem ela o PP do RX sai como `?pp`.
 
 De Max Ohn e tsunyoku — <https://github.com/osuAkatsuki/akatsuki-pp-py>.
 

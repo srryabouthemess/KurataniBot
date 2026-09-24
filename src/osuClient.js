@@ -30,13 +30,13 @@ const pp = require('./pp');
 const officialApi = require('./osu/officialApi');
 const banchoPyApi = require('./osu/banchoPyApi');
 const rippleApi = require('./osu/rippleApi');
-const { dedupe } = require('./inflight');
+const { dedupe } = require('./lib/inflight');
 const { parseModsString, parseModTokens } = require('./mods');
-const { idSegment } = require('./urlSafe');
-const { TtlCache } = require('./ttlCache');
-const { logErrorOnce } = require('./logger');
-const { mapLimit } = require('./concurrency');
-const metrics = require('./metrics');
+const { idSegment } = require('./lib/urlSafe');
+const { TtlCache } = require('./lib/ttlCache');
+const { logErrorOnce } = require('./lib/logger');
+const { mapLimit } = require('./lib/concurrency');
+const metrics = require('./lib/metrics');
 
 const DEFAULT_MODE = servers.defaultKey();
 

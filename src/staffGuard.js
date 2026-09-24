@@ -28,7 +28,7 @@
 
 const { getStaffLink } = require('./db');
 const daycore = require('./daycoreAdmin');
-const { logError } = require('./logger');
+const { logError } = require('./lib/logger');
 const config = require('./config');
 
 /**

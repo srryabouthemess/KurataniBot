@@ -10,7 +10,7 @@ const { exigirSubcomando } = require('../subcommands');
 const osu = require('../osuClient');
 const servers = require('../servers');
 const modo = require('../modo');
-const { logError } = require('../logger');
+const { logError } = require('../lib/logger');
 const { safeEditReply } = require('../replies');
 
 // Só os servidores, sem as variantes `_rx`: aqui "VN ou RX" é a opção `modo`,

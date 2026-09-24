@@ -5,7 +5,7 @@ const modo = require('../modo');
 const { resolvePlayer, fetchPlayer } = require('../userLink');
 const playEmbed = require('../embeds/play');
 const { t } = require('../i18n');
-const { logError } = require('../logger');
+const { logError } = require('../lib/logger');
 const { safeEditReply } = require('../replies');
 
 // A soma ponderada e a simulação de uma play hipotética moram no weightedPP.js:

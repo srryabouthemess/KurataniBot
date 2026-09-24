@@ -16,11 +16,11 @@
  * superfície de interação para reaproveitar os comandos sem reescrevê-los.
  *
  * ── Uso ───────────────────────────────────────────────────────────────────────
- *   node test/postEmbeds.js <canalId>              → só relata o canal, não envia
- *   node test/postEmbeds.js <canalId> --enviar     → envia
- *   node test/postEmbeds.js <canalId> --enviar --so=topplays,recent
- *   node test/postEmbeds.js <canalId> --enviar --dono=<seuDiscordId>
- *   node test/postEmbeds.js <canalId> --enviar --top=20
+ *   node scripts/postEmbeds.js <canalId>              → só relata o canal, não envia
+ *   node scripts/postEmbeds.js <canalId> --enviar     → envia
+ *   node scripts/postEmbeds.js <canalId> --enviar --so=topplays,recent
+ *   node scripts/postEmbeds.js <canalId> --enviar --dono=<seuDiscordId>
+ *   node scripts/postEmbeds.js <canalId> --enviar --top=20
  *
  * O `--enviar` é obrigatório de propósito: sem ele o script não escreve nada.
  * Mandar duas dezenas de mensagens no canal errado é fácil e chato de desfazer.
@@ -53,7 +53,7 @@ const FILTRO = (flags.find(f => f.startsWith('--so=')) ?? '').split('=')[1]?.spl
 const TOP    = Number((flags.find(f => f.startsWith('--top=')) ?? '').split('=')[1]) || 0;
 
 if (!canalId) {
-  console.error('uso: node test/postEmbeds.js <canalId> [--enviar] [--dono=<id>] [--so=a,b]');
+  console.error('uso: node scripts/postEmbeds.js <canalId> [--enviar] [--dono=<id>] [--so=a,b]');
   process.exit(1);
 }
 
