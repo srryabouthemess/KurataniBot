@@ -1,4 +1,4 @@
-require('dotenv').config({ quiet: true });
+const config = require('./config');
 const { Client, Collection, GatewayIntentBits, REST, Routes, MessageFlags } = require('discord.js');
 const { logError } = require('./logger');
 const { t, forGuild } = require('./i18n');
@@ -12,6 +12,10 @@ const emojis = require('./emojis');
 const daycoreAdmin = require('./daycoreAdmin');
 const daycoreEvents = require('./daycoreEvents');
 const announce = require('./announce');
+
+// Antes do login e de qualquer comando: .env errado derruba aqui, com a
+// variável nomeada, e não semanas depois num comando que falha calado.
+config.assertValid();
 
 const client = new Client({
   // INTENTS vem vazio quando o modo texto (`k!comando`) está desligado: ler o
@@ -72,8 +76,8 @@ async function syncCommandsIfChanged() {
   if (db.getMeta('commands_hash') === hash) return;
 
   console.log('[deploy] Conjunto de comandos mudou, registrando...');
-  const rest = new REST().setToken(process.env.DISCORD_TOKEN);
-  await rest.put(Routes.applicationCommands(process.env.CLIENT_ID), { body: payload });
+  const rest = new REST().setToken(config.discord.token);
+  await rest.put(Routes.applicationCommands(config.discord.clientId), { body: payload });
   db.setMeta('commands_hash', hash);
   console.log(`[deploy] ${payload.length} comandos registrados globalmente.`);
 }
@@ -85,7 +89,7 @@ async function syncCommandsIfChanged() {
  * preferência de alguém — ninguém rodou comando nenhum aqui.
  */
 async function announceGameRank(client, evento) {
-  const s = forGuild(process.env.DAYCORE_GUILD_ID);
+  const s = forGuild(config.daycore.guildId);
   await announce.announceGameStatus(client, evento, s);
 }
 
@@ -95,7 +99,7 @@ async function announceGameRank(client, evento) {
  * Mesmo idioma e mesmo motivo do anúncio de mapa: não há interação por trás.
  */
 async function announceGamePriv(client, evento) {
-  const s = forGuild(process.env.DAYCORE_GUILD_ID);
+  const s = forGuild(config.daycore.guildId);
   await announce.announcePrivChange(client, evento, s);
 }
 
@@ -130,7 +134,7 @@ client.once('clientReady', async () => {
       onCustomMapChange: evento => announce.announceCustomMap(
         client,
         evento,
-        forGuild(process.env.DAYCORE_GUILD_ID),
+        forGuild(config.daycore.guildId),
       ),
     });
   } catch (error) {
@@ -208,7 +212,7 @@ process.on('unhandledRejection', (reason) => {
 // O padrão continua sendo seguir rodando, porque é o certo para quem roda o bot
 // na própria máquina. Com systemd/pm2/Docker configurado, ligue
 // EXIT_ON_UNCAUGHT no .env e o processo passa a sair para ser reiniciado limpo.
-const EXIT_ON_UNCAUGHT = /^(1|true|yes|sim)$/i.test((process.env.EXIT_ON_UNCAUGHT ?? '').trim());
+const EXIT_ON_UNCAUGHT = config.exitOnUncaught;
 
 process.on('uncaughtException', (error) => {
   logError('uncaughtException', error);
@@ -276,7 +280,7 @@ for (const signal of ['SIGINT', 'SIGTERM']) {
   process.on(signal, () => shutdown(signal));
 }
 
-client.login(process.env.DISCORD_TOKEN).catch(error => {
+client.login(config.discord.token).catch(error => {
   // O intent de conteúdo de mensagem é privilegiado: pedir sem habilitar no
   // Developer Portal faz o gateway recusar a conexão inteira, e a mensagem
   // padrão ("Used disallowed intents") não diz o que fazer.

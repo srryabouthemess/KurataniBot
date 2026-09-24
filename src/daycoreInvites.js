@@ -37,9 +37,9 @@
  * banco inteiro. Ver `.env.example` para o GRANT.
  */
 
-require('dotenv').config({ quiet: true });
 const crypto = require('node:crypto');
 const { logError } = require('./logger');
+const config = require('./config');
 
 // Mesmo alfabeto do CreateInvite.java — não mude sem checar o fork primeiro.
 const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -65,7 +65,7 @@ function randomCode() {
 let _pool = null;
 
 function isConfigured() {
-  return Boolean(process.env.DAYCORE_MYSQL_HOST);
+  return config.daycoreMysql !== null;
 }
 
 function getPool() {
@@ -78,11 +78,7 @@ function getPool() {
   const mysql = require('mysql2/promise');
 
   _pool = mysql.createPool({
-    host:     process.env.DAYCORE_MYSQL_HOST,
-    port:     Number(process.env.DAYCORE_MYSQL_PORT || 3306),
-    user:     process.env.DAYCORE_MYSQL_USER,
-    password: process.env.DAYCORE_MYSQL_PASS,
-    database: process.env.DAYCORE_MYSQL_DATABASE || 'bancho',
+    ...config.daycoreMysql,
     waitForConnections: true,
     connectionLimit: 3,
     connectTimeout: 5000,

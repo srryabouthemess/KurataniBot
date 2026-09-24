@@ -8,6 +8,7 @@ const crypto = require('crypto');
 const osu = require('../osuClient');
 const daycore = require('../daycoreAdmin');
 const db = require('../db');
+const config = require('../config');
 const { t } = require('../i18n');
 const { exigirSubcomando } = require('../subcommands');
 const { logError, logErrorOnce } = require('../logger');
@@ -277,7 +278,7 @@ module.exports = {
     // subcommands.js para o que cada um destes fazia em silêncio antes.
     const sub = exigirSubcomando(module.exports, interaction);
 
-    const guildId = process.env.DAYCORE_GUILD_ID;
+    const guildId = config.daycore.guildId;
     if (!guildId) {
       return interaction.reply({ content: s.admin_not_configured, flags: MessageFlags.Ephemeral });
     }

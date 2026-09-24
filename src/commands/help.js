@@ -16,6 +16,7 @@
 
 const { SlashCommandBuilder, EmbedBuilder, ApplicationIntegrationType, InteractionContextType } = require('discord.js');
 const servers = require('../servers');
+const config = require('../config');
 const { PREFIX, ENABLED: PREFIX_ENABLED } = require('../prefix/config');
 const { t } = require('../i18n');
 const ALIAS_TABLE = require('../bot/aliases');
@@ -70,7 +71,7 @@ module.exports = {
     const available = interaction.client.commands;
 
     const groups = [...GROUPS];
-    const adminGuild = process.env.DAYCORE_GUILD_ID;
+    const adminGuild = config.daycore.guildId;
     if (adminGuild && interaction.guildId === adminGuild) groups.push(ADMIN_GROUP);
 
     const fields = groups

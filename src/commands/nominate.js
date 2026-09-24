@@ -13,8 +13,10 @@ const { md } = require('../markdown');
 const { t, forGuild } = require('../i18n');
 const { exigirSubcomando } = require('../subcommands');
 const { logError } = require('../logger');
+const config = require('../config');
 
-// Quantas nomeações distintas um set precisa antes de ser aplicado de fato.
+// Quantas nomeações distintas um set precisa antes de ser aplicado de fato
+// (NOMINATION_THRESHOLD, lido em config.js).
 //
 // O padrão é 1: quem nomeia já aplica. O osu! oficial pede 2 (dois BNs), mas lá
 // isso resolve um problema que um servidor pequeno não tem — com poucos
@@ -26,7 +28,6 @@ const { logError } = require('../logger');
 // aí duas contas do Discord apontando para o mesmo osu! id valiam como duas
 // nomeações, o que deixava uma pessoa sozinha atingir um limiar de 2; a
 // migração em db.js reconstruiu a tabela justamente por causa disso.
-const DEFAULT_THRESHOLD = 1;
 
 // Tetos nas entradas de texto livre. Sem eles o Discord aceita até 6000
 // caracteres, que estouram o limite de 4096 do embed — o comando falharia ao
@@ -41,8 +42,7 @@ function truncate(text, max) {
 }
 
 function threshold() {
-  const raw = Number(process.env.NOMINATION_THRESHOLD);
-  return Number.isFinite(raw) && raw >= 1 ? Math.floor(raw) : DEFAULT_THRESHOLD;
+  return config.daycore.nominationThreshold;
 }
 
 /**
@@ -208,7 +208,7 @@ function announceApplied(interaction, { setId, diffs, status, label, actorName, 
   // preferencia pessoal diferente da do servidor fazia o canal receber dois
   // anuncios iguais em linguas diferentes -- o do comando na dele, o do rank
   // in-game na do servidor (ver index.js).
-  const s = forGuild(process.env.DAYCORE_GUILD_ID);
+  const s = forGuild(config.daycore.guildId);
 
   announce.announceStatus(interaction.client, {
     setId, diffs, status,

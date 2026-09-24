@@ -31,11 +31,14 @@
  * `mode_arg` que vai para a API.
  */
 
-// Carrega o .env aqui também: este módulo lê a configuração no require, e sem
-// isso quem o carregasse antes do dotenv (um script, um teste, outro ponto de
-// entrada) montaria um registro vazio — e aí todo servidor privado cairia
-// calado no oficial. É idempotente.
-require('dotenv').config({ quiet: true });
+// Este módulo lê a configuração no require: sem o `.env` carregado antes, quem
+// o importasse primeiro (um script, um teste, outro ponto de entrada) montaria
+// um registro vazio — e todo servidor privado cairia calado no oficial. O
+// config.js carrega o `.env` no próprio require.
+//
+// As variáveis daqui (SERVERS, OSU_MODE, SERVER_<CHAVE>_*) continuam lidas
+// neste arquivo, e não no config.js: o nome delas depende da chave do servidor.
+require('./config');
 
 const OFFICIAL_KEY = 'official';
 

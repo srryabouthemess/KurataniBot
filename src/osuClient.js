@@ -24,7 +24,6 @@
  * tudo ao osuClient.
  */
 
-require('dotenv').config({ quiet: true });
 const beatmapCache = require('./beatmapCache');
 const servers = require('./servers');
 const pp = require('./pp');

@@ -27,6 +27,7 @@ const { EmbedBuilder, PermissionFlagsBits } = require('discord.js');
 const osu = require('./osuClient');
 const servers = require('./servers');
 const daycore = require('./daycoreAdmin');
+const config = require('./config');
 const { md } = require('./markdown');
 const { logError } = require('./logger');
 
@@ -39,7 +40,7 @@ const STATUS_COLOR = {
 };
 
 function channelId() {
-  return process.env.DAYCORE_ANNOUNCE_CHANNEL_ID || null;
+  return config.daycore.announceChannelId;
 }
 
 function isConfigured() {
@@ -56,7 +57,7 @@ function isConfigured() {
  * publicar nada.
  */
 function privChannelId() {
-  return process.env.DAYCORE_ROLE_LOG_CHANNEL_ID || null;
+  return config.daycore.roleLogChannelId;
 }
 
 function isPrivLogConfigured() {
@@ -64,7 +65,7 @@ function isPrivLogConfigured() {
 }
 
 function customMapChannelId() {
-  return process.env.DAYCORE_CUSTOM_MAP_CHANNEL_ID || null;
+  return config.daycore.customMapChannelId;
 }
 
 function isCustomMapConfigured() {

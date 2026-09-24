@@ -8,6 +8,7 @@
 
 const axios = require('axios');
 const servers = require('../servers');
+const config = require('../config');
 const rateLimiter = require('../rateLimiter');
 const { modSettings } = require('../mods');
 const { urlSegment, idSegment } = require('../urlSafe');
@@ -28,8 +29,8 @@ async function getOfficialToken() {
     const res = await withRetry(async () => {
       await rateLimiter.acquire('osuOAuth');
       return axios.post('https://osu.ppy.sh/oauth/token', {
-        client_id: process.env.OSU_CLIENT_ID,
-        client_secret: process.env.OSU_CLIENT_SECRET,
+        client_id: config.osu.clientId,
+        client_secret: config.osu.clientSecret,
         grant_type: 'client_credentials',
         scope: 'public',
       }, { timeout: 10000 });

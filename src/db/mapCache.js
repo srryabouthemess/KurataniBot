@@ -18,6 +18,7 @@
  */
 
 const metrics = require('../metrics');
+const config = require('../config');
 const { db } = require('./connection');
 
 // ─── Arquivos .osu ────────────────────────────────────────────────────────────
@@ -34,7 +35,7 @@ const MAP_FILE_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 dias
  * chamar /simulate com IDs de mapa diferentes em sequência, e cada um grava um
  * arquivo novo permanentemente. O cooldown limita a taxa, não o total.
  */
-const MAP_FILE_MAX_ROWS = Number(process.env.BEATMAP_CACHE_MAX || 1500);
+const MAP_FILE_MAX_ROWS = config.cache.beatmapMaxRows;
 
 // Só reescreve last_used se a marca estiver velha, para um mapa lido em loop
 // (ex: virar página no /topplays) não gerar uma escrita por leitura.
@@ -157,7 +158,7 @@ function setMapDifficulty(mapId, mods, engine, stars, maxCombo) {
  * Cada linha são algumas dezenas de bytes, então 20 mil ≈ 1–2MB: generoso o
  * bastante para o teto nunca ser sentido em uso normal.
  */
-const FC_PP_MAX_ROWS = Number(process.env.FC_PP_CACHE_MAX || 20000);
+const FC_PP_MAX_ROWS = config.cache.fcPpMaxRows;
 
 /**
  * @param {{mapId: number, mods: string, engine: string,

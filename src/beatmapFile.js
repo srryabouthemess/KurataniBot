@@ -12,7 +12,6 @@
  * ou o de um dos espelhos, quando ele não responde (ver HOSTS).
  */
 
-require('dotenv').config({ quiet: true });
 const axios = require('axios');
 
 const db = require('./db');

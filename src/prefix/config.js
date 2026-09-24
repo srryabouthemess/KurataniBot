@@ -8,9 +8,7 @@
  * intents).
  */
 
-require('dotenv').config({ quiet: true });
-
-const PREFIX = (process.env.COMMAND_PREFIX ?? '').trim();
+const PREFIX = require('../config').commandPrefix;
 
 /**
  * Sem prefixo configurado, o modo texto não existe: nem o listener é

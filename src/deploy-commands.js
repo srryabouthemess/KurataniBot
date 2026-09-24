@@ -1,11 +1,13 @@
 const { REST, Routes } = require('discord.js');
-require('dotenv').config({ quiet: true });
+const config = require('./config');
 const db = require('./db');
 const { logError } = require('./logger');
 const { loadCommands, commandsPayload, hashCommands } = require('./bot/loadCommands');
 
 // Estrito, ao contrário do boot: registrar uma lista sem o comando que não
 // carregou o apagaria do Discord. Aqui qualquer falha aborta antes do PUT.
+config.assertValid();
+
 let commands;
 try {
     commands = commandsPayload(loadCommands({ strict: true }).commands);
@@ -15,7 +17,7 @@ try {
     process.exit(1);
 }
 
-const rest = new REST().setToken(process.env.DISCORD_TOKEN);
+const rest = new REST().setToken(config.discord.token);
 
 (async () => {
     try {
@@ -24,7 +26,7 @@ const rest = new REST().setToken(process.env.DISCORD_TOKEN);
         // ROTA GLOBAL: Não usa o GUILD_ID. 
         // Isso faz o bot funcionar em qualquer servidor automaticamente.
         await rest.put(
-            Routes.applicationCommands(process.env.CLIENT_ID),
+            Routes.applicationCommands(config.discord.clientId),
             { body: commands },
         );
 

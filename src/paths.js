@@ -12,6 +12,7 @@
  */
 
 const path = require('path');
+const config = require('./config');
 
 /** Raiz do projeto — um nível acima de `src/`. */
 const ROOT = path.join(__dirname, '..');
@@ -34,9 +35,7 @@ const ROOT = path.join(__dirname, '..');
  * ASSETS fica de fora de propósito — emoji é conteúdo que viaja junto do
  * código, não dado que o bot produz.
  */
-const DATA_DIR = process.env.KURATANI_DATA_DIR
-  ? path.resolve(process.env.KURATANI_DATA_DIR)
-  : ROOT;
+const DATA_DIR = config.dataDir ? path.resolve(config.dataDir) : ROOT;
 
 module.exports = {
   ROOT,

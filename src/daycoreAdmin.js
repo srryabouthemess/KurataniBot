@@ -28,12 +28,12 @@
  * para o Prometheus do bancho.
  */
 
-require('dotenv').config({ quiet: true });
 const { createClient } = require('redis');
 const osu = require('./osuClient');
 const servers = require('./servers');
 const { logError } = require('./logger');
 const { mapLimit } = require('./concurrency');
+const config = require('./config');
 
 // ─── Constantes espelhadas do bancho.py-ex ────────────────────────────────────
 // Fonte: app/constants/privileges.py. Mantenha em sincronia se o fork mudar.
@@ -117,7 +117,7 @@ let _client     = null;
 let _connecting = null;
 
 function isConfigured() {
-  return Boolean(process.env.REDIS_HOST);
+  return config.redis !== null;
 }
 
 async function getRedis() {
@@ -126,22 +126,18 @@ async function getRedis() {
   if (_connecting) return _connecting;
 
   _connecting = (async () => {
-    // Credenciais como campos separados, e não embutidas numa URL
-    // `redis://user:senha@host`: a URL aparece em mensagem de erro de conexão
-    // do client, que vai parar no log — e o log do bot é lido por gente que
-    // não precisa ter a senha do Redis do servidor.
+    // Credenciais em campos separados, nunca numa URL — ver config.redis.
+    const { host, port, ...auth } = config.redis;
     const client = createClient({
       socket: {
-        host: process.env.REDIS_HOST,
-        port: Number(process.env.REDIS_PORT || 6379),
+        host,
+        port,
         connectTimeout: 5000,
         // Sem isso o client tenta reconectar para sempre e cada comando fica
         // pendurado; três tentativas e falha com erro que o comando trata.
         reconnectStrategy: (retries) => (retries > 3 ? false : Math.min(retries * 200, 1000)),
       },
-      username: process.env.REDIS_USER || undefined,
-      password: process.env.REDIS_PASS || undefined,
-      database: Number(process.env.REDIS_DB || 0),
+      ...auth,
     });
 
     // O client emite 'error' em queda de conexão; sem listener o Node derruba

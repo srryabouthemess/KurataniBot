@@ -35,10 +35,10 @@
  * log — inclusive a reconexão, que o client tenta sozinho.
  */
 
-require('dotenv').config({ quiet: true });
 const { createClient } = require('redis');
 
 const { logError } = require('./logger');
+const config = require('./config');
 
 const CHANNEL      = 'ex:map_status_change';
 const PRIV_CHANNEL = 'ex:priv_change';
@@ -59,7 +59,7 @@ const STATUS_BY_TYPE = { rank: 2, love: 5, unrank: 0 };
 let _client = null;
 
 function isConfigured() {
-  return Boolean(process.env.REDIS_HOST);
+  return config.redis !== null;
 }
 
 /**
@@ -230,19 +230,18 @@ async function listen({ onStatusChange, onPrivChange, onCustomMapChange } = {}) 
 
   let client = null;
   try {
+    const { host, port, ...auth } = config.redis;
     client = createClient({
       socket: {
-        host: process.env.REDIS_HOST,
-        port: Number(process.env.REDIS_PORT || 6379),
+        host,
+        port,
         connectTimeout: 5000,
         // Ao contrário do publisher, aqui a reconexão infinita é o que se quer:
         // é uma assinatura de vida longa, e desistir dela deixaria o bot mudo
         // para sempre sem ninguém perceber. O teto evita rajada de tentativas.
         reconnectStrategy: (retries) => Math.min(retries * 500, 30000),
       },
-      username: process.env.REDIS_USER || undefined,
-      password: process.env.REDIS_PASS || undefined,
-      database: Number(process.env.REDIS_DB || 0),
+      ...auth,
     });
 
     client.on('error', (err) => logError('daycoreEvents:redis', err));

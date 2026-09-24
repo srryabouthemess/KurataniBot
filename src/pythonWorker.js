@@ -26,6 +26,7 @@
 const { spawn } = require('child_process');
 const path = require('path');
 const { logErrorOnce } = require('./logger');
+const config = require('./config');
 
 const SCRIPT = path.join(__dirname, 'pp_calc.py');
 
@@ -56,7 +57,7 @@ const _stats = { spawns: 0, served: 0, failed: 0 };
  * plataforma.
  */
 function pythonBin() {
-  return process.env.PYTHON_BIN || (process.platform === 'win32' ? 'python' : 'python3');
+  return config.pythonBin;
 }
 
 // ─── Registro de falhas ───────────────────────────────────────────────────────

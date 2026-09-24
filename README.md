@@ -52,6 +52,8 @@ OSU_CLIENT_ID=      # osu! → Account → OAuth
 OSU_CLIENT_SECRET=
 ```
 
+Se quiser conferir antes de subir, `npm run config:check` aponta o que estiver faltando ou malformado. O bot faz a mesma conferência no boot e não sobe com erro.
+
 E suba:
 
 ```bash

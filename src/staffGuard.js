@@ -29,6 +29,7 @@
 const { getStaffLink } = require('./db');
 const daycore = require('./daycoreAdmin');
 const { logError } = require('./logger');
+const config = require('./config');
 
 /**
  * Resolve quem está rodando o comando e confirma que pode.
@@ -39,7 +40,7 @@ const { logError } = require('./logger');
  * @returns {Promise<{osuId: number, osuName: string, priv: number} | {error: string}>}
  */
 async function resolveStaff(interaction, requiredPriv, s) {
-  const guildId = process.env.DAYCORE_GUILD_ID;
+  const guildId = config.daycore.guildId;
 
   if (!guildId) return { error: s.admin_not_configured };
   if (interaction.guildId !== guildId) return { error: s.admin_wrong_guild };
