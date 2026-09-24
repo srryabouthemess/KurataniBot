@@ -38,14 +38,13 @@
  */
 require('dotenv').config();
 
-const fs = require('fs');
-const path = require('path');
 const { Client, Collection, GatewayIntentBits, PermissionFlagsBits } = require('discord.js');
 
 const servers = require('../src/servers');
 const osu = require('../src/osuClient');
 const pp = require('../src/pp');
 const db = require('../src/db');
+const { loadCommands } = require('../src/bot/loadCommands');
 
 const [canalId, ...flags] = process.argv.slice(2);
 const ENVIAR = flags.includes('--enviar');
@@ -63,29 +62,29 @@ const jogadorDe = (s) => PLAYERS[servers.namespace(s.key)] ?? 'pudim2';
 const MAPA = 1103981;
 
 const casos = [];
-const caso = (nome, arquivo, opcoes, extra) => casos.push({ nome, arquivo, opcoes, extra });
+const caso = (nome, cmd, opcoes, extra) => casos.push({ nome, cmd, opcoes, extra });
 
 for (const server of servers.all()) {
   const player = jogadorDe(server);
-  caso(`profile ${server.key}`,  'profile.js',  { player, server: server.key });
-  caso(`topplays ${server.key}`, 'topplays.js', { player, server: server.key });
-  caso(`recent ${server.key}`,   'recent.js',   { player, server: server.key });
-  caso(`leaderboard ${server.key}`, 'leaderboard.js', { server: server.key });
-  caso(`topscores ${server.key}`, 'topscores.js', { server: server.key });
+  caso(`profile ${server.key}`,  'profile',  { player, server: server.key });
+  caso(`topplays ${server.key}`, 'topplays', { player, server: server.key });
+  caso(`recent ${server.key}`,   'recent',   { player, server: server.key });
+  caso(`leaderboard ${server.key}`, 'leaderboard', { server: server.key });
+  caso(`topscores ${server.key}`, 'topscores', { server: server.key });
 }
-caso('pp',       'pp.js',       { player: PLAYERS.official, target: 6000 });
-caso('simulate', 'simulate.js', { map: String(MAPA), mods: 'HDDT', acc: 99 });
-caso('whatif',   'whatif.js',   { player: PLAYERS.official, pp: 500 });
-caso('score',    'score.js',    { player: PLAYERS.official, map: String(MAPA) });
-caso('compare',  'compare.js',  { user1: PLAYERS.official, user2: 'mrekk' });
+caso('pp',       'pp',       { player: PLAYERS.official, target: 6000 });
+caso('simulate', 'simulate', { map: String(MAPA), mods: 'HDDT', acc: 99 });
+caso('whatif',   'whatif',   { player: PLAYERS.official, pp: 500 });
+caso('score',    'score',    { player: PLAYERS.official, map: String(MAPA) });
+caso('compare',  'compare',  { user1: PLAYERS.official, user2: 'mrekk' });
 // O caso cruzado tem embed próprio — o rótulo do servidor só entra quando os
 // dois lados diferem, então o de cima não o exercita.
-caso('compare cruzado', 'compare.js', {
+caso('compare cruzado', 'compare', {
   user1: PLAYERS.official, server:  'official',
   user2: PLAYERS.akatsuki, server2: 'akatsuki',
 });
-caso('help',     'help.js',     {});
-caso('diag',     'diag.js',     {});
+caso('help',     'help',     {});
+caso('diag',     'diag',     {});
 
 /**
  * Interação que responde NO CANAL.
@@ -149,11 +148,7 @@ const client = new Client({ intents: [GatewayIntentBits.Guilds] });
 // O /help confere o catálogo contra `client.commands`, que o index.js monta no
 // boot. Aqui o Client é cru, então a coleção precisa ser montada do mesmo jeito
 // — sem ela o comando estoura em `available.has(...)`.
-client.commands = new Collection();
-for (const arquivo of fs.readdirSync(path.join(__dirname, '..', 'src', 'commands')).filter(f => f.endsWith('.js'))) {
-  const comando = require(path.join(__dirname, '..', 'src', 'commands', arquivo));
-  if (comando?.data?.name) client.commands.set(comando.data.name, comando);
-}
+client.commands = new Collection(loadCommands().commands);
 
 client.once('clientReady', async () => {
   console.log(`bot: ${client.user.tag}\n`);
@@ -195,7 +190,7 @@ client.once('clientReady', async () => {
       // nick recentemente pode não resolver, e aí a linha some do teste sem que
       // isso tenha a ver com o que se quer olhar.
       const alvo = String(entrada.user_id ?? entrada.id ?? entrada.username);
-      caso(`recent #${i + 1} ${entrada.username ?? alvo}`, 'recent.js',
+      caso(`recent #${i + 1} ${entrada.username ?? alvo}`, 'recent',
         { player: alvo, server: 'official' });
     });
   }
@@ -212,8 +207,8 @@ client.once('clientReady', async () => {
   console.log(`\nenviando ${lista.length} comandos...\n`);
   let falhas = 0;
 
-  for (const { nome, arquivo, opcoes, extra = {} } of lista) {
-    const comando = require(`../src/commands/${arquivo}`);
+  for (const { nome, cmd, opcoes, extra = {} } of lista) {
+    const comando = client.commands.get(cmd);
     const interaction = interacaoNoCanal(canal, client, opcoes, extra);
 
     try {

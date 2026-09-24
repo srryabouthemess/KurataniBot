@@ -3,7 +3,7 @@
  * O índice do bot: o que dá para fazer e por onde começar.
  *
  * A lista é curada, não derivada de `client.commands`. A coleção traz também os
- * aliases (`/osu`, `/rs`, `/top`, `/wi`, `/c`, `/choke`, `/lb`) e os administrativos: listados um por
+ * aliases (ver bot/aliases.js) e os administrativos: listados um por
  * linha, dobrariam o tamanho da resposta sem ajudar quem chegou agora. Aqui os
  * aliases aparecem ao lado do comando que eles chamam, e os administrativos só
  * no Discord onde de fato funcionam.
@@ -18,6 +18,7 @@ const { SlashCommandBuilder, EmbedBuilder, ApplicationIntegrationType, Interacti
 const servers = require('../servers');
 const { PREFIX, ENABLED: PREFIX_ENABLED } = require('../prefix/config');
 const { t } = require('../i18n');
+const ALIAS_TABLE = require('../bot/aliases');
 
 /** Os grupos, na ordem em que aparecem. A descrição sai de `help_cmd_<nome>`. */
 const GROUPS = [
@@ -32,16 +33,13 @@ const GROUPS = [
  */
 const ADMIN_GROUP = { key: 'admin', commands: ['nominate', 'moderate', 'role', 'wipe', 'scorewipe', 'invitecode', 'staff'] };
 
-/** Atalhos, mostrados junto do comando de origem em vez de em linha própria. */
-const ALIASES = {
-  profile:     ['osu'],
-  recent:      ['rs'],
-  topplays:    ['top'],
-  nochoke:     ['nc'],
-  score:       ['c', 'choke'],
-  whatif:      ['wi'],
-  leaderboard: ['lb'],
-};
+/**
+ * Atalhos, mostrados junto do comando de origem em vez de em linha própria.
+ * Saem da mesma tabela que cria os aliases, então não há lista paralela para
+ * esquecer de atualizar.
+ */
+const ALIASES = {};
+for (const alias of ALIAS_TABLE) (ALIASES[alias.of] ??= []).push(alias.name);
 
 /** Uma linha do help: nome em negrito, atalhos entre parênteses, descrição. */
 function commandLine(name, available, s) {

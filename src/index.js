@@ -1,10 +1,8 @@
 require('dotenv').config({ quiet: true });
-const fs = require('fs');
-const path = require('path');
-const crypto = require('crypto');
 const { Client, Collection, GatewayIntentBits, REST, Routes, MessageFlags } = require('discord.js');
 const { logError } = require('./logger');
-const { t } = require('./i18n');
+const { t, forGuild } = require('./i18n');
+const { loadCommands, commandsPayload, hashCommands } = require('./bot/loadCommands');
 const db = require('./db');
 const pp = require('./pp');
 const cooldowns = require('./cooldowns');
@@ -14,7 +12,6 @@ const emojis = require('./emojis');
 const daycoreAdmin = require('./daycoreAdmin');
 const daycoreEvents = require('./daycoreEvents');
 const announce = require('./announce');
-const { forGuild } = require('./i18n');
 
 const client = new Client({
   // INTENTS vem vazio quando o modo texto (`k!comando`) está desligado: ler o
@@ -32,34 +29,10 @@ const client = new Client({
   allowedMentions: { parse: [], repliedUser: false },
 });
 
-client.commands = new Collection();
-
-const commandsPath = path.join(__dirname, 'commands');
-const commandFiles = fs.readdirSync(commandsPath).filter(file => file.endsWith('.js'));
-
-// Cada arquivo é validado antes de entrar: um helper solto nesta pasta, ou um
-// comando com erro de sintaxe, fazia `command.data.name` estourar aqui e o
-// processo morrer ANTES do login. Sob supervisor isso não é uma falha visível —
-// é loop de restart, e o bot fica fora do ar até alguém ler o log. Perder um
+// O loader pula o comando que não carrega (ver bot/loadCommands.js): perder um
 // comando é bem melhor do que perder o bot inteiro por causa dele.
-for (const file of commandFiles) {
-  const filePath = path.join(commandsPath, file);
-
-  let command;
-  try {
-    command = require(filePath);
-  } catch (error) {
-    logError(`commands:${file}`, error);
-    continue;
-  }
-
-  if (!command?.data?.name || typeof command.execute !== 'function') {
-    console.warn(`[commands] ${file} ignorado: não exporta data.name e execute.`);
-    continue;
-  }
-
-  client.commands.set(command.data.name, command);
-}
+const { commands, failures: commandFailures } = loadCommands();
+client.commands = new Collection(commands);
 
 // Mesmos comandos, também por texto (`k!rs mrekk`). Não faz nada sem
 // COMMAND_PREFIX no .env.
@@ -70,16 +43,6 @@ prefixCommands.register(client);
 // comandos por texto, então só é ligado junto com eles.
 if (prefixCommands.ENABLED) {
   client.on('messageCreate', message => mapContext.watch(message));
-}
-
-/**
- * Hash estável do conjunto de comandos. Ordena por nome porque index.js e
- * deploy-commands.js montam a lista de formas diferentes — sem ordenar, os
- * dois poderiam gerar hashes distintos para o mesmo conjunto.
- */
-function hashCommands(payload) {
-  const sorted = [...payload].sort((a, b) => a.name.localeCompare(b.name));
-  return crypto.createHash('sha256').update(JSON.stringify(sorted)).digest('hex');
 }
 
 /**
@@ -95,7 +58,15 @@ function hashCommands(payload) {
  * deploy-commands.js continua funcionando para forçar um registro manual.
  */
 async function syncCommandsIfChanged() {
-  const payload = [...client.commands.values()].map(c => c.data.toJSON());
+  // Registrar a lista sem o comando que falhou ao carregar o APAGARIA do
+  // Discord para todo mundo — e o próximo boot, já corrigido, teria de
+  // registrar de novo. Com falha, o registro anterior fica como está.
+  if (commandFailures.length > 0) {
+    console.warn(`[deploy] ${commandFailures.length} comando(s) não carregaram; registro no Discord mantido como estava.`);
+    return;
+  }
+
+  const payload = commandsPayload(client.commands);
   const hash = hashCommands(payload);
 
   if (db.getMeta('commands_hash') === hash) return;

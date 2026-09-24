@@ -13,25 +13,18 @@
  *
  * O terceiro é o motivo de a lista ser conferida nos dois sentidos.
  */
-const fs = require('fs');
-const path = require('path');
 const test = require('node:test');
 const assert = require('node:assert');
 
 const { catalog } = require('../src/commands/help');
+const { loadCommands } = require('../src/bot/loadCommands');
 const { GROUPS, ADMIN_GROUP, ALIASES } = catalog;
 
 const LANGS = ['pt', 'en', 'ru'];
 const load = lang => require(`../src/i18n/${lang}`)({ ADMIN: 'Servidor' });
 
-/** Os nomes que o bot registra de fato, montados como no index.js. */
-const registered = (() => {
-  const dir = path.join(__dirname, '..', 'src', 'commands');
-  const names = fs.readdirSync(dir)
-    .filter(file => file.endsWith('.js'))
-    .map(file => require(path.join(dir, file)).data.name);
-  return new Set(names);
-})();
+/** Os nomes que o bot registra de fato, pelo mesmo loader do index.js. */
+const registered = new Set(loadCommands({ strict: true }).commands.keys());
 
 const listed = [...GROUPS, ADMIN_GROUP].flatMap(group => group.commands);
 

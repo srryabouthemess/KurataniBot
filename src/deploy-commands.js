@@ -1,24 +1,18 @@
 const { REST, Routes } = require('discord.js');
-const fs = require('node:fs');
-const path = require('node:path');
-const crypto = require('node:crypto');
 require('dotenv').config({ quiet: true });
 const db = require('./db');
 const { logError } = require('./logger');
+const { loadCommands, commandsPayload, hashCommands } = require('./bot/loadCommands');
 
-const commands = [];
-// Ajuste 'commands' para o nome da sua pasta onde estão os arquivos .js dos comandos
-const commandsPath = path.join(__dirname, 'commands'); 
-const commandFiles = fs.readdirSync(commandsPath).filter(file => file.endsWith('.js'));
-
-for (const file of commandFiles) {
-    const filePath = path.join(commandsPath, file);
-    const command = require(filePath);
-    if ('data' in command && 'execute' in command) {
-        commands.push(command.data.toJSON());
-    } else {
-        console.log(`[AVISO] O comando em ${filePath} está faltando a propriedade "data" ou "execute".`);
-    }
+// Estrito, ao contrário do boot: registrar uma lista sem o comando que não
+// carregou o apagaria do Discord. Aqui qualquer falha aborta antes do PUT.
+let commands;
+try {
+    commands = commandsPayload(loadCommands({ strict: true }).commands);
+} catch (error) {
+    logError('deploy-commands', error);
+    console.error('Registro cancelado: um comando não carregou (ver acima).');
+    process.exit(1);
 }
 
 const rest = new REST().setToken(process.env.DISCORD_TOKEN);
@@ -37,10 +31,7 @@ const rest = new REST().setToken(process.env.DISCORD_TOKEN);
         // Grava o mesmo hash que o index.js usa para decidir se precisa
         // registrar no boot — sem isso, o próximo start faria um registro
         // redundante logo depois deste.
-        // Mesma ordenação do index.js, para os dois gerarem o mesmo hash.
-        const sorted = [...commands].sort((a, b) => a.name.localeCompare(b.name));
-        const hash = crypto.createHash('sha256').update(JSON.stringify(sorted)).digest('hex');
-        db.setMeta('commands_hash', hash);
+        db.setMeta('commands_hash', hashCommands(commands));
         db.close();
 
         console.log('✅ Sucesso! Comandos registrados globalmente.');

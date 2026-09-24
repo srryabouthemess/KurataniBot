@@ -24,12 +24,11 @@
  */
 require('dotenv').config();
 
-const fs = require('fs');
-const path = require('path');
 
 const servers = require('../src/servers');
 const pp = require('../src/pp');
 const db = require('../src/db');
+const { loadCommands } = require('../src/bot/loadCommands');
 
 // Um Discord id que não é de ninguém: os comandos que leem link vão achar vazio
 // e cair no caminho "sem link", que é o que queremos exercitar sem mexer no
@@ -44,14 +43,8 @@ const PLAYERS = { official: 'kuratani', akatsuki: '47379', daycore: 'pudim2' };
 const jogadorDe = (server) => PLAYERS[servers.namespace(server.key)] ?? 'pudim2';
 const MAPA = 1103981;
 
-/** Os comandos registrados, como o index.js os monta — o /help confere contra isto. */
-function comandosRegistrados() {
-  const dir = path.join(__dirname, '..', 'src', 'commands');
-  const nomes = fs.readdirSync(dir)
-    .filter(f => f.endsWith('.js'))
-    .map(f => require(path.join(dir, f)).data.name);
-  return new Map(nomes.map(n => [n, true]));
-}
+/** Os comandos registrados, pelo mesmo loader do index.js — o /help confere contra isto. */
+const comandos = loadCommands().commands;
 
 /** Uma interação com o que os comandos de fato tocam. */
 function fakeInteraction(opcoes = {}, { subcommand = null, guildId = '111' } = {}) {
@@ -80,7 +73,7 @@ function fakeInteraction(opcoes = {}, { subcommand = null, guildId = '111' } = {
       user: { id: '2', displayAvatarURL: () => 'https://cdn.discordapp.com/embed/avatars/0.png' },
       users: { fetch: async (id) => ({ id }) },
       // O /help confere o catálogo contra o que está registrado de verdade.
-      commands: comandosRegistrados(),
+      commands: comandos,
     },
 
     options: {
@@ -120,65 +113,65 @@ function resumir(enviado) {
 }
 
 const casos = [];
-const caso = (nome, arquivo, opcoes, extra) => casos.push({ nome, arquivo, opcoes, extra });
+const caso = (nome, cmd, opcoes, extra) => casos.push({ nome, cmd, opcoes, extra });
 
 // ── Consulta: uma vez por servidor configurado ────────────────────────────────
 for (const server of servers.all()) {
   const player = jogadorDe(server);
-  caso(`/profile  ${server.label}`, 'profile.js', { player, server: server.key });
-  caso(`/topplays ${server.label}`, 'topplays.js', { player, server: server.key });
+  caso(`/profile  ${server.label}`, 'profile', { player, server: server.key });
+  caso(`/topplays ${server.label}`, 'topplays', { player, server: server.key });
   // O mesmo comando com filtro e ordenação: o caminho muda de verdade, porque
   // ordenar acontece sobre o score CRU, e "cru" tem forma diferente em cada
   // tipo de servidor (ver topFilter.js) — é o que só roda contra a API real.
-  caso(`/topplays -acc ${server.label}`, 'topplays.js',
+  caso(`/topplays -acc ${server.label}`, 'topplays',
     { player, server: server.key, sort: 'acc', mods: 'HD' });
-  caso(`/recent   ${server.label}`, 'recent.js', { player, server: server.key });
+  caso(`/recent   ${server.label}`, 'recent', { player, server: server.key });
   // Só quando o servidor tem par RX: exercita o `modo:` explícito nos três
   // sentidos — o caso de cima cobre só a chave que `server:` resolveu.
   if (servers.has(`${server.key}_rx`)) {
-    caso(`/recent VN   ${server.label}`, 'recent.js', { player, server: server.key, modo: 'vn' });
-    caso(`/recent RX   ${server.label}`, 'recent.js', { player, server: server.key, modo: 'rx' });
-    caso(`/recent BOTH ${server.label}`, 'recent.js', { player, server: server.key, modo: 'both' });
+    caso(`/recent VN   ${server.label}`, 'recent', { player, server: server.key, modo: 'vn' });
+    caso(`/recent RX   ${server.label}`, 'recent', { player, server: server.key, modo: 'rx' });
+    caso(`/recent BOTH ${server.label}`, 'recent', { player, server: server.key, modo: 'both' });
   }
   // Este não depende de jogador, mas depende do servidor: é o único comando que
   // chama `leaderboard` no adaptador, e cada tipo o serve de um endpoint
   // diferente (ver osu/).
-  caso(`/leaderboard ${server.label}`, 'leaderboard.js', { server: server.key });
+  caso(`/leaderboard ${server.label}`, 'leaderboard', { server: server.key });
   // Nos servidores que não são bancho.py o esperado é a recusa explicando por
   // quê — e ela também precisa continuar saindo.
-  caso(`/topscores ${server.label}`, 'topscores.js', { server: server.key });
+  caso(`/topscores ${server.label}`, 'topscores', { server: server.key });
 }
 
 // ── Cálculo: não dependem de jogador ──────────────────────────────────────────
-caso('/pp',       'pp.js',       { map: String(MAPA), acc: 98 });
-caso('/simulate', 'simulate.js', { map: String(MAPA), mods: 'HDDT', acc: 99 });
+caso('/pp',       'pp',       { map: String(MAPA), acc: 98 });
+caso('/simulate', 'simulate', { map: String(MAPA), mods: 'HDDT', acc: 99 });
 // Com mods, que é onde a tabela de pp deixa de ser a do mapa cru: se os
 // atributos ajustados sumirem, é aqui que aparece.
-caso('/map',      'map.js',      { map: String(MAPA), mods: 'HDDT' });
-caso('/whatif',   'whatif.js',   { player: PLAYERS.official, pp: 500 });
-caso('/score',    'score.js',    { player: PLAYERS.official, map: String(MAPA) });
-caso('/compare',  'compare.js',  { player: PLAYERS.official, map: String(MAPA) });
+caso('/map',      'map',      { map: String(MAPA), mods: 'HDDT' });
+caso('/whatif',   'whatif',   { player: PLAYERS.official, pp: 500 });
+caso('/score',    'score',    { player: PLAYERS.official, map: String(MAPA) });
+caso('/compare',  'compare',  { player: PLAYERS.official, map: String(MAPA) });
 
 // ── Sem rede ──────────────────────────────────────────────────────────────────
-caso('/help',     'help.js',     {});
-caso('/diag',     'diag.js',     {});
-caso('/language', 'language.js', {}, { subcommand: 'status' });
-caso('/link',     'link.js',     {}, { subcommand: 'status' });
+caso('/help',     'help',     {});
+caso('/diag',     'diag',     {});
+caso('/language', 'language', {}, { subcommand: 'status' });
+caso('/link',     'link',     {}, { subcommand: 'status' });
 
 // ── Administrativos: só para conferir que RECUSAM ─────────────────────────────
-caso('/nominate (recusa)', 'nominate.js', { map: '1' }, { subcommand: 'queue', esperaRecusa: true });
-caso('/moderate (recusa)', 'moderate.js', { player: '1' }, { subcommand: 'log', esperaRecusa: true });
-caso('/staff    (recusa)', 'staff.js',    {}, { subcommand: 'list', esperaRecusa: true });
-caso('/wipe     (recusa)', 'wipe.js',     { player: '1', mode: '0', reason: 'x' }, { esperaRecusa: true });
-caso('/scorewipe (recusa)', 'scorewipe.js', { player: '1', mode: '0', reason: 'x' }, { esperaRecusa: true });
-caso('/role     (recusa)', 'role.js',     { player: '1', role: 'nominator', reason: 'x' }, { subcommand: 'give', esperaRecusa: true });
-caso('/invitecode (recusa)', 'invitecode.js', {}, { esperaRecusa: true });
+caso('/nominate (recusa)', 'nominate', { map: '1' }, { subcommand: 'queue', esperaRecusa: true });
+caso('/moderate (recusa)', 'moderate', { player: '1' }, { subcommand: 'log', esperaRecusa: true });
+caso('/staff    (recusa)', 'staff',    {}, { subcommand: 'list', esperaRecusa: true });
+caso('/wipe     (recusa)', 'wipe',     { player: '1', mode: '0', reason: 'x' }, { esperaRecusa: true });
+caso('/scorewipe (recusa)', 'scorewipe', { player: '1', mode: '0', reason: 'x' }, { esperaRecusa: true });
+caso('/role     (recusa)', 'role',     { player: '1', role: 'nominator', reason: 'x' }, { subcommand: 'give', esperaRecusa: true });
+caso('/invitecode (recusa)', 'invitecode', {}, { esperaRecusa: true });
 
 (async () => {
   let falhas = 0;
 
-  for (const { nome, arquivo, opcoes, extra = {} } of casos) {
-    const comando = require(path.join(__dirname, '..', 'src', 'commands', arquivo));
+  for (const { nome, cmd, opcoes, extra = {} } of casos) {
+    const comando = comandos.get(cmd);
     const { interaction, enviado } = fakeInteraction(opcoes, extra);
 
     const inicio = Date.now();

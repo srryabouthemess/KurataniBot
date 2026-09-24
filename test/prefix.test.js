@@ -10,6 +10,7 @@ const { MessageFlags } = require('discord.js');
 const { fakeMessage, firstReply, drain } = require('./helpers');
 
 const prefixCommands = require('../src/prefixCommands');
+const { loadCommands } = require('../src/bot/loadCommands');
 
 const NAMES = [
   'recent', 'rs', 'score', 'c', 'simulate', 'pp',
@@ -18,8 +19,9 @@ const NAMES = [
 
 let captured = null;
 const commands = new Map();
+const { commands: loaded } = loadCommands({ strict: true });
 for (const name of NAMES) {
-  const real = require(`../src/commands/${name}`);
+  const real = loaded.get(name);
   commands.set(name, {
     data: real.data,
     prefix: real.prefix,
