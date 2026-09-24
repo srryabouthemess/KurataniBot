@@ -10,7 +10,8 @@
  * ── Como está dividido ────────────────────────────────────────────────────────
  *   connection.js   abre os dois arquivos e o ATTACH que os une numa conexão
  *   schema.js       o formato ATUAL das tabelas — o que um banco novo ganha
- *   migrations.js   o caminho de quem partiu de uma versão anterior
+ *   migrations.js   o caminho de quem partiu de uma versão anterior, e a recusa
+ *                   de quem é antigo demais para ele
  *   users.js        links de conta, servidor preferido, idioma
  *   staff.js        vínculo de staff e a prova de posse da conta
  *   nominations.js  fila de nomeação e log de ação administrativa
@@ -37,10 +38,15 @@ const nominations = require('./nominations');
 const mapCache    = require('./mapCache');
 const meta        = require('./meta');
 
-// A ordem é obrigatória: o schema cria o que as migrações vão acertar, e as
-// migrações precisam terminar antes de qualquer consulta rodar.
+// A ordem é obrigatória. A conferência vem antes de tudo: o schema aplicado por
+// cima de um banco que as migrações não sabem levar misturaria dois formatos. O
+// "novo" é medido antes do schema, que é quem cria as tabelas. E as migrações
+// terminam antes de qualquer consulta rodar.
+const novo = migrations.ehNovo(connection.db);
+migrations.conferirOrigem(connection.db, { novo });
 schema.apply(connection.db);
-migrations.run(connection.db);
+if (novo) migrations.carimbar(connection.db);
+else migrations.run(connection.db);
 
 module.exports = {
   ...users,

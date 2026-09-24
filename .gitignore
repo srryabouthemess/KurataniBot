@@ -27,30 +27,18 @@ Thumbs.db
 .vscode/
 .idea/
 
-# Cache local de beatmaps (regenerável, não precisa versionar)
-beatmap_cache.json
-beatmap_cache.json.migrated
-beatmap_cache.json.corrupt
+# Dados gerados em runtime (NUNCA commitar — contém IDs do Discord e nomes de
+# usuário reais vinculados por quem usa o bot). Moram todos em data/: o bot.db,
+# o cache.db e os -wal/-shm que o modo WAL cria ao lado de cada um — ignorar só
+# o bot.db deixaria os dados vazarem pelo -wal, que guarda as escritas recentes.
+data/
 
-# Dados de usuários gerados em runtime (NUNCA commitar — contém IDs
-# do Discord e nomes de usuário reais vinculados por quem usa o bot)
-#
-# O banco roda em modo WAL, que mantém as transações recentes em arquivos
-# separados (-wal e -shm). Ignorar só bot.db deixaria os dados de usuário
-# vazarem por eles: o -wal chega a centenas de KB de escritas recentes.
-bot.db
-bot.db-journal
-bot.db-wal
-bot.db-shm
-
-# Cache de mapas (arquivo separado do bot.db justamente por ser descartável:
-# some sem prejuízo nenhum, o bot rebaixa o que precisar)
-cache.db
-cache.db-journal
-cache.db-wal
-cache.db-shm
-links.json
-links.json.migrated
+# Os mesmos arquivos na RAIZ, de quando os dados moravam lá. Quem atualiza o
+# bot antes de movê-los (ver src/paths.js) não pode arriscar commitá-los no meio
+# do caminho. O * pega os -wal/-shm/-journal e os backups (bot.db.antes-...).
+bot.db*
+cache.db*
+links.json*
+languages.json*
 langs.json
-languages.json
-languages.json.migrated
+beatmap_cache.json*

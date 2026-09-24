@@ -18,7 +18,24 @@ try {
   process.exit(1);
 }
 
-const { BOT_DB, CACHE_DB } = require('../paths');
+const fs = require('fs');
+const { BOT_DB, CACHE_DB, DATA_DIR, dadosEsquecidosNaRaiz } = require('../paths');
+
+// ANTES de abrir: abrir cria o arquivo, e um bot.db vazio em data/ com o de
+// verdade parado na raiz é justamente o que esta checagem existe para impedir
+// (ver paths.js).
+const esquecidos = dadosEsquecidosNaRaiz();
+if (esquecidos.length > 0) {
+  throw new Error(
+    `Os dados do bot agora ficam em data/, e ainda estão na raiz do projeto: ${esquecidos.join(', ')}.\n` +
+    '  Com o bot parado, mova esses arquivos para data/ (os bancos junto com os\n' +
+    '  -wal e -shm deles; os backups bot.db.* podem ir junto). Da raiz do projeto:\n' +
+    '    mkdir -p data && mv bot.db* cache.db* data/\n' +
+    '  Ou defina KURATANI_DATA_DIR no .env apontando para onde eles estão.',
+  );
+}
+
+fs.mkdirSync(DATA_DIR, { recursive: true });
 
 const db = new DatabaseSync(BOT_DB);
 

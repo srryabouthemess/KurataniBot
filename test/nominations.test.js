@@ -1,6 +1,8 @@
 /**
- * Nomeação: unicidade por conta de JOGO (não por conta do Discord) e a
- * migração que troca a chave da tabela antiga.
+ * Nomeação: unicidade por conta de JOGO (não por conta do Discord).
+ *
+ * (A migração que trocava a chave da tabela antiga saiu junto com a faixa 0→1
+ * das migrações; um banco daquela época agora é recusado — ver dbMigrations.)
  *
  * Roda contra um bot.db descartável, apontado por `KURATANI_DATA_DIR` (ver
  * dbWorkspace em helpers.js). O caminho do banco saía de `src/` e não havia como
@@ -62,60 +64,5 @@ test('banco novo já nasce com a chave certa', async t => {
     db.addNomination(100, 5, 'discord-A', 777, 'fulano');
     assert.equal(db.getNominations(100, 2).length, 1);
     assert.equal(db.getNominations(100, 5).length, 1);
-  });
-});
-
-test('banco antigo é migrado e deduplicado', async t => {
-  const { dbPath, load, primaryKey } = workspace(t);
-
-  // Schema ANTIGO, com dois votos da mesma conta de jogo.
-  const old = new DatabaseSync(dbPath);
-  old.exec(`
-    CREATE TABLE map_nominations (
-      set_id        INTEGER NOT NULL,
-      target_status INTEGER NOT NULL,
-      discord_id    TEXT    NOT NULL,
-      osu_id        INTEGER NOT NULL,
-      osu_name      TEXT,
-      created_at    INTEGER NOT NULL,
-      PRIMARY KEY (set_id, target_status, discord_id)
-    );
-    INSERT INTO map_nominations VALUES
-      (200, 2, 'discord-A', 777, 'fulano',  1000),
-      (200, 2, 'discord-B', 777, 'fulano',  2000),
-      (200, 2, 'discord-C', 888, 'sicrano', 3000);
-  `);
-  old.close();
-
-  const db = load();
-  const rows = db.getNominations(200, 2);
-
-  await t.test('o voto repetido some', () => {
-    assert.equal(rows.length, 2);
-  });
-
-  await t.test('fica a nomeação mais antiga, com o Discord dela', () => {
-    const row = rows.find(r => r.osu_id === 777);
-    assert.equal(row.created_at, 1000);
-    assert.equal(row.discord_id, 'discord-A');
-  });
-
-  await t.test('a outra pessoa é preservada', () => {
-    assert.ok(rows.some(r => r.osu_id === 888));
-  });
-
-  await t.test('a chave da tabela foi trocada', () => {
-    assert.equal(primaryKey(), 'osu_id,set_id,target_status');
-  });
-
-  await t.test('o duplicado não reaparece depois', () => {
-    db.addNomination(200, 2, 'discord-B', 777, 'fulano');
-    assert.equal(db.getNominations(200, 2).length, 2);
-  });
-
-  await t.test('carregar de novo é idempotente', () => {
-    const again = load();
-    assert.equal(again.getNominations(200, 2).length, 2);
-    again.close();
   });
 });
