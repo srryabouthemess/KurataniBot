@@ -11,7 +11,7 @@
 const test = require('node:test');
 const assert = require('node:assert');
 
-const { parseModAction, applyModAction, buildTopIf, adjustGradeForMods } = require('../src/commands/osu/topif');
+const { parseModAction, applyModAction, buildTopIf, adjustGradeForMods } = require('../src/commands/osu/topif/logic');
 const { weightedPP, WEIGHT } = require('../src/weightedPP');
 
 const somaRef = plays =>
