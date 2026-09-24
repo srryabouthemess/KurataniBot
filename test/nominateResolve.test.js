@@ -46,7 +46,7 @@ function setupMock({ serverSets = {}, serverMaps = {}, officialSets = {}, offici
   osuMock.getBeatmap = async id => officialMaps[id] ?? null;
 }
 
-const { resolveSet } = require('../src/commands/admin/nominate');
+const { resolveSet } = require('../src/commands/admin/nominate/set');
 
 const diff = (id, setId) => ({ id, set_id: setId, artist: 'a', title: 't', creator: 'c' });
 

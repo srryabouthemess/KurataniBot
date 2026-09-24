@@ -105,6 +105,29 @@ function dbWorkspace(t) {
 const freshDb = (t) => dbWorkspace(t).load();
 
 /**
+ * O código-fonte de um comando, seja ele um arquivo (`commands/osu/pp.js`) ou
+ * uma pasta (`commands/admin/nominate/`, com as peças lado a lado).
+ *
+ * Existe para os testes que conferem o fonte ("passa pelo adminLog", "exige
+ * DEVELOPER"): a garantia é do COMANDO, e não de qual arquivo dele a linha mora.
+ * Sem isto, mover um helper para o arquivo ao lado quebraria o teste sem que
+ * nada no comportamento tivesse mudado.
+ *
+ * @param {string} rel caminho a partir de `src/commands`, sem extensão
+ */
+function commandSource(rel) {
+  const base = path.join(ROOT, 'commands', rel);
+  if (fs.existsSync(base) && fs.statSync(base).isDirectory()) {
+    return fs.readdirSync(base)
+      .filter(f => f.endsWith('.js'))
+      .sort()
+      .map(f => fs.readFileSync(path.join(base, f), 'utf8'))
+      .join('\n');
+  }
+  return fs.readFileSync(`${base}.js`, 'utf8');
+}
+
+/**
  * Um `.osu` válido e mínimo, com `n` círculos.
  *
  * Sintético de propósito: os testes dos dois motores de cálculo rodam contra as
@@ -130,5 +153,5 @@ function mapaSintetico(n) {
 }
 
 module.exports = {
-  ROOT, fakeMessage, firstReply, drain, dbWorkspace, freshDb, mapaSintetico,
+  ROOT, commandSource, fakeMessage, firstReply, drain, dbWorkspace, freshDb, mapaSintetico,
 };

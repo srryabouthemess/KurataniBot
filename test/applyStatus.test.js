@@ -27,7 +27,7 @@ require.cache[daycorePath] = {
   id: daycorePath, filename: daycorePath, loaded: true, exports: daycoreMock,
 };
 
-const { applyStatus } = require('../src/commands/admin/nominate');
+const { applyStatus } = require('../src/commands/admin/nominate/set');
 
 const RANKED = 2;
 const diffs = (...ids) => ids.map(id => ({ id }));

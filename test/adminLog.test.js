@@ -50,6 +50,7 @@ const db = require('../src/db');
 const osu = require('../src/osuClient');
 const daycore = require('../src/daycoreAdmin');
 const { registrarAcao } = require('../src/adminLog');
+const { commandSource } = require('./helpers');
 const role = require('../src/commands/admin/role');
 
 test.after(() => {
@@ -242,8 +243,7 @@ test('/role: com o banco são, a resposta não traz aviso nenhum', async () => {
 
 // ─── Os três, do mesmo jeito ──────────────────────────────────────────────────
 
-const fonteDe = (nome) =>
-  fs.readFileSync(require.resolve(`../src/commands/admin/${nome}`), 'utf8');
+const fonteDe = (nome) => commandSource(`admin/${nome}`);
 
 for (const nome of ['role', 'moderate', 'wipe', 'nominate']) {
   test(`/${nome} registra pelo adminLog, e não pelo db dentro do try`, () => {
