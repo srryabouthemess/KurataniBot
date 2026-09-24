@@ -44,8 +44,8 @@ como veio:
 as pessoas falam. Tanto faz qual você usar.)
 
 Falta algum? Aquela grade sai como texto (`**A**`), como era antes — a pasta é
-opcional e nada quebra sem ela. Os ícones oficiais não incluem um `F`, então a
-play não completada continua em texto até você pôr um.
+opcional e nada quebra sem ela. Os ícones oficiais não incluem um `F`; o
+`ranking-F.png` daqui é um F simples, à parte da skin.
 
 > Se você usa um aplicativo separado para testes, os emojis são **por
 > aplicativo**: o bot de teste envia para o app dele e o de produção para o
@@ -53,7 +53,8 @@ play não completada continua em texto até você pôr um.
 
 ## De onde vêm estes arquivos
 
-Os oito PNGs aqui são da **skin oficial do osu!**, de ppy Pty Ltd. O código do
+Os oito PNGs de `A` a `XH` são da **skin oficial do osu!**, de ppy Pty Ltd. (O
+`ranking-F.png` não é: a skin não tem F.) O código do
 osu! é MIT, mas os **recursos do jogo não são**: eles saem sob
 [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/), que pede
 atribuição e **proíbe uso comercial**. A atribuição está no
