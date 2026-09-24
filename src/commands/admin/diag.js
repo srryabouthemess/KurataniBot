@@ -3,14 +3,14 @@ const {
   InteractionContextType, MessageFlags,
 } = require('discord.js');
 
-const metrics = require('../lib/metrics');
+const metrics = require('../../lib/metrics');
 // Direto nos workers, e não via pp.js: o que interessa aqui é o estado dos
 // motores, não o cálculo. Pelo pp o comando arrastaria junto o banco e todo o
 // caminho de PP para montar um embed de contadores.
-const pythonWorker = require('../pp/pythonWorker');
-const rosuWorker = require('../pp/rosuWorker');
-const lazerWorker = require('../pp/lazerWorker');
-const { t } = require('../i18n');
+const pythonWorker = require('../../pp/pythonWorker');
+const rosuWorker = require('../../pp/rosuWorker');
+const lazerWorker = require('../../pp/lazerWorker');
+const { t } = require('../../i18n');
 
 /**
  * Diagnóstico do próprio bot.

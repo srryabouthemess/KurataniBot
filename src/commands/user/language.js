@@ -1,7 +1,7 @@
 const { SlashCommandBuilder, PermissionFlagsBits, ApplicationIntegrationType, InteractionContextType, MessageFlags } = require('discord.js');
-const { SUPPORTED_LANGS, t } = require('../i18n');
-const { exigirSubcomando } = require('../subcommands');
-const { setUserLang, setServerLang, getUserLang, getServerLang } = require('../db');
+const { SUPPORTED_LANGS, t } = require('../../i18n');
+const { exigirSubcomando } = require('../../subcommands');
+const { setUserLang, setServerLang, getUserLang, getServerLang } = require('../../db');
 
 module.exports = {
   data: new SlashCommandBuilder()

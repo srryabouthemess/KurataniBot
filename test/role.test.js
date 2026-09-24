@@ -23,7 +23,7 @@ redis.createClient = () => ({
 });
 
 const daycore = require('../src/daycoreAdmin');
-const role = require('../src/commands/role');
+const role = require('../src/commands/admin/role');
 
 const ACTOR = { osuId: 3, discordId: '100000000000000002', discordName: 'staff-dois' };
 
@@ -164,7 +164,7 @@ test('o privilégio exigido vem do cargo escolhido, não de um valor fixo', () =
   // passaria a poder conceder `developer` a um cúmplice — o auto-refuso
   // (mod_cannot_self) só barra a própria conta dele, não a de outra pessoa.
   // Mesmo idioma de test/wipe.test.js, primeiro teste do arquivo.
-  const fonte = require('fs').readFileSync(require.resolve('../src/commands/role'), 'utf8');
+  const fonte = require('fs').readFileSync(require.resolve('../src/commands/admin/role'), 'utf8');
   assert.match(fonte, /resolveStaff\(interaction, role\.requires/);
   assert.doesNotMatch(fonte, /resolveStaff\(interaction, daycore\.Privileges\./);
 });
@@ -173,6 +173,6 @@ test('o /moderate check lista todos os cargos, não só o topo', () => {
   // Quem acabou de receber `whitelisted` sem ter mais nada aparecia como
   // "Player": o comando que serve para conferir a concessão não mostrava a
   // concessão.
-  const fonte = require('fs').readFileSync(require.resolve('../src/commands/moderate'), 'utf8');
+  const fonte = require('fs').readFileSync(require.resolve('../src/commands/admin/moderate'), 'utf8');
   assert.match(fonte, /privNames\(target\.priv\)/);
 });

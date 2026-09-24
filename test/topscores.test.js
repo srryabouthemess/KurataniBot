@@ -16,7 +16,7 @@ const assert = require('node:assert');
 const banchoPy = require('../src/osu/banchoPyApi');
 const oficial  = require('../src/osu/officialApi');
 const ripple   = require('../src/osu/rippleApi');
-const topscores = require('../src/commands/topscores');
+const topscores = require('../src/commands/osu/topscores');
 
 // Uma linha real de /v2/scores?status=2 e o mapa dela, do get_map_info.
 const SCORE = {

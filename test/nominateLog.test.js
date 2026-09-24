@@ -47,7 +47,7 @@ require.cache[daycorePath] = {
 
 const db = require('../src/db');
 const osu = require('../src/osuClient');
-const nominate = require('../src/commands/nominate');
+const nominate = require('../src/commands/admin/nominate');
 
 test.after(() => {
   db.close();

@@ -1,12 +1,12 @@
 const { SlashCommandBuilder, EmbedBuilder, ApplicationIntegrationType, InteractionContextType, MessageFlags } = require('discord.js');
-const osu = require('../osuClient');
-const servers = require('../servers');
-const modo = require('../modo');
-const mapContext = require('../mapContext');
-const { stripClassic, formatMods } = require('../mods');
-const { t } = require('../i18n');
-const { logError } = require('../lib/logger');
-const { safeEditReply } = require('../replies');
+const osu = require('../../osuClient');
+const servers = require('../../servers');
+const modo = require('../../modo');
+const mapContext = require('../../mapContext');
+const { stripClassic, formatMods } = require('../../mods');
+const { t } = require('../../i18n');
+const { logError } = require('../../lib/logger');
+const { safeEditReply } = require('../../replies');
 
 module.exports = {
   data: modo.addOption(new SlashCommandBuilder()

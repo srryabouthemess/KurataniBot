@@ -29,12 +29,12 @@ const {
   InteractionContextType, MessageFlags,
 } = require('discord.js');
 
-const daycoreInvites = require('../daycoreInvites');
-const daycore = require('../daycoreAdmin');
-const { resolveStaff } = require('../staffGuard');
-const { registrarAcao } = require('../adminLog');
-const { t } = require('../i18n');
-const { logError } = require('../lib/logger');
+const daycoreInvites = require('../../daycoreInvites');
+const daycore = require('../../daycoreAdmin');
+const { resolveStaff } = require('../../staffGuard');
+const { registrarAcao } = require('../../adminLog');
+const { t } = require('../../i18n');
+const { logError } = require('../../lib/logger');
 
 const NOTE_MAX_LENGTH = 255; // mesmo teto da coluna `note` no banco.
 

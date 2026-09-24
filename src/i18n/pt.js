@@ -41,7 +41,7 @@ module.exports = ({ ADMIN }) => ({
     `Para ver tudo que eu faço, use \`/help\` (ou \`${prefix}help\`).`,
 
   // ── /help ─────────────────────────────────────────────────────────────────
-  // A ordem e o agrupamento dos comandos ficam no próprio commands/help.js;
+  // A ordem e o agrupamento dos comandos ficam no próprio commands/user/help.js;
   // aqui é só o texto de cada um.
   help_title:              'Comandos do KurataniBot',
   help_intro:              'Estatísticas de osu! no Discord.\n' +
@@ -130,7 +130,7 @@ module.exports = ({ ADMIN }) => ({
   topscores_none:              (label) => `Nenhuma play registrada no **${label}** ainda.`,
   topscores_error:             'Erro ao buscar as melhores plays do servidor.',
   // O motivo vai junto: sem ele a resposta parece defeito do bot, e a pessoa
-  // tenta de novo. Ver o cabeçalho do commands/topscores.js.
+  // tenta de novo. Ver o cabeçalho do commands/osu/topscores.js.
   topscores_unsupported:       (label) =>
     `❌ O **${label}** não publica as melhores plays do servidor — a API dele não tem esse endpoint. ` +
     `Isso funciona nos servidores bancho.py. Para as melhores plays de um jogador, use \`/topplays\`.`,

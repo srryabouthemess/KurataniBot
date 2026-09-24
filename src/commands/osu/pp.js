@@ -1,18 +1,18 @@
 const { SlashCommandBuilder, EmbedBuilder, ApplicationIntegrationType, InteractionContextType, MessageFlags } = require('discord.js');
-const osu = require('../osuClient');
-const servers = require('../servers');
-const modo = require('../modo');
-const { resolvePlayer, fetchPlayer } = require('../userLink');
-const playEmbed = require('../embeds/play');
-const { t } = require('../i18n');
-const { logError } = require('../lib/logger');
-const { safeEditReply } = require('../replies');
+const osu = require('../../osuClient');
+const servers = require('../../servers');
+const modo = require('../../modo');
+const { resolvePlayer, fetchPlayer } = require('../../userLink');
+const playEmbed = require('../../embeds/play');
+const { t } = require('../../i18n');
+const { logError } = require('../../lib/logger');
+const { safeEditReply } = require('../../replies');
 
 // A soma ponderada e a simulação de uma play hipotética moram no weightedPP.js:
 // o /whatif faz a mesma conta pela pergunta oposta ("quanto X me daria" contra
 // "quanto falta para X"), e duas cópias de uma fórmula que precisa concordar já
 // custaram caro neste projeto antes.
-const { weightedPP: calcWeightedPP, comPlayHipotetica } = require('../weightedPP');
+const { weightedPP: calcWeightedPP, comPlayHipotetica } = require('../../weightedPP');
 
 const simulateInsert = (currentPlays, x) => {
   const { weighted, position } = comPlayHipotetica(currentPlays, x);

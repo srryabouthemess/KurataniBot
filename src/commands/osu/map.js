@@ -1,5 +1,5 @@
 /**
- * commands/map.js
+ * commands/osu/map.js
  * O mapa, e quanto ele paga.
  *
  * ── O que faltava ─────────────────────────────────────────────────────────────
@@ -16,15 +16,15 @@
  */
 
 const { SlashCommandBuilder, EmbedBuilder, ApplicationIntegrationType, InteractionContextType, MessageFlags } = require('discord.js');
-const osu = require('../osuClient');
-const servers = require('../servers');
-const modo = require('../modo');
-const mapContext = require('../mapContext');
-const playEmbed = require('../embeds/play');
-const { stripClassic, formatMods } = require('../mods');
-const { t } = require('../i18n');
-const { logError } = require('../lib/logger');
-const { safeEditReply } = require('../replies');
+const osu = require('../../osuClient');
+const servers = require('../../servers');
+const modo = require('../../modo');
+const mapContext = require('../../mapContext');
+const playEmbed = require('../../embeds/play');
+const { stripClassic, formatMods } = require('../../mods');
+const { t } = require('../../i18n');
+const { logError } = require('../../lib/logger');
+const { safeEditReply } = require('../../replies');
 
 /**
  * As acurácias da tabela, da melhor para a pior.

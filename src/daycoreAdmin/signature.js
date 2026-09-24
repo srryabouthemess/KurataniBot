@@ -26,8 +26,8 @@
  * A raiz foi resolvida depois, e este comentário já a descreveu como pendente
  * por mais tempo do que devia: o `/staff register` só emite um código, e quem
  * cria o vínculo é o `/staff confirm`, depois de achar esse código no userpage
- * da conta de jogo — página que só muda por quem entra nela (ver commands/
- * staff.js). A assinatura continua valendo pelo que ela sempre fez: amarrar a
+ * da conta de jogo — página que só muda por quem entra nela (ver
+ * commands/admin/staff.js). A assinatura continua valendo pelo que ela sempre fez: amarrar a
  * ação a uma conta do Discord dentro do log de quem recebeu a ação.
  */
 const SIGNATURE_MARK = 'via KurataniBot';

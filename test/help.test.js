@@ -16,7 +16,7 @@
 const test = require('node:test');
 const assert = require('node:assert');
 
-const { catalog } = require('../src/commands/help');
+const { catalog } = require('../src/commands/user/help');
 const { loadCommands } = require('../src/bot/loadCommands');
 const { GROUPS, ADMIN_GROUP, ALIASES } = catalog;
 

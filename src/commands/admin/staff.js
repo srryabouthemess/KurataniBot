@@ -5,13 +5,13 @@ const {
 
 const crypto = require('crypto');
 
-const osu = require('../osuClient');
-const daycore = require('../daycoreAdmin');
-const db = require('../db');
-const config = require('../config');
-const { t } = require('../i18n');
-const { exigirSubcomando } = require('../subcommands');
-const { logError, logErrorOnce } = require('../lib/logger');
+const osu = require('../../osuClient');
+const daycore = require('../../daycoreAdmin');
+const db = require('../../db');
+const config = require('../../config');
+const { t } = require('../../i18n');
+const { exigirSubcomando } = require('../../subcommands');
+const { logError, logErrorOnce } = require('../../lib/logger');
 
 // Vale para o tempo de ir ao site, editar o perfil e voltar, sem deixar código
 // válido pendurado por horas.

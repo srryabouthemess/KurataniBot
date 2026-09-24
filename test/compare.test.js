@@ -36,7 +36,7 @@ let links         = {};
 }
 
 const { resolveServer, resolveSecondServer } = require('../src/userLink');
-const compare = require('../src/commands/compare');
+const compare = require('../src/commands/osu/compare');
 const servers = require('../src/servers');
 const osu = require('../src/osuClient');
 

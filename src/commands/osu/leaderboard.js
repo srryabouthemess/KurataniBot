@@ -1,5 +1,5 @@
 /**
- * commands/leaderboard.js
+ * commands/osu/leaderboard.js
  * O ranking de pp de um servidor, dez colocados por página.
  *
  * ── Por que a lista inteira vem de uma vez ────────────────────────────────────
@@ -36,16 +36,16 @@
  */
 
 const { SlashCommandBuilder, EmbedBuilder, ApplicationIntegrationType, InteractionContextType, MessageFlags } = require('discord.js');
-const osu = require('../osuClient');
-const servers = require('../servers');
-const modo = require('../modo');
-const { resolveServer } = require('../userLink');
-const { paginate } = require('../pagination');
-const { ppLegivel } = require('../embeds/play');
-const { md } = require('../markdown');
-const { t } = require('../i18n');
-const { logError } = require('../lib/logger');
-const { safeEditReply } = require('../replies');
+const osu = require('../../osuClient');
+const servers = require('../../servers');
+const modo = require('../../modo');
+const { resolveServer } = require('../../userLink');
+const { paginate } = require('../../pagination');
+const { ppLegivel } = require('../../embeds/play');
+const { md } = require('../../markdown');
+const { t } = require('../../i18n');
+const { logError } = require('../../lib/logger');
+const { safeEditReply } = require('../../replies');
 
 const PAGE_SIZE   = 10;
 // Teto dos três adaptadores: o bancho.py recusa acima disso (422) e o Ripple

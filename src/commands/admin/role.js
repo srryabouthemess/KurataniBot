@@ -25,13 +25,13 @@ const {
   InteractionContextType, MessageFlags,
 } = require('discord.js');
 
-const osu = require('../osuClient');
-const daycore = require('../daycoreAdmin');
-const { resolveStaff, checkRedisOrError } = require('../staffGuard');
-const { registrarAcao } = require('../adminLog');
-const { t } = require('../i18n');
-const { exigirSubcomando } = require('../subcommands');
-const { logError } = require('../lib/logger');
+const osu = require('../../osuClient');
+const daycore = require('../../daycoreAdmin');
+const { resolveStaff, checkRedisOrError } = require('../../staffGuard');
+const { registrarAcao } = require('../../adminLog');
+const { t } = require('../../i18n');
+const { exigirSubcomando } = require('../../subcommands');
+const { logError } = require('../../lib/logger');
 
 // Mesmo teto do /moderate e do /wipe. Aqui o texto não vai para o log do
 // servidor, mas vai para o embed e para o admin_actions.

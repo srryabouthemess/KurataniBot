@@ -46,14 +46,14 @@ process.env.KURATANI_DATA_DIR = DATA_DIR;
 const db = require('../src/db');
 
 const COMANDOS = {
-  language: require('../src/commands/language'),
-  link:     require('../src/commands/link'),
-  nominate: require('../src/commands/nominate'),
-  moderate: require('../src/commands/moderate'),
-  staff:    require('../src/commands/staff'),
+  language: require('../src/commands/user/language'),
+  link:     require('../src/commands/user/link'),
+  nominate: require('../src/commands/admin/nominate'),
+  moderate: require('../src/commands/admin/moderate'),
+  staff:    require('../src/commands/admin/staff'),
   // /wipe fica de fora de propósito: não tem subcomando, então nenhuma das
   // duas camadas se aplica a ele.
-  role:     require('../src/commands/role'),
+  role:     require('../src/commands/admin/role'),
 };
 
 test.after(() => {

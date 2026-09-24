@@ -23,11 +23,11 @@ redis.createClient = () => ({
 });
 
 const daycore = require('../src/daycoreAdmin');
-const scorewipe = require('../src/commands/scorewipe');
+const scorewipe = require('../src/commands/admin/scorewipe');
 
 const ACTOR = { osuId: 3, discordId: '100000000000000002', discordName: 'staff-dois' };
 
-const fonte = require('fs').readFileSync(require.resolve('../src/commands/scorewipe'), 'utf8');
+const fonte = require('fs').readFileSync(require.resolve('../src/commands/admin/scorewipe'), 'utf8');
 
 test('exige DEVELOPER, e não ADMINISTRATOR', () => {
   // Mesma razão do /wipe: o receptor do canal não confere privilégio nenhum, só

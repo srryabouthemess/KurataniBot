@@ -57,13 +57,13 @@ const {
   StringSelectMenuBuilder, ApplicationIntegrationType, InteractionContextType, MessageFlags,
 } = require('discord.js');
 
-const osu = require('../osuClient');
-const daycore = require('../daycoreAdmin');
-const { decodeMods, formatMods } = require('../mods');
-const { resolveStaff, checkRedisOrError } = require('../staffGuard');
-const { registrarAcao } = require('../adminLog');
-const { t } = require('../i18n');
-const { logError } = require('../lib/logger');
+const osu = require('../../osuClient');
+const daycore = require('../../daycoreAdmin');
+const { decodeMods, formatMods } = require('../../mods');
+const { resolveStaff, checkRedisOrError } = require('../../staffGuard');
+const { registrarAcao } = require('../../adminLog');
+const { t } = require('../../i18n');
+const { logError } = require('../../lib/logger');
 
 const REASON_MAX_LENGTH = 200;
 

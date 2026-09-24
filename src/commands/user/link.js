@@ -4,14 +4,14 @@ const {
   setPreferredServer, getPreferredServer,
   setPreferredModo, getPreferredModo,
   linkNamespace,
-} = require('../db');
-const { t } = require('../i18n');
-const { exigirSubcomando } = require('../subcommands');
-const osu = require('../osuClient');
-const servers = require('../servers');
-const modo = require('../modo');
-const { logError } = require('../lib/logger');
-const { safeEditReply } = require('../replies');
+} = require('../../db');
+const { t } = require('../../i18n');
+const { exigirSubcomando } = require('../../subcommands');
+const osu = require('../../osuClient');
+const servers = require('../../servers');
+const modo = require('../../modo');
+const { logError } = require('../../lib/logger');
+const { safeEditReply } = require('../../replies');
 
 // Só os servidores, sem as variantes `_rx`: aqui "VN ou RX" é a opção `modo`,
 // e o link em si é o mesmo nos dois (um namespace, ver db/schema.js).

@@ -1,5 +1,5 @@
 /**
- * commands/topscores.js
+ * commands/osu/topscores.js
  * As melhores plays do SERVIDOR — não as de um jogador.
  *
  * ── Por que não é uma opção do /topplays nem do /leaderboard ─────────────────
@@ -32,16 +32,16 @@
  */
 
 const { SlashCommandBuilder, EmbedBuilder, ApplicationIntegrationType, InteractionContextType } = require('discord.js');
-const osu = require('../osuClient');
-const servers = require('../servers');
-const modo = require('../modo');
-const { resolveServer } = require('../userLink');
-const { paginate } = require('../pagination');
-const playEmbed = require('../embeds/play');
-const { md } = require('../markdown');
-const { t } = require('../i18n');
-const { logError } = require('../lib/logger');
-const { safeEditReply } = require('../replies');
+const osu = require('../../osuClient');
+const servers = require('../../servers');
+const modo = require('../../modo');
+const { resolveServer } = require('../../userLink');
+const { paginate } = require('../../pagination');
+const playEmbed = require('../../embeds/play');
+const { md } = require('../../markdown');
+const { t } = require('../../i18n');
+const { logError } = require('../../lib/logger');
+const { safeEditReply } = require('../../replies');
 
 const PAGE_SIZE   = 5;
 const FETCH_LIMIT = 50;

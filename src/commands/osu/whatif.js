@@ -1,19 +1,19 @@
 const { SlashCommandBuilder, EmbedBuilder, ApplicationIntegrationType, InteractionContextType, MessageFlags } = require('discord.js');
-const osu = require('../osuClient');
-const servers = require('../servers');
-const modo = require('../modo');
-const { resolvePlayer, fetchPlayer } = require('../userLink');
-const playEmbed = require('../embeds/play');
+const osu = require('../../osuClient');
+const servers = require('../../servers');
+const modo = require('../../modo');
+const { resolvePlayer, fetchPlayer } = require('../../userLink');
+const playEmbed = require('../../embeds/play');
 const { ppLegivel } = playEmbed;
-const { md } = require('../markdown');
-const { t } = require('../i18n');
-const { logError } = require('../lib/logger');
-const { safeEditReply } = require('../replies');
+const { md } = require('../../markdown');
+const { t } = require('../../i18n');
+const { logError } = require('../../lib/logger');
+const { safeEditReply } = require('../../replies');
 
 // A soma ponderada e a inserção da play hipotética moram no weightedPP.js: o
 // /pp faz a mesma conta pela pergunta oposta ("quanto falta para X" contra
 // "quanto X me daria"), e as duas cópias precisavam concordar para sempre.
-const { weightedPP, comPlayHipotetica } = require('../weightedPP');
+const { weightedPP, comPlayHipotetica } = require('../../weightedPP');
 
 /** Quanto o jogador ganharia com uma play de `hypotheticalPP`. */
 function simulateWhatIf(currentPlays, hypotheticalPP) {

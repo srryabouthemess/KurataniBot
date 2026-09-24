@@ -1,15 +1,15 @@
 const { SlashCommandBuilder, EmbedBuilder, ApplicationIntegrationType, InteractionContextType, MessageFlags } = require('discord.js');
-const osu = require('../osuClient');
-const servers = require('../servers');
-const modo = require('../modo');
-const { resolvePlayer, fetchPlayer } = require('../userLink');
-const mapContext = require('../mapContext');
-const playEmbed = require('../embeds/play');
-const { paginate } = require('../pagination');
-const topFilter = require('../topFilter');
-const { t } = require('../i18n');
-const { logError } = require('../lib/logger');
-const { safeEditReply } = require('../replies');
+const osu = require('../../osuClient');
+const servers = require('../../servers');
+const modo = require('../../modo');
+const { resolvePlayer, fetchPlayer } = require('../../userLink');
+const mapContext = require('../../mapContext');
+const playEmbed = require('../../embeds/play');
+const { paginate } = require('../../pagination');
+const topFilter = require('../../topFilter');
+const { t } = require('../../i18n');
+const { logError } = require('../../lib/logger');
+const { safeEditReply } = require('../../replies');
 
 const PAGE_SIZE   = 5;
 const FETCH_LIMIT = 100;

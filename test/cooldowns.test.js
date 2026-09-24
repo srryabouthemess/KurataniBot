@@ -14,7 +14,7 @@ const test = require('node:test');
 const assert = require('node:assert');
 
 const cooldowns = require('../src/cooldowns');
-const { catalog } = require('../src/commands/help');
+const { catalog } = require('../src/commands/user/help');
 
 test('todo atalho cai no mesmo bucket do comando que ele chama', () => {
   for (const [canonical, aliases] of Object.entries(catalog.ALIASES)) {

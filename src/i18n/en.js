@@ -38,7 +38,7 @@ module.exports = ({ ADMIN }) => ({
     `To see everything I do, use \`/help\` (or \`${prefix}help\`).`,
 
   // ── /help ─────────────────────────────────────────────────────────────────
-  // Order and grouping live in commands/help.js; this is only the wording.
+  // Order and grouping live in commands/user/help.js; this is only the wording.
   help_title:              'KurataniBot commands',
   help_intro:              'osu! stats on Discord.\n' +
                            'Run `/link set` once and the other commands already know who you are.',
@@ -121,7 +121,7 @@ module.exports = ({ ADMIN }) => ({
   topscores_none:              (label) => `No plays recorded on **${label}** yet.`,
   topscores_error:             "Error fetching the server's best plays.",
   // The reason ships with the refusal: without it the answer looks like a bug
-  // and people just retry. See the header of commands/topscores.js.
+  // and people just retry. See the header of commands/osu/topscores.js.
   topscores_unsupported:       (label) =>
     `❌ **${label}** does not publish the server's best plays — its API has no endpoint for it. ` +
     `This works on bancho.py servers. For a player's best plays, use \`/topplays\`.`,

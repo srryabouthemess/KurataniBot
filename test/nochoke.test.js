@@ -10,7 +10,7 @@
 const test = require('node:test');
 const assert = require('node:assert');
 
-const { unchoke, fcGrade } = require('../src/commands/nochoke');
+const { unchoke, fcGrade } = require('../src/commands/osu/nochoke');
 const { weightedPP, WEIGHT } = require('../src/weightedPP');
 
 // Referência independente da soma ponderada, para não comparar a peça com ela

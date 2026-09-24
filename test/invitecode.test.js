@@ -32,7 +32,7 @@ mysql2.createPool = () => ({
 });
 
 const daycoreInvites = require('../src/daycoreInvites');
-const invitecode = require('../src/commands/invitecode');
+const invitecode = require('../src/commands/admin/invitecode');
 
 test('o alfabeto é exatamente o do CreateInvite.java do Shiina (sem I/O/0/1)', () => {
   // Lido direto do fonte no VPS em 11/09/2026 — ver o cabeçalho do módulo
@@ -129,7 +129,7 @@ test('exige ADMINISTRATOR — o mesmo bit que o PermissionHelper.java do site ex
   // Não DEVELOPER (como /wipe e /scorewipe, ações irreversíveis): gerar
   // convite não desfaz estado de ninguém, e travar mais alto que o próprio
   // site travaria negaria pelo bot o que o site já permite.
-  const fonte = require('fs').readFileSync(require.resolve('../src/commands/invitecode'), 'utf8');
+  const fonte = require('fs').readFileSync(require.resolve('../src/commands/admin/invitecode'), 'utf8');
   assert.match(fonte, /resolveStaff\(interaction, daycore\.Privileges\.ADMINISTRATOR, s\)/);
 });
 

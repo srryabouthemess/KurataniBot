@@ -2,7 +2,7 @@
 const test = require('node:test');
 const assert = require('node:assert');
 
-const { threshold } = require('../src/commands/nominate');
+const { threshold } = require('../src/commands/admin/nominate');
 
 const CASES = [
   ['vazio',            '',        1],

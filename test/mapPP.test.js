@@ -96,8 +96,8 @@ require.cache[clientPath] = {
   id: clientPath, filename: clientPath, loaded: true, exports: osuMock,
 };
 
-const mapCmd      = require('../src/commands/map');
-const simulateCmd = require('../src/commands/simulate');
+const mapCmd      = require('../src/commands/osu/map');
+const simulateCmd = require('../src/commands/osu/simulate');
 
 test.after(() => {
   try { require('../src/db').close(); } catch { /* já fechado */ }

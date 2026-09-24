@@ -15,7 +15,7 @@ const assert = require('node:assert');
 const oficial  = require('../src/osu/officialApi');
 const banchoPy = require('../src/osu/banchoPyApi');
 const ripple   = require('../src/osu/rippleApi');
-const { bandeira } = require('../src/commands/leaderboard');
+const { bandeira } = require('../src/commands/osu/leaderboard');
 
 // ─── osu! oficial: /rankings/osu/performance ─────────────────────────────────
 

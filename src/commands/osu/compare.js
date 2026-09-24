@@ -1,13 +1,13 @@
 const { SlashCommandBuilder, EmbedBuilder, ApplicationIntegrationType, InteractionContextType, MessageFlags } = require('discord.js');
-const osu = require('../osuClient');
-const servers = require('../servers');
-const modo = require('../modo');
-const { getLink } = require('../db');
-const { resolveServer, resolveSecondServer } = require('../userLink');
-const { md } = require('../markdown');
-const { t } = require('../i18n');
-const { logError } = require('../lib/logger');
-const { safeEditReply } = require('../replies');
+const osu = require('../../osuClient');
+const servers = require('../../servers');
+const modo = require('../../modo');
+const { getLink } = require('../../db');
+const { resolveServer, resolveSecondServer } = require('../../userLink');
+const { md } = require('../../markdown');
+const { t } = require('../../i18n');
+const { logError } = require('../../lib/logger');
+const { safeEditReply } = require('../../replies');
 
 // O Discord mobile NÃO rola code block na horizontal: ele quebra a linha, e
 // uma tabela monoespaçada quebrada fica ilegível. A versão antiga tinha 40

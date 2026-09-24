@@ -1,5 +1,5 @@
 /**
- * commands/help.js
+ * commands/user/help.js
  * O índice do bot: o que dá para fazer e por onde começar.
  *
  * A lista é curada, não derivada de `client.commands`. A coleção traz também os
@@ -15,11 +15,11 @@
  */
 
 const { SlashCommandBuilder, EmbedBuilder, ApplicationIntegrationType, InteractionContextType } = require('discord.js');
-const servers = require('../servers');
-const config = require('../config');
-const { PREFIX, ENABLED: PREFIX_ENABLED } = require('../prefix/config');
-const { t } = require('../i18n');
-const ALIAS_TABLE = require('../bot/aliases');
+const servers = require('../../servers');
+const config = require('../../config');
+const { PREFIX, ENABLED: PREFIX_ENABLED } = require('../../prefix/config');
+const { t } = require('../../i18n');
+const ALIAS_TABLE = require('../../bot/aliases');
 
 /** Os grupos, na ordem em que aparecem. A descrição sai de `help_cmd_<nome>`. */
 const GROUPS = [

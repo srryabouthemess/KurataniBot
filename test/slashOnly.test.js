@@ -12,10 +12,10 @@ const assert = require('node:assert');
 
 const { buildSpec } = require('../src/prefix/spec');
 
-const moderate = require('../src/commands/moderate');
-const staff    = require('../src/commands/staff');
-const nominate = require('../src/commands/nominate');
-const recent   = require('../src/commands/recent');
+const moderate = require('../src/commands/admin/moderate');
+const staff    = require('../src/commands/admin/staff');
+const nominate = require('../src/commands/admin/nominate');
+const recent   = require('../src/commands/osu/recent');
 
 test('os comandos que respondem em efêmero se declaram', () => {
   assert.equal(moderate.prefix?.slashOnly, true);
