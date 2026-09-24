@@ -111,7 +111,8 @@ test('o status de score apagado bate com o do bancho', () => {
   assert.notEqual(daycore.WIPED_SCORE_STATUS, 0);
 });
 
-const fonteApi = require('fs').readFileSync(require.resolve('../src/osu/banchoPyApi'), 'utf8');
+// O fonte de onde as leituras cruas do servidor moram desde a divisão do adaptador.
+const fonteApi = require('fs').readFileSync(require.resolve('../src/osu/banchoPyApi/server'), 'utf8');
 
 test('a leitura por mapa devolve null quando não houve leitura', () => {
   // O `banchoV1Get` aceita 404 e 422 como resposta normal e devolve `null` sem
