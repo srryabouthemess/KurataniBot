@@ -88,8 +88,10 @@ async function parseArgs(spec, tokens, message, s) {
     }
 
     // Flag com hífen: `-daycore`, `-rank`, `-randomize`. O `-\d` de fora é para
-    // um número negativo não ser lido como flag.
-    if (token.length > 1 && token.startsWith('-') && !/^-[\d.]/.test(token)) {
+    // um número negativo não ser lido como flag, e o `!` final é para o
+    // modificador de exclusão do /topif (`-hd!`) — nenhuma flag de verdade
+    // termina em "!", e sem esta guarda o token nunca chegava a ser posicional.
+    if (token.length > 1 && token.startsWith('-') && !/^-[\d.]/.test(token) && !token.endsWith('!')) {
       // Lista, e não um par: uma flag pode preencher duas opções de uma vez
       // (`-daycorerx` é servidor e modo — ver resolveFlag).
       const atribuicoes = resolveFlag(defs, token.slice(1));

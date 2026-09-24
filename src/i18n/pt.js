@@ -54,6 +54,7 @@ module.exports = ({ ADMIN }) => ({
   help_cmd_recent:         'Últimas plays, incluindo as que falharam.',
   help_cmd_topplays:       'Melhores plays, 5 por página.',
   help_cmd_nochoke:        'Top plays recalculadas como se todo choke tivesse sido FC.',
+  help_cmd_topif:          'Mostra como as top plays ficariam com outros mods.',
   help_cmd_score:          'Scores num mapa, com o PP que cada um valeria com FC.',
   help_cmd_compare:        'Compara dois jogadores lado a lado.',
   help_cmd_leaderboard:    'Ranking de pp do servidor, 10 por página.',
@@ -263,6 +264,15 @@ module.exports = ({ ADMIN }) => ({
   nochoke_removed:         'Removidos',
   nochoke_footer:          (page, total, label) => `Página ${page}/${total} · ${label}`,
   nochoke_error:           'Erro ao montar o top sem choke.',
+
+  topif_none:              'Nenhuma play encontrada.',
+  topif_no_change:         (name) => `As top plays de **${name}** não mudam com esses mods.`,
+  topif_bad_mods:          (input) => `❌ Não entendi \`${input}\`. Use \`+mods\` para inserir, \`+mods!\` para substituir, ou \`-mods!\` para remover (ex: \`+hd\`, \`+hdhr!\`, \`-hd!\`).`,
+  topif_content:           (name, mods) => `Top plays de **${name}** com \`${mods}\``,
+  topif_gain:              (before, after, gain) =>
+    `**Total pp:** ${before} → **${after}pp** (**${gain}**)`,
+  topif_footer:            (page, total, label) => `Página ${page}/${total} · ${label}`,
+  topif_error:             'Erro ao montar o topif.',
 
   // ── Administração do servidor (/nominate, /moderate) ──────────────────────
   admin_not_configured:    '❌ Os comandos administrativos não estão configurados neste bot (falta `DAYCORE_GUILD_ID` no `.env`).',

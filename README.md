@@ -14,6 +14,8 @@ Funciona no Bancho, no Akatsuki, no EZPP Farm e em servidores bancho.py.
 | `/profile` | Perfil do jogador |
 | `/recent` | Últimas plays, incluindo as que falharam |
 | `/topplays` | Melhores plays, 5 por página |
+| `/nochoke` | Top plays recalculadas como se todo choke tivesse sido FC |
+| `/topif <mods>` | Como as top plays ficariam com outros mods |
 | `/score` | Scores num mapa |
 | `/compare` | Compara dois jogadores, inclusive de servidores diferentes |
 | `/leaderboard` | Ranking de pp do servidor, 10 por página |
@@ -24,7 +26,7 @@ Funciona no Bancho, no Akatsuki, no EZPP Farm e em servidores bancho.py.
 | `/link` | Vincula sua conta do osu! ao Discord |
 | `/language` | Português, English ou Русский |
 
-Atalhos: `/osu`, `/rs`, `/top`, `/wi`, `/c`, `/choke` e `/lb`.
+Atalhos: `/osu`, `/rs`, `/top`, `/nc`, `/wi`, `/c`, `/choke` e `/lb`.
 
 **Use `/link set <seu nick>` uma vez** e os outros comandos passam a saber quem você é.
 

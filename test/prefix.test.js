@@ -13,7 +13,7 @@ const prefixCommands = require('../src/prefixCommands');
 
 const NAMES = [
   'recent', 'rs', 'score', 'c', 'simulate', 'pp',
-  'link', 'language', 'whatif', 'nominate', 'compare',
+  'link', 'language', 'whatif', 'nominate', 'compare', 'topif',
 ];
 
 let captured = null;
@@ -314,6 +314,34 @@ test('prefixo sozinho convida a começar', async t => {
 
   await t.test('sugere o modo texto com o prefixo configurado', async () => {
     assert.match((await run('k!')).reply, /k!help/);
+  });
+});
+
+test('/topif por texto', async t => {
+  await t.test('insere, posicional', async () => {
+    const { context } = await run('k!topif +hd mrekk');
+    assert.equal(context.options.getString('mods'), '+hd');
+    assert.equal(context.options.getString('player'), 'mrekk');
+  });
+
+  await t.test('substitui (exato), com "!"', async () => {
+    const { context } = await run('k!topif +hdhr!');
+    assert.equal(context.options.getString('mods'), '+hdhr!');
+  });
+
+  // O "-hd!" começa com hífen igual a uma flag (`-daycore`), e sem a guarda do
+  // "!" em parseArgs.js o parser tentava achar essa "flag" entre as choices de
+  // `server`/`modo`, não achava, e recusava a linha inteira antes de chegar ao
+  // `mods` — ver o comentário ao lado de `token.endsWith('!')`.
+  await t.test('remove, com "!" — não é confundido com flag de servidor', async () => {
+    const { context } = await run('k!topif -hd!');
+    assert.equal(context.options.getString('mods'), '-hd!');
+  });
+
+  await t.test('nomeado continua funcionando para o caso de remover', async () => {
+    const { context } = await run('k!topif mods:-hd! pudim2');
+    assert.equal(context.options.getString('mods'), '-hd!');
+    assert.equal(context.options.getString('player'), 'pudim2');
   });
 });
 

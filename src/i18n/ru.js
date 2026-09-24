@@ -50,6 +50,7 @@ module.exports = ({ ADMIN }) => ({
   help_cmd_recent:         'Последние плеи, включая проваленные.',
   help_cmd_topplays:       'Лучшие плеи, по 5 на странице.',
   help_cmd_nochoke:        'Топ плеи пересчитаны так, будто каждый чок был FC.',
+  help_cmd_topif:          'Как выглядели бы топ плеи с другими модами.',
   help_cmd_score:          'Скоры на карте и сколько PP дал бы каждый при FC.',
   help_cmd_compare:        'Сравнение двух игроков.',
   help_cmd_leaderboard:    'Рейтинг pp сервера, по 10 на странице.',
@@ -250,6 +251,15 @@ module.exports = ({ ADMIN }) => ({
   nochoke_removed:         'Удалено',
   nochoke_footer:          (page, total, label) => `Страница ${page}/${total} · ${label}`,
   nochoke_error:           'Ошибка при сборке топа без чоков.',
+
+  topif_none:              'Плеи не найдены.',
+  topif_no_change:         (name) => `Топ плеи **${name}** не меняются с этими модами.`,
+  topif_bad_mods:          (input) => `❌ Не удалось понять \`${input}\`. Используйте \`+mods\` чтобы добавить, \`+mods!\` чтобы заменить, или \`-mods!\` чтобы убрать (напр. \`+hd\`, \`+hdhr!\`, \`-hd!\`).`,
+  topif_content:           (name, mods) => `Топ плеи **${name}** с \`${mods}\``,
+  topif_gain:              (before, after, gain) =>
+    `**Total pp:** ${before} → **${after}pp** (**${gain}**)`,
+  topif_footer:            (page, total, label) => `Страница ${page}/${total} · ${label}`,
+  topif_error:             'Ошибка при сборке topif.',
 
   // ── Администрирование сервера (/nominate, /moderate) ──────────────────────
   admin_not_configured:    '❌ Административные команды не настроены на этом боте (отсутствует `DAYCORE_GUILD_ID` в `.env`).',
