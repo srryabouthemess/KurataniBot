@@ -167,7 +167,7 @@ test('com canal configurado, manda o embed de cargo', async () => {
   assert.match(embed.description, /#42/);
   assert.match(embed.description, /sicrano/);
   // Avatar do ALVO: é dele que o cargo mudou.
-  assert.match(embed.thumbnail.url, /42$/);
+  assert.match(embed.thumbnail.url, /\/42\?v=\d+$/);
 });
 
 test('remoção sai com título próprio', async () => {

@@ -102,7 +102,10 @@ test('linhas do MySQL → formato comum', () => {
   assert.deepEqual(p.games[2].scores[1].mods, ['NF']);
   assert.equal(p.games[2].scores[1].username, null);
 
-  assert.deepEqual(p.avatars, { 10: 'https://a.daycore.org/10', 20: 'https://a.daycore.org/20' });
+  // O `?v=` muda com a hora — ver servers.avatarUrl.
+  assert.deepEqual(Object.keys(p.avatars), ['10', '20']);
+  assert.match(p.avatars[10], /^https:\/\/a\.daycore\.org\/10\?v=\d+$/);
+  assert.match(p.avatars[20], /^https:\/\/a\.daycore\.org\/20\?v=\d+$/);
 });
 
 test('partida aberta, team_type desconhecido e time fora da faixa', () => {

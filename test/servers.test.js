@@ -399,3 +399,12 @@ test('embutidos convivendo com o SERVERS do .env', async t => {
     assert.equal(s.resolveKey('private'), null);
   });
 });
+
+test('avatarUrl: muda de hora em hora, para o proxy do Discord buscar a foto nova', () => {
+  const s = load({});
+  const hora = 60 * 60 * 1000;
+  const t0 = 1000 * hora;
+  assert.equal(s.avatarUrl('https://a.daycore.org', '13', t0), 'https://a.daycore.org/13?v=1000');
+  assert.equal(s.avatarUrl('https://a.daycore.org', 13, t0 + hora - 1), 'https://a.daycore.org/13?v=1000');
+  assert.equal(s.avatarUrl('https://a.daycore.org', 13, t0 + hora), 'https://a.daycore.org/13?v=1001');
+});

@@ -217,7 +217,7 @@ const PRIV_COLOR = {
 };
 
 /** Avatar da conta no servidor privado — mesma origem que o resto do bot usa. */
-const avatarUrl = osuId => `${servers.get(osu.PRIVATE_MODE).avatars}/${Number(osuId)}`;
+const avatarUrl = osuId => servers.avatarUrl(servers.get(osu.PRIVATE_MODE).avatars, osuId);
 
 /**
  * Anuncia um cargo dado ou tirado DENTRO DO JOGO (`!addpriv` / `!rmpriv`).

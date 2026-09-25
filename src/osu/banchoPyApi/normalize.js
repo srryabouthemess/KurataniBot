@@ -16,7 +16,7 @@ function normalizeUserPrivate(playerData, statsData, mode, globalRank = null, co
   return {
     id: playerData.id,
     username: playerData.name,
-    avatar_url: `${servers.get(mode).avatars}/${playerData.id}`,
+    avatar_url: servers.avatarUrl(servers.get(mode).avatars, playerData.id),
     country_code: (playerData.country || 'xx').toUpperCase(),
     join_date: playerData.creation_time
       ? new Date(playerData.creation_time * 1000).toISOString()

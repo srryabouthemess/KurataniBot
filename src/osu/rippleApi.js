@@ -78,7 +78,7 @@ function normalizeUser(data, mode) {
   return {
     id: data.id,
     username: data.username,
-    avatar_url: `${servers.get(mode).avatars}/${data.id}`,
+    avatar_url: servers.avatarUrl(servers.get(mode).avatars, data.id),
     country_code: (data.country || 'xx').toUpperCase(),
     // Já vêm em ISO, ao contrário do bancho.py, que manda epoch.
     join_date: data.registered_on ?? null,

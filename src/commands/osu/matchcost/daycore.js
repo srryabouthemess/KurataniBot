@@ -27,6 +27,7 @@
  */
 
 const daycoreMysql = require('../../../daycoreMysql');
+const servers = require('../../../servers');
 const { decodeMods, stripImpliedDT } = require('../../../mods');
 const { podeVerPartida } = require('./logic');
 
@@ -137,7 +138,7 @@ function normalizarPartida({ partida, jogos, scores }, { avatars = null } = {}) 
 
   const avatarsPorId = {};
   if (avatars) {
-    for (const s of scores) avatarsPorId[Number(s.user_id)] = `${avatars}/${Number(s.user_id)}`;
+    for (const s of scores) avatarsPorId[Number(s.user_id)] = servers.avatarUrl(avatars, s.user_id);
   }
 
   return {

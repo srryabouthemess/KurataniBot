@@ -452,8 +452,21 @@ function rootChoices() {
   return comoChoices(all().filter(s => !s.relax));
 }
 
+/**
+ * URL do avatar de uma conta num servidor bancho.py/Ripple.
+ *
+ * O `a.<domínio>/<id>` é o mesmo antes e depois de a pessoa trocar a foto, e o
+ * proxy de mídia do Discord guarda a imagem pela URL — então embed nenhum via a
+ * foto nova. O `?v=` muda de hora em hora e força o proxy a buscar de novo: a
+ * troca aparece em até uma hora, e o proxy ainda cacheia dentro dela.
+ */
+const AVATAR_JANELA_MS = 60 * 60 * 1000;
+function avatarUrl(base, osuId, agora = Date.now()) {
+  return `${base}/${Number(osuId)}?v=${Math.floor(agora / AVATAR_JANELA_MS)}`;
+}
+
 module.exports = {
   all, get, has, resolveKey, isOfficial, isRelax, label, namespace, keyForNamespace,
   rootKey, relaxKey,
-  defaultKey, choices, rootChoices, OFFICIAL_KEY,
+  defaultKey, choices, rootChoices, OFFICIAL_KEY, avatarUrl,
 };
