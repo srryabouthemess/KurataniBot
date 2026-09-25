@@ -9,8 +9,9 @@ copyright e o texto da licença viajem junto com o software. Este arquivo é ess
 cumprimento.
 
 Cobre as **73 dependências de produção** do lock — as transitivas
-inclusive, que são a maioria — e mais duas que o npm não enxerga: a lib Python do
-PP do Relax e os ícones de grade, que vieram do jogo. Estas últimas estão em
+inclusive, que são a maioria — e mais três que o npm não enxerga: a lib Python do
+PP do Relax, os ícones de grade, que vieram do jogo, e o código do Bathbot de onde
+saiu a fórmula do `/matchcost`. Estas últimas estão em
 [O que não vem do npm](#o-que-não-vem-do-npm), no fim.
 
 ## O que há aqui
@@ -2858,7 +2859,7 @@ calculador, cuja LGPL-3.0 acompanha as outras duas variantes.
 
 ## O que não vem do npm
 
-O lock só conhece o que o `npm install` baixa, e o bot usa duas coisas de terceiro
+O lock só conhece o que o `npm install` baixa, e o bot usa três coisas de terceiro
 fora disso. Elas entram aqui à mão, pela mesma razão que o resto do arquivo existe.
 
 ### akatsuki-pp-py — MIT
@@ -2892,6 +2893,34 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+```
+
+### Bathbot — ISC
+
+A fórmula do **`/matchcost`** é um porte do `match_costs.rs` do Bathbot
+(`bathbot/src/commands/osu/match_costs.rs`): as constantes, a ordem em que os jogos
+são filtrados, o tiebreaker, o arredondamento e o jeito de desempatar vêm de lá —
+reescritos em JavaScript em [`src/commands/osu/matchcost/logic.js`](src/commands/osu/matchcost/logic.js).
+O layout do embed segue a exibição compacta do mesmo bot.
+
+De Max Ohn — <https://github.com/MaxOhn/Bathbot>.
+
+```text
+ISC License
+
+Copyright (c) 2022 Max Ohn
+
+Permission to use, copy, modify, and/or distribute this software for any
+purpose with or without fee is hereby granted, provided that the above
+copyright notice and this permission notice appear in all copies.
+
+THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH
+REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
+AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT,
+INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
+LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR
+OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
+PERFORMANCE OF THIS SOFTWARE.
 ```
 
 ### Ícones de grade em `assets/emojis/` — osu!, CC BY-NC 4.0
