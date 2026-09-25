@@ -63,4 +63,11 @@ module.exports = [
     description: "Alias for /leaderboard — show a server's pp ranking",
     pt:          'Atalho para /leaderboard — mostra o ranking de pp de um servidor',
   },
+  {
+    // O mesmo atalho do Bathbot, de onde veio o comando.
+    name: 'mc',
+    of:   'matchcost',
+    description: 'Alias for /matchcost — performance rating of each player in a multiplayer match',
+    pt:          'Atalho para /matchcost — o desempenho de cada jogador numa partida multiplayer',
+  },
 ];
