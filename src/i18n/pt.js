@@ -285,6 +285,7 @@ module.exports = ({ ADMIN }) => ({
   matchcost_unconfigured:  (label) => `❌ O /matchcost do ${label} não está configurado neste bot (falta \`DAYCORE_MYSQL_HOST\` no \`.env\`).`,
   matchcost_unreachable:   (label) => `❌ Não consegui falar com o banco do ${label} agora. Tente de novo em instantes.`,
   matchcost_no_games:      (warmups) => `Nenhum jogo depois ${warmups === 1 ? 'do 1 warmup' : `dos ${warmups} warmups`}.`,
+  matchcost_no_scores:     'Nenhum score válido nos jogos desta partida.',
   matchcost_note:          (warmups, ez) => {
     const aquecimento = warmups > 0
       ? `Ignorando ${warmups === 1 ? 'o primeiro mapa' : `os primeiros ${warmups} mapas`} como warmup`

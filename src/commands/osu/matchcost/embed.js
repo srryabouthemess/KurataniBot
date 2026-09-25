@@ -137,6 +137,12 @@ function montarEmbeds({ partida, resultado, server, id, opcoes, urlDoJogador }, 
   }
 
   const { jogadores } = resultado;
+  // Houve jogo, mas ninguém com score acima de 0 — a descrição sairia vazia, e
+  // o Discord recusa embed com descrição vazia.
+  if (!jogadores.length) {
+    return [base(s.matchcost_no_scores, s.matchcost_footer(1, 1, server.label, resultado.jogos))];
+  }
+
   const total = Math.max(1, Math.ceil(jogadores.length / POR_PAGINA));
   const l = larguras([jogadores]);
   const mvp = linhaMvp(resultado, jogadores, s);

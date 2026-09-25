@@ -270,6 +270,7 @@ module.exports = ({ ADMIN }) => ({
   matchcost_unconfigured:  (label) => `❌ /matchcost для ${label} не настроен на этом боте (отсутствует \`DAYCORE_MYSQL_HOST\` в \`.env\`).`,
   matchcost_unreachable:   (label) => `❌ Сейчас нет связи с базой данных ${label}. Попробуйте чуть позже.`,
   matchcost_no_games:      (warmups) => `Нет сыгранных карт после разминки (${warmups}).`,
+  matchcost_no_scores:     'В картах этого матча нет засчитанных результатов.',
   matchcost_note:          (warmups, ez) => {
     const razminka = warmups > 0
       ? (warmups === 1 ? 'Первая карта не учитывается (разминка)' : `Первые ${warmups} карт не учитываются (разминка)`)

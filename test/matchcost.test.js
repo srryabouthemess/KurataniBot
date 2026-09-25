@@ -459,3 +459,17 @@ test('partida privada: só quem jogou vê', () => {
   assert.equal(podeVerPartida({ private: true }, false), false);
   assert.equal(podeVerPartida({ private: true }, undefined), false);
 });
+
+test('head-to-head sem nenhum score acima de 0: embed com aviso, não descrição vazia', () => {
+  const { montarEmbeds } = require('../src/commands/osu/matchcost/embed');
+  const s = require('../src/i18n/pt')({ ADMIN: 'Servidor' });
+  const r = calcularMatchCost(partida([jogo([[1, 0], [2, 0]])]));
+  assert.deepStrictEqual(r.jogadores, []);
+  const embeds = montarEmbeds({
+    partida: partida([]), resultado: r, id: 1,
+    server: { kind: 'private', webUrl: 'https://exemplo', label: 'Servidor' },
+    opcoes: { warmups: 0, ezMult: 1 }, urlDoJogador: id => `https://exemplo/u/${id}`,
+  }, s);
+  assert.equal(embeds.length, 1);
+  assert.equal(embeds[0].data.description, s.matchcost_no_scores);
+});
