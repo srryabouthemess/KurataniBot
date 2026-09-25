@@ -35,8 +35,8 @@ const { md } = require('../markdown');
 const { formatMods } = require('../mods');
 const { localScorePP } = require('../scorePP');
 
-/** Rosa do bot para play concluída; vermelho para a que parou no meio. */
-const COLOR      = 0xff66aa;
+/** Cor do bot para play concluída; vermelho para a que parou no meio. */
+const COLOR      = 0x2b4963;
 const COLOR_FAIL = 0xee4444;
 
 /** Cor de cada grade — prata pras versões com Hidden, ouro pra SS/S, vermelho pra D/F. */

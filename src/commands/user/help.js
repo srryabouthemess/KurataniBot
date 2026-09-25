@@ -97,7 +97,7 @@ module.exports = {
     const embed = new EmbedBuilder()
       .setTitle(s.help_title)
       .setDescription(s.help_intro)
-      .setColor(0xff66aa)
+      .setColor(0x2b4963)
       .setThumbnail(interaction.client.user.displayAvatarURL())
       .addFields(fields)
       .setFooter({ text: s.help_footer });

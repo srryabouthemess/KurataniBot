@@ -52,7 +52,7 @@ const PAGE_SIZE   = 10;
 // serve no máximo isso por página. Dez páginas de dez.
 const FETCH_LIMIT = 100;
 
-const COLOR = 0xff66aa;
+const COLOR = 0x2b4963;
 
 /** Código ISO de duas letras — o formato que os três servidores aceitam. */
 const PAIS = /^[A-Za-z]{2}$/;

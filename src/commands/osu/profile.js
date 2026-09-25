@@ -80,7 +80,7 @@ module.exports = {
         .setTitle(s.profile_title(user.username))
         .setURL(osu.getUserUrl(user.id, mode))
         .setThumbnail(user.avatar_url)
-        .setColor(user.is_online ? 0x99ff99 : 0xff66aa)
+        .setColor(user.is_online ? 0x99ff99 : 0x2b4963)
         .addFields(
           { name: s.profile_ranks,  value: rankValue,  inline: true },
           {
