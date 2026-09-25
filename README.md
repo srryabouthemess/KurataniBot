@@ -20,13 +20,14 @@ Funciona no Bancho, no Akatsuki, no EZPP Farm e em servidores bancho.py.
 | `/compare` | Compara dois jogadores, inclusive de servidores diferentes |
 | `/leaderboard` | Ranking de pp do servidor, 10 por página |
 | `/topscores` | Melhores plays do servidor inteiro (só bancho.py) |
+| `/matchcost <partida>` | Desempenho de cada jogador numa partida multiplayer, com a fórmula do Bathbot (Bancho, ou servidor privado com o MySQL configurado) |
 | `/whatif <pp>` | Quanto PP você ganharia com uma play nova |
 | `/pp <alvo>` | O que falta para chegar a um total de PP |
 | `/simulate <mapa>` | Quanto PP daria uma play específica |
 | `/link` | Vincula sua conta do osu! ao Discord |
 | `/language` | Português, English ou Русский |
 
-Atalhos: `/osu`, `/rs`, `/top`, `/nc`, `/wi`, `/c`, `/choke` e `/lb`.
+Atalhos: `/osu`, `/rs`, `/top`, `/nc`, `/wi`, `/c`, `/choke`, `/lb` e `/mc`.
 
 **Use `/link set <seu nick>` uma vez** e os outros comandos passam a saber quem você é.
 

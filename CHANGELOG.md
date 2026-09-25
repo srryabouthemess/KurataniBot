@@ -2,6 +2,73 @@
 
 ---
 
+# Sessão de 2026-09-25 (match cost)
+
+Porte do `/matchcost` do Bathbot: o desempenho de cada jogador numa partida
+multiplayer, no número que a comunidade de torneio já usa para comparar.
+
+## ✨ Novos recursos
+
+- **`/matchcost match: [warmups:] [skip_last:] [ez_mult:]`**, com o atalho `/mc`
+  (o mesmo do Bathbot) e `k!mc <partida> [warmups]` no modo texto.
+  [`matchcost/`](src/commands/osu/matchcost/)
+  - **A fórmula é a do Bathbot, e não uma parecida.** Porte do `match_costs.rs`
+    (MaxOhn/Bathbot, ISC) em [`logic.js`](src/commands/osu/matchcost/logic.js),
+    inclusive a aritmética em `f32`: o arredondamento para duas casas também é
+    feito em `f32` lá, e é perto do meio-centésimo que as duas precisões
+    discordam (2.295 sai "2.30" no Bathbot e sairia "2.29" em `f64`).
+  - **Até os empates saem iguais.** O Bathbot decide MVP, ordem de empatados e
+    quem vai para o azul num 1v1 pela ordem de iteração de um `HashMap` com
+    hasher identidade — determinística, e reproduzida aqui. Importa num 1v1
+    com dois SS no mesmo mapa: o jogo empatado vai para o vermelho.
+  - Conferido contra uma réplica em Rust do `process_match` (mesmos tipos, o
+    `HashMap` da biblioteca padrão) em ~50 mil partidas aleatórias, com e sem
+    empates, sem nenhuma divergência em nenhum campo.
+  - Link diz o servidor: `osu.ppy.sh/community/matches/<id>` (ou `/mp/<id>`) é
+    o Bancho, `<site do servidor>/matches/<id>` é o privado — o site sai do
+    registro de `servers.js`. Id sozinho vai para o servidor preferido.
+  - **Bancho:** `GET /matches/{id}` da API v2, paginado para trás até o
+    primeiro evento (o Bathbot para em 5 páginas). 404 e 401 (partida privada)
+    têm mensagem própria.
+  - **Daycore:** leitura direta das tabelas `dc_match_*` do MySQL, que o patch
+    do bancho.py-ex grava. Partida privada só aparece para quem tem `join`
+    nela pela conta do `/link`; para os outros, a resposta é a mesma de
+    partida inexistente.
+  - Servidor privado sem as tabelas (Akatsuki, EZPP) responde que o comando
+    não está disponível ali.
+
+## ⚠️ Divergência do Bathbot, de propósito
+
+- `skip_last` maior que o número de jogos: lá a subtração de `usize` dá a volta
+  e nada é cortado (pedir para ignorar 10 mapas de 8 mostra os 8); aqui corta
+  tudo e a resposta é "nenhum jogo".
+
+## ♻️ Refatoração
+
+- A conexão com o MySQL do Daycore saiu do `daycoreInvites.js` para
+  [`daycoreMysql.js`](src/daycoreMysql.js), compartilhada com o `/matchcost`.
+  O `/invitecode` não muda.
+
+## ⚙️ Configuração
+
+- O usuário MySQL do bot precisa de `SELECT` nas quatro tabelas `dc_match_*` e
+  em `users (id, name)` — só essas duas colunas. Os `GRANT`s estão no
+  `.env.example`. Sem `DAYCORE_MYSQL_HOST`, o `/matchcost` do Daycore responde
+  que não está configurado e o do Bancho segue funcionando.
+
+## ✅ Testes
+
+- `test/matchcost.test.js`: a fórmula em partidas montadas à mão (head-to-head,
+  Team VS com e sem tiebreaker, warmups, skip_last, ez_mult, score 0, jogo
+  abortado, NoFail, participação com 1 jogo), o arredondamento em `f32` e a
+  ordem do `HashMap` contra ordens tiradas do Rust.
+- `test/matchcostBancho.test.js`: normalização de um JSON de exemplo da API v2,
+  paginação para trás, 404/401.
+- `test/matchcostDaycore.test.js`: normalização das linhas do MySQL e a regra
+  de partida privada, com o `mysql2` dublado.
+
+---
+
 # Sessão de 2026-09-11 (código de convite)
 
 O Daycore passou a exigir código de convite para registro. Quem gera é o
