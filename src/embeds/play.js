@@ -31,7 +31,7 @@
 
 const osu = require('../osuClient');
 const emojis = require('../emojis');
-const { md } = require('../markdown');
+const { mdLink } = require('../markdown');
 const { formatMods } = require('../mods');
 const { localScorePP } = require('../scorePP');
 
@@ -401,7 +401,7 @@ async function listItem(play, { mode, index, mapUrl = null, autor = null }) {
   // setTitle() da play única, que é texto puro — escapar lá imprimiria as
   // contrabarras na tela sem proteger de nada (ver markdown.js).
   const cabecalho = mapUrl
-    ? `**#${index}** [${md(mapTitle(play))}](${mapUrl}) ${modsTexto}${sufixo}`
+    ? `**#${index}** [${mdLink(mapTitle(play))}](${mapUrl}) ${modsTexto}${sufixo}`
     : `**#${index}** ${grade} ${modsTexto}${sufixo}`;
 
   const numeros = join([

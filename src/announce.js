@@ -28,7 +28,7 @@ const osu = require('./osuClient');
 const servers = require('./servers');
 const daycore = require('./daycoreAdmin');
 const config = require('./config');
-const { md } = require('./markdown');
+const { md, mdLink } = require('./markdown');
 const { logError } = require('./lib/logger');
 
 // Cores por status: verde para ranked, rosa para loved, cinza para unranked.
@@ -149,7 +149,7 @@ async function announceStatus(client, info, s) {
         // O rótulo é artista/título/criador do mapa — texto de terceiro, e este
         // embed vai para um canal PÚBLICO. Sem escape, um mapa com `](url)` no
         // nome faz o bot publicar um link forjado (ver markdown.js).
-        `**[${md(info.label)}](${mapUrl})**\n` +
+        `**[${mdLink(info.label)}](${mapUrl})**\n` +
         s.ann_diffs(info.confirmed) +
         // De onde veio muda a linha: aplicado pelo bot é rastreável até uma
         // conta do Discord, aplicado no jogo não — e quem lê o canal precisa
@@ -298,7 +298,7 @@ async function announceCustomMap(client, evento, s) {
       .setColor(uploaded ? 0x3498db : 0x992d22)
       .setTitle(uploaded ? s.custom_map_uploaded : s.custom_map_deleted)
       .setDescription(
-        `${uploaded ? `**[${md(label)}](${mapUrl})**` : `**${label}**`}\n` +
+        `${uploaded ? `**[${mdLink(label)}](${mapUrl})**` : `**${label}**`}\n` +
         s.custom_map_diffs(count) + '\n' +
         s.custom_map_source_line(source) +
         (evento.actorName ? `\n${s.custom_map_by(md(evento.actorName))}` : ''),

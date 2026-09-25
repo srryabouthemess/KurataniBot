@@ -42,7 +42,7 @@ const modo = require('../../modo');
 const { resolveServer } = require('../../userLink');
 const { paginate } = require('../../pagination');
 const { ppLegivel } = require('../../embeds/play');
-const { md } = require('../../markdown');
+const { md, mdLink } = require('../../markdown');
 const { t } = require('../../i18n');
 const { logError } = require('../../lib/logger');
 const { safeEditReply } = require('../../replies');
@@ -173,7 +173,7 @@ module.exports = {
         // Sem id não há perfil para onde apontar, e o nome sai sem link em vez
         // de virar um `/users/null` clicável.
         const nome = entrada.id
-          ? `[${md(entrada.username)}](${osu.getUserUrl(entrada.id, mode)})`
+          ? `[${mdLink(entrada.username)}](${osu.getUserUrl(entrada.id, mode)})`
           : md(entrada.username);
 
         // A acurácia também passa pelo idioma, e não pelo `toFixed(2)` que o

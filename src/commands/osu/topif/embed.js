@@ -6,7 +6,7 @@
 const osu = require('../../../osuClient');
 const playEmbed = require('../../../embeds/play');
 const { formatMods } = require('../../../mods');
-const { md } = require('../../../markdown');
+const { mdLink } = require('../../../markdown');
 const emojis = require('../../../emojis');
 const { hitCounts } = require('../../../hits');
 const { adjustGradeForMods } = require('./logic');
@@ -20,7 +20,7 @@ async function linhaPlay(entry, mode) {
   const temStarsAntes = Number.isFinite(starsAntes) && starsAntes > 0;
 
   const grade  = emojis.rankLabel(changed ? adjustGradeForMods(play.rank, newMods) : play.rank);
-  const titulo = md(playEmbed.mapTitle(play));
+  const titulo = mdLink(playEmbed.mapTitle(play));
   const url    = osu.getMapUrl(play.beatmap?.id, play.beatmapset?.id, mode);
 
   let modsLabel  = `**${formatMods(play.mods)}**`;

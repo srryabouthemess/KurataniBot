@@ -6,7 +6,7 @@
 const osu = require('../../../osuClient');
 const playEmbed = require('../../../embeds/play');
 const { formatMods } = require('../../../mods');
-const { md } = require('../../../markdown');
+const { mdLink } = require('../../../markdown');
 const emojis = require('../../../emojis');
 const { hitCounts } = require('../../../hits');
 const { accPair, fcGrade } = require('./logic');
@@ -22,7 +22,7 @@ async function linhaPlay(entry, mode, s) {
   // Choke desfeito mostra a grade do score HIPOTÉTICO (FC); o resto, a real.
   const grade  = emojis.rankLabel(unchoked ? fcGrade(play) : play.rank);
   const mods   = `**${formatMods(play.mods)}**`;
-  const titulo = md(playEmbed.mapTitle(play));
+  const titulo = mdLink(playEmbed.mapTitle(play));
   const url    = osu.getMapUrl(play.beatmap?.id, play.beatmapset?.id, mode);
   const cabec  = url
     ? `**#${origIndex}** [${titulo}](${url}) ${mods}${stars}`

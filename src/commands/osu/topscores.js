@@ -38,7 +38,7 @@ const modo = require('../../modo');
 const { resolveServer } = require('../../userLink');
 const { paginate } = require('../../pagination');
 const playEmbed = require('../../embeds/play');
-const { md } = require('../../markdown');
+const { mdLink } = require('../../markdown');
 const { t } = require('../../i18n');
 const { logError } = require('../../lib/logger');
 const { safeEditReply } = require('../../replies');
@@ -206,7 +206,7 @@ module.exports = {
             index:  inicio + index + 1,
             mapUrl: osu.getMapUrl(play.beatmap.id, play.beatmapset.id, mode),
             // Nick é texto de terceiro em posição de link (ver markdown.js).
-            autor:  `**[${md(nome)}](${osu.getUserUrl(id, mode)})**`,
+            autor:  `**[${mdLink(nome)}](${osu.getUserUrl(id, mode)})**`,
           })
         ));
 

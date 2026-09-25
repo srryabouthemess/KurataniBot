@@ -4,7 +4,7 @@ const servers = require('../../servers');
 const modo = require('../../modo');
 const { resolvePlayer, fetchPlayer } = require('../../userLink');
 const emojis = require('../../emojis');
-const { md } = require('../../markdown');
+const { mdLink } = require('../../markdown');
 const { t } = require('../../i18n');
 const { logError } = require('../../lib/logger');
 const { safeEditReply } = require('../../replies');
@@ -67,7 +67,7 @@ module.exports = {
         const mapName = `${bestPlay.beatmapset.title} [${bestPlay.beatmap.version}]`;
         topPlayString =
           // Nome de mapa é texto de terceiro em posição de link (ver markdown.js).
-          `🏆 **[${md(mapName)}](${mapUrl})**\n` +
+          `🏆 **[${mdLink(mapName)}](${mapUrl})**\n` +
           `> **PP:** ${bestPlay.pp.toFixed(2)}pp | **${s.profile_acc}:** ${(bestPlay.accuracy * 100).toFixed(2)}%\n` +
           `> **Rank:** ${emojis.rankLabel(bestPlay.rank)} | **${s.profile_max_combo}:** ${bestPlay.max_combo !== null ? bestPlay.max_combo + 'x' : '-'}`;
       }

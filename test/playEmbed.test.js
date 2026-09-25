@@ -202,9 +202,10 @@ test('item de lista com link põe o mapa na primeira linha e a grade na segunda'
   });
 
   const [cabecalho, numeros, hits] = item.split('\n');
-  // Os colchetes da dificuldade saem escapados (ver markdown.js): o Discord
-  // renderiza `\[` como `[`, então na tela o título continua igual.
-  assert.match(cabecalho, /^\*\*#3\*\* \[MC - MONTAGEM BATCHI \\\[JOGA ACELERA\\\]\]\(https:\/\/exemplo\/1\)/);
+  // Dentro do rótulo do link o Discord não consome `\[`: os colchetes da
+  // dificuldade viram os de largura total (ver mdLink em markdown.js).
+  assert.match(cabecalho, /^\*\*#3\*\* \[MC - MONTAGEM BATCHI ［JOGA ACELERA］\]\(https:\/\/exemplo\/1\)/);
+  assert.ok(!cabecalho.includes('\\'), 'contrabarra visível no título do mapa');
   assert.match(cabecalho, /\[8\.31★\]$/);
   assert.match(numeros, /^\*\*C\*\*/);
   assert.equal(hits, '{ 148 / 18 / 0 / 23 }');

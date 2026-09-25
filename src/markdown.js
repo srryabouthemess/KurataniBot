@@ -38,6 +38,13 @@
  * a menos que ele traga a própria quebra de linha, que é o que a limpeza de
  * controle abaixo remove. É a mesma decisão do `signReason` no daycoreAdmin.
  *
+ * ── Dentro de rótulo de link, a contrabarra aparece ────────────────────────────
+ * Dentro do rótulo de um link mascarado (`[aqui](url)`) o Discord NÃO consome o
+ * escape de colchete: `\[Kumocha's EXPERT\]` saiu assim, com as contrabarras,
+ * no /top. Para rótulo existe `mdLink()`, que troca `[` e `]` pelos colchetes de
+ * largura total `［` `］` — parecem colchete para quem lê, mas não são sintaxe,
+ * então o par `](` continua sem ter como se formar.
+ *
  * ── O que fica de fora, e por quê ─────────────────────────────────────────────
  * URL solta continua virando link clicável, e não há contrabarra que impeça. Não
  * é o mesmo risco: o que este módulo fecha é **forjar o rótulo** — fazer um link
@@ -66,4 +73,16 @@ function md(texto) {
     .replace(ESCAPAVEIS, '\\$1');
 }
 
-module.exports = { md };
+/**
+ * Texto externo pronto para ser o RÓTULO de um link mascarado: `[aqui](url)`.
+ * Colchete vira o de largura total em vez de ser escapado (ver acima); o resto
+ * passa pelo `md()` normal.
+ *
+ * @param {*} texto qualquer coisa; `null`/`undefined` viram string vazia
+ * @returns {string}
+ */
+function mdLink(texto) {
+  return md(String(texto ?? '').replace(/\[/g, '［').replace(/\]/g, '］'));
+}
+
+module.exports = { md, mdLink };
