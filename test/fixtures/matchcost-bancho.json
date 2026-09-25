@@ -1,0 +1,77 @@
+{
+  "match": {
+    "id": 111222333,
+    "start_time": "2026-09-20T18:00:00+00:00",
+    "end_time": "2026-09-20T19:10:00+00:00",
+    "name": "KBT: (Os Azuis) vs (Os Vermelhos)"
+  },
+  "events": [
+    { "id": 9001, "detail": { "type": "match-created" }, "timestamp": "2026-09-20T18:00:00+00:00", "user_id": 1001 },
+    { "id": 9002, "detail": { "type": "player-joined" }, "timestamp": "2026-09-20T18:00:10+00:00", "user_id": 1001 },
+    { "id": 9003, "detail": { "type": "player-joined" }, "timestamp": "2026-09-20T18:00:20+00:00", "user_id": 1002 },
+    {
+      "id": 9004,
+      "detail": { "type": "other" },
+      "timestamp": "2026-09-20T18:05:00+00:00",
+      "user_id": null,
+      "game": {
+        "beatmap_id": 75, "id": 555001,
+        "start_time": "2026-09-20T18:02:00+00:00", "end_time": "2026-09-20T18:05:00+00:00",
+        "mode": "osu", "mode_int": 0, "scoring_type": "score", "team_type": "team-vs",
+        "mods": ["NF"],
+        "beatmap": { "beatmapset_id": 1, "difficulty_rating": 5.2, "id": 75, "mode": "osu", "status": "ranked", "total_length": 180, "user_id": 2, "version": "Insane" },
+        "scores": [
+          {
+            "accuracy": 0.9712, "best_id": null, "created_at": "2026-09-20T18:05:00+00:00", "id": null,
+            "max_combo": 812, "mode": "osu", "mode_int": 0, "mods": ["HD"], "passed": true, "perfect": 0,
+            "pp": null, "rank": "A", "replay": false, "score": 712345, "type": "legacy_match_score", "user_id": 1001,
+            "statistics": { "count_100": 12, "count_300": 700, "count_50": 0, "count_geki": 150, "count_katu": 8, "count_miss": 1 },
+            "current_user_attributes": { "pin": null },
+            "match": { "slot": 0, "team": "blue", "pass": true }
+          },
+          {
+            "accuracy": 0.95, "best_id": null, "created_at": "2026-09-20T18:05:00+00:00", "id": null,
+            "max_combo": 500, "mode": "osu", "mode_int": 0, "mods": ["HD", "NF"], "passed": true, "perfect": 0,
+            "pp": null, "rank": "A", "replay": false, "score": 400000, "type": "legacy_match_score", "user_id": 1002,
+            "statistics": { "count_100": 30, "count_300": 680, "count_50": 2, "count_geki": 120, "count_katu": 20, "count_miss": 5 },
+            "current_user_attributes": { "pin": null },
+            "match": { "slot": 1, "team": "red", "pass": true }
+          }
+        ]
+      }
+    },
+    {
+      "id": 9005,
+      "detail": { "type": "other" },
+      "timestamp": "2026-09-20T18:07:00+00:00",
+      "user_id": null,
+      "game": {
+        "beatmap_id": 76, "id": 555002,
+        "start_time": "2026-09-20T18:06:00+00:00", "end_time": null,
+        "mode": "osu", "mode_int": 0, "scoring_type": "score", "team_type": "team-vs",
+        "mods": [],
+        "beatmap": null,
+        "scores": []
+      }
+    },
+    { "id": 9006, "detail": { "type": "player-left" }, "timestamp": "2026-09-20T19:10:00+00:00", "user_id": 1002 },
+    { "id": 9007, "detail": { "type": "match-disbanded" }, "timestamp": "2026-09-20T19:10:00+00:00", "user_id": null }
+  ],
+  "users": [
+    {
+      "avatar_url": "https://a.ppy.sh/1001?1700000000.jpeg", "country_code": "BR", "default_group": "default",
+      "id": 1001, "is_active": true, "is_bot": false, "is_deleted": false, "is_online": false, "is_supporter": false,
+      "last_visit": null, "pm_friends_only": false, "profile_colour": null, "username": "Alice",
+      "country": { "code": "BR", "name": "Brazil" }
+    },
+    {
+      "avatar_url": "https://a.ppy.sh/1002?1700000000.jpeg", "country_code": "CL", "default_group": "default",
+      "id": 1002, "is_active": true, "is_bot": false, "is_deleted": false, "is_online": false, "is_supporter": false,
+      "last_visit": null, "pm_friends_only": false, "profile_colour": null, "username": "Bruno",
+      "country": { "code": "CL", "name": "Chile" }
+    }
+  ],
+  "first_event_id": 9001,
+  "latest_event_id": 9007,
+  "current_game_id": null
+}

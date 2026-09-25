@@ -51,6 +51,7 @@ module.exports = ({ ADMIN }) => ({
   help_cmd_topplays:       'Best plays, 5 per page.',
   help_cmd_nochoke:        'Top plays re-scored as if every choke had been an FC.',
   help_cmd_topif:          "How the top plays would look like with different mods.",
+  help_cmd_matchcost:      "Each player's performance in a multiplayer match (Bathbot's formula).",
   help_cmd_score:          'Scores on a map, with the PP each would be worth on FC.',
   help_cmd_compare:        'Compare two players side by side.',
   help_cmd_leaderboard:    "The server's pp ranking, 10 per page.",
@@ -260,6 +261,35 @@ module.exports = ({ ADMIN }) => ({
     `**Total pp:** ${before} → **${after}pp** (**${gain}**)`,
   topif_footer:            (page, total, label) => `Page ${page}/${total} · ${label}`,
   topif_error:             'Error building the topif.',
+
+  // ── /matchcost ────────────────────────────────────────────────────────────
+  matchcost_bad_input:     "❌ Couldn't understand the match. Send its link (`osu.ppy.sh/community/matches/<id>`, or the server's own site) or just the id.",
+  matchcost_not_found:     (id) => `❌ No match with id \`${id}\` was found.`,
+  matchcost_private:       "❌ I can't access the match because it was set as private.",
+  matchcost_unsupported:   (label) => `❌ /matchcost is not available on ${label}: only on Bancho and on the server with matches in its database.`,
+  matchcost_unconfigured:  (label) => `❌ /matchcost for ${label} is not configured on this bot (missing \`DAYCORE_MYSQL_HOST\` in \`.env\`).`,
+  matchcost_unreachable:   (label) => `❌ Could not reach the ${label} database right now. Try again in a moment.`,
+  matchcost_no_games:      (warmups) => `No games played yet beyond the ${warmups} warmup${warmups === 1 ? '' : 's'}.`,
+  matchcost_no_scores:     'No valid scores in this match\'s games.',
+  matchcost_note:          (warmups, ez) => {
+    const warmup = warmups > 0
+      ? `Ignoring the first ${warmups === 1 ? 'map' : `${warmups} maps`} as warmup`
+      : '';
+    if (ez) return warmup ? `${warmup} (EZ multiplier: ${ez}):` : `EZ multiplier: ${ez}`;
+    return warmup ? `${warmup}:` : '';
+  },
+  matchcost_score:         (finished, blue, red) => {
+    const b = blue > red ? `**${blue}**` : `${blue}`;
+    const r = red > blue ? `**${red}**` : `${red}`;
+    return `**${finished ? 'Final' : 'Current'} score**: 🔷 ${b} - ${r} 🔺`;
+  },
+  matchcost_mvp:           (name, cost) => `👑 **MVP:** ${name} — \`${cost}\``,
+  matchcost_blue:          'Blue Team',
+  matchcost_red:           'Red Team',
+  matchcost_too_many:      'Too many players, cannot display values :(',
+  matchcost_footer:        (page, total, label, maps) =>
+    `${total > 1 ? `Page ${page}/${total} · ` : ''}${label} · ${maps} ${maps === 1 ? 'map' : 'maps'}`,
+  matchcost_error:         'Error calculating the match cost.',
 
   // ── Server administration (/nominate, /moderate) ──────────────────────────
   admin_not_configured:    '❌ Admin commands are not configured on this bot (missing `DAYCORE_GUILD_ID` in `.env`).',

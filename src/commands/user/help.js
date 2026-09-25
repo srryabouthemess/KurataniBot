@@ -23,7 +23,7 @@ const ALIAS_TABLE = require('../../bot/aliases');
 
 /** Os grupos, na ordem em que aparecem. A descrição sai de `help_cmd_<nome>`. */
 const GROUPS = [
-  { key: 'stats',  commands: ['profile', 'recent', 'topplays', 'nochoke', 'topif', 'score', 'compare', 'leaderboard', 'topscores'] },
+  { key: 'stats',  commands: ['profile', 'recent', 'topplays', 'nochoke', 'topif', 'score', 'compare', 'leaderboard', 'topscores', 'matchcost'] },
   { key: 'pp',     commands: ['whatif', 'pp', 'map', 'simulate'] },
   { key: 'config', commands: ['link', 'language'] },
 ];

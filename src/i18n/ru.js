@@ -51,6 +51,7 @@ module.exports = ({ ADMIN }) => ({
   help_cmd_topplays:       'Лучшие плеи, по 5 на странице.',
   help_cmd_nochoke:        'Топ плеи пересчитаны так, будто каждый чок был FC.',
   help_cmd_topif:          'Как выглядели бы топ плеи с другими модами.',
+  help_cmd_matchcost:      'Результат каждого игрока в мультиплеерном матче (формула Bathbot).',
   help_cmd_score:          'Скоры на карте и сколько PP дал бы каждый при FC.',
   help_cmd_compare:        'Сравнение двух игроков.',
   help_cmd_leaderboard:    'Рейтинг pp сервера, по 10 на странице.',
@@ -260,6 +261,35 @@ module.exports = ({ ADMIN }) => ({
     `**Total pp:** ${before} → **${after}pp** (**${gain}**)`,
   topif_footer:            (page, total, label) => `Страница ${page}/${total} · ${label}`,
   topif_error:             'Ошибка при сборке topif.',
+
+  // ── /matchcost ────────────────────────────────────────────────────────────
+  matchcost_bad_input:     '❌ Не удалось понять матч. Отправьте ссылку (`osu.ppy.sh/community/matches/<id>` или сайт сервера) или только id.',
+  matchcost_not_found:     (id) => `❌ Матч с id \`${id}\` не найден.`,
+  matchcost_private:       '❌ Нет доступа к матчу: он приватный.',
+  matchcost_unsupported:   (label) => `❌ /matchcost недоступен на ${label}: только на Bancho и на сервере, где матчи хранятся в базе.`,
+  matchcost_unconfigured:  (label) => `❌ /matchcost для ${label} не настроен на этом боте (отсутствует \`DAYCORE_MYSQL_HOST\` в \`.env\`).`,
+  matchcost_unreachable:   (label) => `❌ Сейчас нет связи с базой данных ${label}. Попробуйте чуть позже.`,
+  matchcost_no_games:      (warmups) => `Нет сыгранных карт после разминки (${warmups}).`,
+  matchcost_no_scores:     'В картах этого матча нет засчитанных результатов.',
+  matchcost_note:          (warmups, ez) => {
+    const razminka = warmups > 0
+      ? (warmups === 1 ? 'Первая карта не учитывается (разминка)' : `Первые ${warmups} карт не учитываются (разминка)`)
+      : '';
+    if (ez) return razminka ? `${razminka} (множитель EZ: ${ez}):` : `Множитель EZ: ${ez}`;
+    return razminka ? `${razminka}:` : '';
+  },
+  matchcost_score:         (finished, blue, red) => {
+    const b = blue > red ? `**${blue}**` : `${blue}`;
+    const r = red > blue ? `**${red}**` : `${red}`;
+    return `**${finished ? 'Итоговый' : 'Текущий'} счёт**: 🔷 ${b} - ${r} 🔺`;
+  },
+  matchcost_mvp:           (name, cost) => `👑 **MVP:** ${name} — \`${cost}\``,
+  matchcost_blue:          'Синяя команда',
+  matchcost_red:           'Красная команда',
+  matchcost_too_many:      'Слишком много игроков, не помещается в embed :(',
+  matchcost_footer:        (page, total, label, maps) =>
+    `${total > 1 ? `Страница ${page}/${total} · ` : ''}${label} · карт: ${maps}`,
+  matchcost_error:         'Ошибка при расчёте match cost.',
 
   // ── Администрирование сервера (/nominate, /moderate) ──────────────────────
   admin_not_configured:    '❌ Административные команды не настроены на этом боте (отсутствует `DAYCORE_GUILD_ID` в `.env`).',

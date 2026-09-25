@@ -151,6 +151,9 @@ caso('/map',      'map',      { map: String(MAPA), mods: 'HDDT' });
 caso('/whatif',   'whatif',   { player: PLAYERS.official, pp: 500 });
 caso('/score',    'score',    { player: PLAYERS.official, map: String(MAPA) });
 caso('/compare',  'compare',  { player: PLAYERS.official, map: String(MAPA) });
+// A partida do exemplo do help do Bathbot, de onde veio a fórmula: dá para
+// conferir o número lado a lado com o `<mc` de lá.
+caso('/matchcost', 'matchcost', { match: 'https://osu.ppy.sh/community/matches/58320988', warmups: 1 });
 
 // ── Sem rede ──────────────────────────────────────────────────────────────────
 caso('/help',     'help',     {});
