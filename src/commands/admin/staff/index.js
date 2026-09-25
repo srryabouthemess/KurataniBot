@@ -188,6 +188,25 @@ module.exports = {
       if (rows.length === 0) {
         return interaction.reply({ content: s.staff_list_empty, flags: MessageFlags.Ephemeral });
       }
+
+      await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
+      // O `osu_name` é o nick de quando o vínculo foi criado. Relê o atual e
+      // corrige o banco; se o servidor não responder, fica o que estava salvo.
+      const ids = [...new Set(rows.map(r => r.osu_id))];
+      const atuais = await Promise.allSettled(ids.map(id => osu.getServerPlayerRaw(id)));
+      const nomePorId = new Map();
+      atuais.forEach((r, i) => {
+        const nome = r.status === 'fulfilled' ? r.value?.name : null;
+        if (nome) nomePorId.set(ids[i], nome);
+      });
+      for (const r of rows) {
+        const nome = nomePorId.get(r.osu_id);
+        if (nome && nome !== r.osu_name) {
+          db.updateStaffLinkName(r.osu_id, nome);
+          r.osu_name = nome;
+        }
+      }
       // O register agora recusa duplicata, mas vínculos criados antes disso
       // continuam no banco — e são invisíveis numa lista que só enfileira
       // linhas. Marcar aqui é o que faz alguém notar e resolver.
@@ -209,7 +228,7 @@ module.exports = {
             (porOsuId.get(r.osu_id) > 1 ? ` ${s.staff_list_duplicate}` : '')).join('\n') +
           `\n\n${s.staff_proof_legend}`,
         );
-      return interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
+      return interaction.editReply({ embeds: [embed] });
     }
 
     const member = interaction.options.getUser('member');

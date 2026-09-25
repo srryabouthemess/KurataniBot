@@ -54,6 +54,14 @@ function listStaffLinks() {
   return db.prepare('SELECT * FROM staff_links ORDER BY added_at ASC').all();
 }
 
+/**
+ * O nome é gravado no vínculo e o jogo deixa trocar de nick depois: sem isto a
+ * lista mostraria para sempre o nome de quando a pessoa foi vinculada.
+ */
+function updateStaffLinkName(osuId, osuName) {
+  db.prepare('UPDATE staff_links SET osu_name = ? WHERE osu_id = ?').run(osuName, osuId);
+}
+
 // ─── Desafio de posse de conta ────────────────────────────────────────────────
 
 /**
@@ -95,5 +103,6 @@ function clearStaffChallenge(discordId) {
 
 module.exports = {
   setStaffLink, getStaffLink, getStaffLinkByOsuId, removeStaffLink, listStaffLinks,
+  updateStaffLinkName,
   setStaffChallenge, getStaffChallenge, clearStaffChallenge,
 };
