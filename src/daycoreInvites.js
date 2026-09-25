@@ -39,7 +39,9 @@
 
 const crypto = require('node:crypto');
 const { logError } = require('./lib/logger');
-const config = require('./config');
+// A conexão mora em daycoreMysql.js desde que o /matchcost passou a ler o mesmo
+// banco. Os três nomes continuam exportados daqui para o /invitecode não mudar.
+const { isConfigured, getPool, checkConnection, closePool } = require('./daycoreMysql');
 
 // Mesmo alfabeto do CreateInvite.java — não mude sem checar o fork primeiro.
 const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -55,56 +57,6 @@ function randomCode() {
     code += CODE_CHARS[crypto.randomInt(CODE_CHARS.length)];
   }
   return code;
-}
-
-// ─── Conexão com o MySQL ───────────────────────────────────────────────────
-// Lazy e opcional, como o Redis em daycoreAdmin.js: o bot precisa subir numa
-// máquina sem esse banco por perto — só o /invitecode fica indisponível, com
-// mensagem clara, em vez de derrubar o processo no boot.
-
-let _pool = null;
-
-function isConfigured() {
-  return config.daycoreMysql !== null;
-}
-
-function getPool() {
-  if (!isConfigured()) return null;
-  if (_pool) return _pool;
-
-  // require aqui dentro, e não no topo do arquivo: numa instância sem
-  // DAYCORE_MYSQL_HOST configurado (a maioria dos que rodam este bot para
-  // outro servidor), mysql2 nunca precisa ser carregado.
-  const mysql = require('mysql2/promise');
-
-  _pool = mysql.createPool({
-    ...config.daycoreMysql,
-    waitForConnections: true,
-    connectionLimit: 3,
-    connectTimeout: 5000,
-  });
-
-  return _pool;
-}
-
-/**
- * Testa se dá para falar com o MySQL agora.
- * @returns {Promise<{ok: true} | {ok: false, reason: 'unconfigured'|'unreachable', error?: string}>}
- */
-async function checkConnection() {
-  if (!isConfigured()) return { ok: false, reason: 'unconfigured' };
-  try {
-    const pool = getPool();
-    await pool.query('SELECT 1');
-    return { ok: true };
-  } catch (err) {
-    return { ok: false, reason: 'unreachable', error: err.message };
-  }
-}
-
-async function closePool() {
-  if (_pool) await _pool.end();
-  _pool = null;
 }
 
 /**

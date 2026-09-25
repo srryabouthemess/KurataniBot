@@ -112,7 +112,9 @@ test('erro que não é ER_DUP_ENTRY sobe na hora, sem retry', async () => {
     mysql2.createPool = () => ({
       async execute() { throw new Error('conexão recusada'); },
     });
-    // Força o daycoreInvites a criar um pool novo com este stub.
+    // Força um pool novo com este stub. O pool mora no daycoreMysql, então é
+    // ele que precisa sair do cache — o daycoreInvites só o reexporta.
+    delete require.cache[require.resolve('../src/daycoreMysql')];
     delete require.cache[require.resolve('../src/daycoreInvites')];
     const isolado = require('../src/daycoreInvites');
     await assert.rejects(
@@ -121,6 +123,7 @@ test('erro que não é ER_DUP_ENTRY sobe na hora, sem retry', async () => {
     );
   } finally {
     mysql2.createPool = original;
+    delete require.cache[require.resolve('../src/daycoreMysql')];
     delete require.cache[require.resolve('../src/daycoreInvites')];
   }
 });

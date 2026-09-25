@@ -139,7 +139,7 @@ const config = {
     };
   },
 
-  /** MySQL do bancho (só o /invitecode), ou `null` sem DAYCORE_MYSQL_HOST. */
+  /** MySQL do bancho (/invitecode e /matchcost), ou `null` sem DAYCORE_MYSQL_HOST. */
   get daycoreMysql() {
     const host = str('DAYCORE_MYSQL_HOST');
     if (!host) return null;
