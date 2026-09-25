@@ -211,6 +211,32 @@ function parseCustomMapEvent(raw) {
 }
 
 /**
+ * Loga a queda da conexão uma vez só, e a volta.
+ *
+ * O client emite 'error' a cada tentativa de reconexão — com o Redis fora por
+ * alguns minutos, o log ganhava dezenas de stacks iguais e parecia um problema
+ * contínuo, sem dizer quando caiu nem se voltou. Aqui sai a primeira falha e,
+ * no 'ready' seguinte, quanto tempo ficou fora.
+ *
+ * @param {import('events').EventEmitter} client
+ * @param {object} [deps] para o teste
+ */
+function vigiarConexao(client, { log = logError, info = console.log, agora = Date.now } = {}) {
+  let caiuEm = null;
+  client.on('error', (err) => {
+    if (caiuEm !== null) return;
+    caiuEm = agora();
+    log('daycoreEvents:redis', err);
+  });
+  client.on('ready', () => {
+    if (caiuEm === null) return;
+    const segundos = Math.round((agora() - caiuEm) / 1000);
+    caiuEm = null;
+    info(`[daycoreEvents:redis] Reconectado depois de ${segundos}s fora.`);
+  });
+}
+
+/**
  * Começa a escutar. Idempotente: chamar de novo não abre uma segunda conexão.
  *
  * Os dois canais dividem o MESMO client de propósito: um client em modo
@@ -244,7 +270,7 @@ async function listen({ onStatusChange, onPrivChange, onCustomMapChange } = {}) 
       ...auth,
     });
 
-    client.on('error', (err) => logError('daycoreEvents:redis', err));
+    vigiarConexao(client);
 
     await client.connect();
 
@@ -291,7 +317,7 @@ async function close() {
 }
 
 module.exports = {
-  listen, close, isConfigured,
+  listen, close, isConfigured, vigiarConexao,
   parseEvent, CHANNEL, ANNOUNCED_TYPES,
   parsePrivEvent, PRIV_CHANNEL, PRIV_TYPES,
   parseCustomMapEvent, CUSTOM_MAP_CHANNEL, CUSTOM_MAP_TYPES,

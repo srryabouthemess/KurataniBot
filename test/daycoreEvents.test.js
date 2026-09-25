@@ -202,3 +202,26 @@ test('evento customizado inválido ou hostil é descartado', () => {
   assert.equal(parseCustomMapEvent(customMap({ type: 'deleted', removed: true })), null);
   assert.equal(parseCustomMapEvent(customMap({ type: 'deleted', removed: '2' })), null);
 });
+
+test('queda do Redis: loga a primeira falha e a volta, não cada tentativa', () => {
+  const { EventEmitter } = require('node:events');
+  const { vigiarConexao } = require('../src/daycoreEvents');
+
+  const client = new EventEmitter();
+  const erros = [];
+  const infos = [];
+  let t = 1_000_000;
+  vigiarConexao(client, { log: (ctx, e) => erros.push(e.message), info: m => infos.push(m), agora: () => t });
+
+  client.emit('ready'); // conexão inicial: nada a dizer
+  for (let i = 0; i < 10; i++) client.emit('error', new Error('Socket closed unexpectedly'));
+  t += 95_000;
+  client.emit('ready');
+
+  assert.deepStrictEqual(erros, ['Socket closed unexpectedly']);
+  assert.deepStrictEqual(infos, ['[daycoreEvents:redis] Reconectado depois de 95s fora.']);
+
+  // Uma segunda queda volta a ser logada.
+  client.emit('error', new Error('connect ECONNREFUSED 127.0.0.1:6379'));
+  assert.strictEqual(erros.length, 2);
+});
