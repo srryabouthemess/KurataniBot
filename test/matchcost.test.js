@@ -473,3 +473,13 @@ test('head-to-head sem nenhum score acima de 0: embed com aviso, não descriçã
   assert.equal(embeds.length, 1);
   assert.equal(embeds[0].data.description, s.matchcost_no_scores);
 });
+
+test('cor do embed: time com mais mapas, neutra no empate e fora de Team VS', () => {
+  const { corDoResultado, COR } = require('../src/commands/osu/matchcost/embed');
+  const times = (a, v) => ({ tipo: 'times', azul: { vitorias: a }, vermelho: { vitorias: v } });
+  assert.equal(corDoResultado(times(3, 1)), COR.blue);
+  assert.equal(corDoResultado(times(1, 3)), COR.red);
+  assert.equal(corDoResultado(times(2, 2)), COR.neutra);
+  assert.equal(corDoResultado({ tipo: 'todos' }), COR.neutra);
+  assert.equal(corDoResultado({ tipo: 'vazio' }), COR.neutra);
+});

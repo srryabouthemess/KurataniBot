@@ -11,7 +11,21 @@
 const { EmbedBuilder } = require('discord.js');
 const { arredondar } = require('./logic');
 
-const COR = 0xff66aa;
+// A faixa diz quem ganhou em Team VS. Empate, head-to-head e partida sem jogo
+// ficam na cor neutra — não há time para destacar.
+const COR = {
+  blue:    0x3498db,
+  red:     0xe74c3c,
+  neutra:  0xf1c40f,
+};
+
+function corDoResultado(resultado) {
+  if (resultado.tipo !== 'times') return COR.neutra;
+  const { azul, vermelho } = resultado;
+  if (azul.vitorias > vermelho.vitorias) return COR.blue;
+  if (vermelho.vitorias > azul.vitorias) return COR.red;
+  return COR.neutra;
+}
 
 /** Jogadores por página no head-to-head — o mesmo do Bathbot. */
 const POR_PAGINA = 20;
@@ -95,7 +109,7 @@ function montarEmbeds({ partida, resultado, server, id, opcoes, urlDoJogador }, 
 
   const base = (descricao, rodape) => {
     const embed = new EmbedBuilder()
-      .setColor(COR)
+      .setColor(corDoResultado(resultado))
       .setTitle((partida.name || `#${id}`).slice(0, 256))
       .setURL(urlDaPartida(server, id))
       .setDescription(caber(nota ? `*${nota}*\n\n${descricao}` : descricao, s))
@@ -157,4 +171,4 @@ function montarEmbeds({ partida, resultado, server, id, opcoes, urlDoJogador }, 
   });
 }
 
-module.exports = { montarEmbeds, urlDaPartida, POR_PAGINA };
+module.exports = { montarEmbeds, urlDaPartida, corDoResultado, COR, POR_PAGINA };
