@@ -170,6 +170,37 @@ test('o FC pp ignora os misses e assume o combo cheio', async () => {
   );
 });
 
+test('score hipotético não passa pela estimativa de miss por score', async () => {
+  // O /simulate não tem score total. Mandar 0 como LegacyTotalScore não é
+  // "sem score": o motor calcula a estimativa por score com 0 pontos, acha
+  // miss de mais e derruba o pp -- 95.06pp contra os 107.86pp que o bancho
+  // do Daycore grava para a mesma play. Sem score, só a estimativa por combo
+  // deve operar, então o hipotético tem que sair ACIMA de um score de 0 pontos.
+  //
+  // Precisa de slider: a estimativa por score existe para achar sliderbreak, e
+  // no mapa só de círculos ela nunca pesa.
+  const objetos = [];
+  for (let i = 0; i < 200; i++) {
+    const x = 100 + (i % 300), y = 100 + (i % 200), t = 500 + i * 300;
+    objetos.push(i % 2 ? `${x},${y},${t},1,0` : `${x},${y},${t},2,0,L|${x + 80}:${y},1,80`);
+  }
+  const comSliders = Buffer.from(
+    MAPA.toString().replace(/\[HitObjects\][\s\S]*/, `[HitObjects]\n${objetos.join('\n')}`),
+  );
+  const bytesComSliders = () => Promise.resolve(comSliders);
+  const choke = { mods: ['CL'], n300: 180, n100: 12, n50: 3, misses: 5, combo: 40 };
+
+  const semScore = await lazerWorker.calcular('simulate', 8002, choke, bytesComSliders);
+  const zeroPontos = await lazerWorker.calcular(
+    'simulate', 8002, { ...choke, legacyTotalScore: 0 }, bytesComSliders,
+  );
+
+  assert.ok(
+    semScore.pp > zeroPontos.pp,
+    `sem score (${semScore.pp}) deveria render mais que um score de 0 pontos (${zeroPontos.pp})`,
+  );
+});
+
 test('play interrompida usa só o trecho jogado', async () => {
   // Alguém desistiu no objeto 40 de 200. Os dois lados são como o scorePP.js
   // monta a chamada de verdade, e a diferença entre eles é o assunto do teste:

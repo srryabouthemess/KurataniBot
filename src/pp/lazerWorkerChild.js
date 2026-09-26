@@ -124,8 +124,12 @@ const contarObjetos = (d) => d.nCircles + d.nSliders + d.nSpinners;
  * o score do lazer no lugar do legado, ou zero, derruba o resultado num choke:
  * medido num top play do mrekk, 1052.16pp contra os 1781.65pp corretos, −41%.
  *
- * Zero é o valor certo para score HIPOTÉTICO (FC e /simulate), que não tem score
- * total nenhum: aí só a estimativa por combo opera, que é o que se quer.
+ * Score HIPOTÉTICO (FC e /simulate) não tem score total nenhum, e aí só a
+ * estimativa por combo deve operar. Zero NÃO faz isso: o motor pula a estimativa
+ * por score só quando o LegacyTotalScore é nulo, e com 0 ele acha miss de mais --
+ * 95.06pp contra os 107.86pp que o bancho do Daycore grava para a mesma play. O
+ * nulo sai de `isLegacyScore: false`; a mecânica clássica continua valendo porque
+ * ela vem do mod CL, não desse campo.
  */
 function montarScore({ beatmap, diffAttrs, mods, n300, n100, n50, misses,
                        combo, sliderEndHits, largeTickHits, legacyTotalScore }) {
@@ -141,7 +145,7 @@ function montarScore({ beatmap, diffAttrs, mods, n300, n100, n50, misses,
 
   const score = {
     totalScore: legacyTotalScore ?? 0,
-    isLegacyScore: classico,
+    isLegacyScore: classico && legacyTotalScore != null,
     maxCombo: combo ?? dados.maxCombo,
 
     // Na mecânica clássica os fins de slider não são rastreados e contam todos
