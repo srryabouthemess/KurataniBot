@@ -58,7 +58,7 @@ const FETCH_LIMIT = 50;
  * chega do HTML. Num servidor bancho.py que não tenha esses grupos, nada casa e
  * nada é escondido — que é o comportamento certo para quem não tem o conceito.
  */
-const GRUPOS_OCULTOS = ['cheating', 'fuquila'];
+const GRUPOS_OCULTOS = ['closet cheating', 'blatant cheating'];
 
 /**
  * O TERCEIRO botão do site — "Loved Maps" — não está aqui, e a diferença é
@@ -80,8 +80,8 @@ const GRUPOS_OCULTOS = ['cheating', 'fuquila'];
  * localização, porque ali a palavra é nossa.
  */
 const ESCOLHAS_INCLUIR = [
-  { value: 'cheating', name: 'Cheating' },
-  { value: 'fuquila',  name: 'Fuquila'  },
+  { value: 'closet cheating',  name: 'Closet Cheating'  },
+  { value: 'blatant cheating', name: 'Blatant Cheating' },
   {
     value: 'both',
     name: 'Both',

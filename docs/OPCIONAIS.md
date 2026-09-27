@@ -57,7 +57,7 @@ e o bot busca o `get_player_scores` do próprio bancho.py. É o que o EZPP Farm 
 
 O mesmo campo aceita um endereço, para front-end que serve a API noutro lugar: `SERVER_<CHAVE>_WEB=https://front.exemplo.org/api/v1`.
 
-**Sem Shiina-Web não há grupos de jogador.** Os selos embaixo do nick (✅ Legit, ❌ Cheating…) são desenho dela — o `/leaderboard` e o `/topscores` simplesmente não os exibem, e o `/topscores` deixa de filtrar por grupo.
+**Sem Shiina-Web não há grupos de jogador.** Os selos embaixo do nick (✅ Legit, ❌ Closet Cheating…) são desenho dela — o `/leaderboard` e o `/topscores` simplesmente não os exibem, e o `/topscores` deixa de filtrar por grupo.
 
 **Ripple/Hanayo não se configura pelo `.env`.** A API é outra (tudo em `<site>/api/v1`), então precisa de adaptador próprio — o `kind: 'ripple'` existe e atende o Akatsuki. Para outro, acrescente aos embutidos em `src/servers.js`.
 

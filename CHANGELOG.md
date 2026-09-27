@@ -9,6 +9,9 @@ Akatsuki e do EZPP — desliga-se pelo mesmo `BUILTIN_SERVERS`.
 
 ## 🔧 Mudanças
 
+- **Selos renomeados: Cheating → Closet Cheating, Fuquila → Blatant Cheating.** [`topscores.js`](src/commands/osu/topscores.js), [`leaderboard.js`](src/commands/osu/leaderboard.js)
+  - A comparação é por nome, então o `/topscores` (grupos ocultos e escolhas da opção `all`) e o `/leaderboard` (selos visíveis) passam a casar os nomes novos. Os antigos não casam mais.
+
 - **Adaptador próprio.** [`osu/gatariApi.js`](src/osu/gatariApi.js), [`servers.js`](src/servers.js), [`osuClient.js`](src/osuClient.js)
   - O Gatari veio do Ripple, mas a API pública (`api.gatari.pw`) já é outra:
     caminhos próprios, datas em epoch e o usuário em duas chamadas

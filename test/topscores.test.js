@@ -79,10 +79,10 @@ const PERFIL = `
   <div class="groupPlace d-flex flex-wrap gap-2 mt-2 mb-3">
           <span
               class="badge shiina-badge bg-light bg-opacity-25 text-white py-2 rounded-pill pe-3"><span
-                  class="groupEmoji me-2">🗿</span>Fuquila</span>
+                  class="groupEmoji me-2">🗿</span>Blatant Cheating</span>
           <span
               class="badge shiina-badge bg-light bg-opacity-25 text-white py-2 rounded-pill pe-3"><span
-                  class="groupEmoji me-2">❌</span>Cheating</span>
+                  class="groupEmoji me-2">❌</span>Closet Cheating</span>
   </div>
   <div class="stats">
       <span class="badge shiina-badge">isto NÃO é grupo</span>
@@ -92,8 +92,8 @@ const PERFIL = `
 test('os grupos saem do HTML mesmo com as tags quebradas em linhas', () => {
   const grupos = banchoPy.parseGroups(PERFIL);
   assert.deepEqual(grupos, [
-    { emoji: '🗿', name: 'Fuquila' },
-    { emoji: '❌', name: 'Cheating' },
+    { emoji: '🗿', name: 'Blatant Cheating' },
+    { emoji: '❌', name: 'Closet Cheating' },
   ]);
 });
 
@@ -110,13 +110,15 @@ test('perfil sem grupo nenhum devolve lista vazia', () => {
   assert.deepEqual(banchoPy.parseGroups(null), []);
 });
 
-test('só Cheating e Fuquila escondem a play', () => {
+test('só Closet Cheating e Blatant Cheating escondem a play', () => {
   const g = (...nomes) => nomes.map(name => ({ emoji: '', name }));
 
-  assert.equal(topscores.estaOculto(g('Cheating', 'Nominator')), true);
-  assert.equal(topscores.estaOculto(g('Fuquila')), true);
+  assert.equal(topscores.estaOculto(g('Closet Cheating', 'Nominator')), true);
+  assert.equal(topscores.estaOculto(g('Blatant Cheating')), true);
   // A caixa vem do HTML e não é garantida.
-  assert.equal(topscores.estaOculto(g('cheating')), true);
+  assert.equal(topscores.estaOculto(g('closet cheating')), true);
+  // O nome antigo não casa mais.
+  assert.equal(topscores.estaOculto(g('Cheating', 'Fuquila')), false);
 
   assert.equal(topscores.estaOculto(g('Legit', 'Nominator', 'Developer')), false);
   assert.equal(topscores.estaOculto(g('puppy', 'Supporter')), false);
@@ -124,13 +126,13 @@ test('só Cheating e Fuquila escondem a play', () => {
 });
 
 test('a opção `all` tira da lista de ocultos o grupo que ela inclui', () => {
-  // É o que cada escolha do comando faz: `cheating` deixa a lista com só
-  // `fuquila` dentro, e `both` a esvazia.
+  // É o que cada escolha do comando faz: `closet cheating` deixa a lista com só
+  // `blatant cheating` dentro, e `both` a esvazia.
   const g = (...nomes) => nomes.map(name => ({ emoji: '', name }));
 
-  assert.equal(topscores.estaOculto(g('Cheating'), ['fuquila']), false);
-  assert.equal(topscores.estaOculto(g('Fuquila'),  ['fuquila']), true);
-  assert.equal(topscores.estaOculto(g('Cheating', 'Fuquila'), []), false, 'both não esconde ninguém');
+  assert.equal(topscores.estaOculto(g('Closet Cheating'), ['blatant cheating']), false);
+  assert.equal(topscores.estaOculto(g('Blatant Cheating'), ['blatant cheating']), true);
+  assert.equal(topscores.estaOculto(g('Closet Cheating', 'Blatant Cheating'), []), false, 'both não esconde ninguém');
 });
 
 test('só o adaptador de bancho.py responde melhores scores do servidor', () => {

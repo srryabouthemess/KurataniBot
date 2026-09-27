@@ -65,7 +65,7 @@ const PAIS = /^[A-Za-z]{2}$/;
  * bandeira sem dizer nada sobre o ranking.
  *
  * Os três que ficam são os que falam do **número ao lado** — se aquele pp
- * conta. E não é opinião nossa: Cheating e Fuquila são exatamente os dois que o
+ * conta. E não é opinião nossa: Closet Cheating e Blatant Cheating são exatamente os dois que o
  * site tira do Top Plays por padrão, e Legit é o contrário deles. O resto é
  * cargo (Nominator, Moderator, Developer, Supporter) ou apelido interno
  * (puppy), que diz respeito à pessoa e não à posição dela.
@@ -73,7 +73,7 @@ const PAIS = /^[A-Za-z]{2}$/;
  * Aqui os três só são EXIBIDOS: ninguém some do ranking por causa de selo. É o
  * /topscores que esconde plays, e lá a regra continua sendo a do site.
  */
-const SELOS_VISIVEIS = ['legit', 'cheating', 'fuquila'];
+const SELOS_VISIVEIS = ['legit', 'closet cheating', 'blatant cheating'];
 
 /**
  * 'BR' → 🇧🇷, montado a partir dos indicadores regionais.

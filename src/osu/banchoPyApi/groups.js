@@ -36,7 +36,7 @@ const GRUPO_ITEM = /<span[^>]*class="[^"]*shiina-badge[^"]*"[^>]*>\s*(?:<span[^>
  *
  * E não dá para derivar do `priv`. Medido no Daycore: a yumi tem os bits de
  * ADMINISTRATOR e DEVELOPER e mostra só "puppy" e "Legit"; o noober tem o bit
- * de DEVELOPER e mostra "Nominator" e "Cheating". São conjuntos independentes.
+ * de DEVELOPER e mostra "Nominator" e "Closet Cheating". São conjuntos independentes.
  *
  * O recorte é DENTRO do `groupPlace` de propósito: `shiina-badge` é classe de
  * uso geral do tema e aparece em outros pontos da página.

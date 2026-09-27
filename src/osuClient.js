@@ -395,7 +395,7 @@ const supportsTopScores = (mode = DEFAULT_MODE) => typeof apiFor(mode).topScores
 
 /**
  * Se aquele servidor tem "grupos" de jogador — os selos que o front-end mostra
- * embaixo do nick (❌ Cheating, 🗿 Fuquila, ✅ Legit, ✍ Nominator...).
+ * embaixo do nick (❌ Closet Cheating, 🗿 Blatant Cheating, ✅ Legit, ✍ Nominator...).
  *
  * Também é coisa só de bancho.py com Shiina-Web: não existe no osu! oficial nem
  * no Ripple, e mesmo entre bancho.py depende do front-end. Quem não tem devolve
