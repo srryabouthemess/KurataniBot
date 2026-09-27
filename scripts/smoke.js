@@ -43,7 +43,9 @@ const PLAYERS = {
   akatsuki_rx: '47379',
   ezpp:        '17854',
   ezpp_rx:     '17854',
-  default:     'pudim2',
+  gatari:      '29826',
+  gatari_rx:   '29826',
+  default:     '25',
 };
 
 (async () => {
