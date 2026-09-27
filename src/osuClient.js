@@ -30,6 +30,7 @@ const pp = require('./pp');
 const officialApi = require('./osu/officialApi');
 const banchoPyApi = require('./osu/banchoPyApi');
 const rippleApi = require('./osu/rippleApi');
+const gatariApi = require('./osu/gatariApi');
 const { dedupe } = require('./lib/inflight');
 const { parseModsString, parseModTokens } = require('./mods');
 const { idSegment } = require('./lib/urlSafe');
@@ -50,6 +51,7 @@ const ADAPTERS = {
   official: officialApi,
   banchopy: banchoPyApi,
   ripple:   rippleApi,
+  gatari:   gatariApi,
 };
 
 /**

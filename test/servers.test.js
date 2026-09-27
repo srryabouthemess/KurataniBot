@@ -297,6 +297,17 @@ test('embutidos', async t => {
     assert.equal(s.namespace('ezpp_rx'), s.namespace('ezpp'));
   });
 
+  await t.test('o Gatari vem por padrão, com o Relax no eixo e não no modo 4', () => {
+    const s = comEmbutidos();
+    assert.equal(s.get('gatari').kind, 'gatari');
+    assert.equal(s.get('gatari').api, 'https://api.gatari.pw');
+    assert.equal(s.get('gatari_rx').relax, true);
+    // A API pede Relax por `special=1`, com o modo continuando 0 — como o Ripple.
+    assert.equal(s.get('gatari_rx').gameMode, 0);
+    assert.equal(s.get('gatari_rx').rx, 1);
+    assert.equal(s.namespace('gatari_rx'), s.namespace('gatari'));
+  });
+
   await t.test('o nome antigo ainda resolve', () => {
     const s = comEmbutidos();
     assert.equal(s.resolveKey('ezppfarm'), 'ezpp');
@@ -307,6 +318,7 @@ test('embutidos', async t => {
     const s = load({ BUILTIN_SERVERS: '' });
     assert.equal(s.has('akatsuki'), false);
     assert.equal(s.has('ezpp'), false);
+    assert.equal(s.has('gatari'), false);
     // O alias não pode sobreviver ao embutido: sem a conferência, `has` diria
     // que sim e o `get` devolveria o padrão como se fosse o EZPP.
     assert.equal(s.has('ezppfarm'), false);

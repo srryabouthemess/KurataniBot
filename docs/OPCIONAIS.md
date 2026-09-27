@@ -18,12 +18,12 @@ Cada seção é independente — ligue só o que você quer.
 
 ## Servidores privados
 
-O **Akatsuki** (`akatsuki`, `akatsuki_rx`) e o **EZPP Farm** (`ezpp`, `ezpp_rx`) já vêm de fábrica. Para escolher quais embutidos carregar:
+O **Akatsuki** (`akatsuki`, `akatsuki_rx`), o **EZPP Farm** (`ezpp`, `ezpp_rx`) e o **Gatari** (`gatari`, `gatari_rx`) já vêm de fábrica. Para escolher quais embutidos carregar:
 
 ```bash
 BUILTIN_SERVERS=                 # nenhum
-BUILTIN_SERVERS=akatsuki,ezpp    # os dois (padrão, se a linha não existir)
-BUILTIN_SERVERS=ezpp             # só esse
+BUILTIN_SERVERS=akatsuki,ezpp,gatari  # todos (padrão, se a linha não existir)
+BUILTIN_SERVERS=ezpp                  # só esse
 ```
 
 A chave do EZPP é curta de propósito — é ela que se digita no modo texto (`k!rs fulano -ezpp`, `-ezpprx`). O nome antigo `ezppfarm` ainda resolve, para o que tenha ficado escrito por aí.
@@ -125,7 +125,7 @@ Cada servidor calcula no motor que **ele próprio** roda — um FC pp ou uma est
 | Bancho (osu! oficial) | `rosu-pp-bancho` | — |
 | Daycore | `rosu-pp-daycore` | akatsuki-pp |
 | Akatsuki | akatsuki-pp | akatsuki-pp |
-| Qualquer outro (EZPP, bancho.py do `.env`) | `rosu-pp-daycore` | akatsuki-pp |
+| Qualquer outro (EZPP, Gatari, bancho.py do `.env`) | `rosu-pp-daycore` | akatsuki-pp |
 
 Os dois `rosu-pp-*` são o [`rosu-pp-js`](https://github.com/MaxOhn/rosu-pp-js) compilado contra o [fork do rosu-pp](https://github.com/srryabouthemess/rosu-pp):
 

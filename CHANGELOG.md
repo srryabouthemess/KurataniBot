@@ -2,6 +2,39 @@
 
 ---
 
+# Sessão de 2026-09-26 (Gatari)
+
+O **Gatari** (`gatari`, `gatari_rx`) entra como servidor embutido, ao lado do
+Akatsuki e do EZPP — desliga-se pelo mesmo `BUILTIN_SERVERS`.
+
+## 🔧 Mudanças
+
+- **Adaptador próprio.** [`osu/gatariApi.js`](src/osu/gatariApi.js), [`servers.js`](src/servers.js), [`osuClient.js`](src/osuClient.js)
+  - O Gatari veio do Ripple, mas a API pública (`api.gatari.pw`) já é outra:
+    caminhos próprios, datas em epoch e o usuário em duas chamadas
+    (`/users/get` + `/user/stats`). Daí um `kind: 'gatari'`, em vez de forçar
+    o adaptador do Ripple.
+  - Relax é o eixo `special=1`, com o modo continuando 0 — como o `rx` do
+    Ripple. As estatísticas vêm com sufixo (`pp_rx`, `rank_rx`), e o ranking
+    muda pelo caminho (`/leaderboard/rx`), que ignora o `special`.
+  - O ranking vem de 50 em 50; o adaptador pagina até o limite pedido.
+  - O link de perfil do Relax aponta para a página dele (`/u/<id>/rx`).
+- **PP.** O rework do Gatari não é público, então o cálculo local cai no
+  perfil padrão (o do Daycore). Conferido contra as top plays de uma conta:
+  nenhum motor reproduz o pp do servidor — o vanilla erra para os dois lados,
+  e o Relax do Gatari fica em torno de metade do akatsuki-pp —, porque o
+  servidor não recalcula plays antigas. O pp mostrado em cada play continua o
+  do servidor; o local só entra em FC, simulação e estrela.
+
+## ✅ Testes
+
+- `gatariApi.test.js`: tradução de score, score do mapa, usuário VN/RX,
+  endereços e ranking, sobre respostas reais da API.
+- `servers.test.js` e `motorPorServidor.test.js`: o embutido, o eixo do Relax
+  e o motor padrão.
+
+---
+
 # Sessão de 2026-09-26 (um motor de PP por servidor)
 
 Cada servidor passa a calcular no motor que **ele próprio** roda. Um FC pp ou uma

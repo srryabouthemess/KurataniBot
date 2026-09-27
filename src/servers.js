@@ -174,11 +174,15 @@ function buildBanchoPy(key) {
  *   Ripple    — são dois eixos: `mode` (0-3) e `rx` (0 vanilla, 1 relax,
  *               2 autopilot). O modo continua 0.
  *
+ * O Gatari segue o Ripple (lá o eixo se chama `special`).
+ *
  * Antes isto era `gameMode: 4` fixo, o que só valia para bancho.py. Agora cada
  * tipo diz como pede o seu, e o adaptador lê o campo que lhe interessa.
  */
+const RELAX_POR_EIXO = new Set(['ripple', 'gatari']);
+
 function relaxVariant(server) {
-  const comoPedeRelax = server.kind === 'ripple'
+  const comoPedeRelax = RELAX_POR_EIXO.has(server.kind)
     ? { gameMode: 0, rx: 1 }
     : { gameMode: 4, rx: 0 };
 
@@ -253,6 +257,24 @@ const BUILTINS = {
       avatars: 'https://a.ez-pp.farm',
       webApi:  null,
     }),
+    builtinRelax: true,
+  },
+
+  // O Gatari veio do Ripple mas a API pública já é outra (host `api.`,
+  // caminhos e formatos próprios), daí o `kind` separado — ver gatariApi.js.
+  // Sem `ppProfile`: o rework dele não é público, então o cálculo local cai
+  // no padrão (ver pp/engines.js).
+  gatari: {
+    key:       'gatari',
+    label:     'Gatari',
+    kind:      'gatari',
+    namespace: 'gatari',
+    gameMode:  0,
+    rx:        0,
+    relax:     false,
+    webUrl:    'https://osu.gatari.pw',
+    api:       'https://api.gatari.pw',
+    avatars:   'https://a.gatari.pw',
     builtinRelax: true,
   },
 };

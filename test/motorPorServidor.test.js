@@ -72,6 +72,9 @@ test('o mapa servidor → motor', () => {
   assert.deepEqual(engines.PERFIS[engines.PERFIL_PADRAO], engines.PERFIS.daycore);
   assert.equal(motor('ezpp'),    'daycore');
   assert.equal(motor('ezpp_rx'), 'akatsuki');
+  // O rework do Gatari não é público: cai no padrão, como o EZPP.
+  assert.equal(motor('gatari'),    'daycore');
+  assert.equal(motor('gatari_rx'), 'akatsuki');
 });
 
 test('a chave de cache do rosu-pp leva a versão do build', () => {
