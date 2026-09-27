@@ -7,8 +7,7 @@ const metrics = require('../../lib/metrics');
 // Direto nos workers, e não via pp.js: o que interessa aqui é o estado dos
 // motores, não o cálculo. Pelo pp o comando arrastaria junto o banco e todo o
 // caminho de PP para montar um embed de contadores.
-const pythonWorker = require('../../pp/pythonWorker');
-const rosuWorker = require('../../pp/rosuWorker');
+const wasmWorker = require('../../pp/wasmWorker');
 const { t } = require('../../i18n');
 
 /**
@@ -82,10 +81,7 @@ module.exports = {
   async execute(interaction) {
     const s = t(interaction);
     const { uptimeMs, contadores, caches } = metrics.snapshot();
-    const workers = {
-      rosu:   rosuWorker.stats(),
-      python: pythonWorker.stats(),
-    };
+    const workers = wasmWorker.stats();
 
     const embed = new EmbedBuilder()
       .setColor(0x99ccff)
@@ -106,17 +102,13 @@ module.exports = {
       embed.addFields({ name: s.diag_limiter, value: limiterLinhas.join('\n') });
     }
 
-    embed.addFields({
-      name: s.diag_workers,
-      value: [
-        // Os builds do rosu-pp vêm primeiro: respondem pela maioria dos números
-        // que as pessoas veem (estrelas, PP e a linha do mapa). Só aparecem os
-        // que já receberam algum pedido — a thread nasce no primeiro.
-        ...Object.entries(workers.rosu).map(([pacote, w]) =>
-          s.diag_worker_line(pacote, w.vivo, w.served, w.failed)),
-        s.diag_worker_line('akatsuki-pp', workers.python.vivo, workers.python.served, workers.python.failed),
-      ].join('\n'),
-    });
+    // Um build por linha, só dos que já receberam algum pedido — a thread
+    // nasce no primeiro.
+    const workerLinhas = Object.entries(workers).map(([pacote, w]) =>
+      s.diag_worker_line(pacote, w.vivo, w.served, w.failed));
+    if (workerLinhas.length) {
+      embed.addFields({ name: s.diag_workers, value: workerLinhas.join('\n') });
+    }
 
     return interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
   },

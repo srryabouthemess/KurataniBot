@@ -1,0 +1,23 @@
+[package]
+name = "akatsuki-pp-js"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "Binding wasm minimo do osuAkatsuki/akatsuki-pp-rs para o KurataniBot"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+# Troque o rev para refazer o build de outro servidor (ver KurataniBot/docs/OPCIONAIS.md).
+akatsuki-pp = { git = "https://github.com/osuAkatsuki/akatsuki-pp-rs", rev = "591de0db4948f2c504ca6e2ca3db442f09103ef1" }
+wasm-bindgen = "0.2.95"
+
+[package.metadata.wasm-pack.profile.release]
+wasm-opt = ["--enable-bulk-memory", "--enable-nontrapping-float-to-int"]
+
+[profile.release]
+lto = true
+panic = "abort"
+codegen-units = 1
+strip = true

@@ -37,7 +37,7 @@ const path = require('path');
 
 const { DATA_DIR } = require('../paths');
 
-const VERSAO_ATUAL = 6;
+const VERSAO_ATUAL = 7;
 
 /** A versão mais antiga que as migrações abaixo sabem levar até a atual. */
 const VERSAO_MINIMA = 1;
@@ -275,6 +275,26 @@ function descartarCacheDoRosuUnico(db) {
   }
 }
 
+// ─── 6 → 7: o akatsuki-pp no commit de cada servidor ──────────────────────────
+
+/**
+ * Apaga as linhas do motor `akatsuki` da map_difficulty e da fc_pp.
+ *
+ * Elas vieram do akatsuki-pp-py do PyPI, num commit do akatsuki-pp-rs que
+ * nenhum dos servidores roda. Os builds novos (ver pp/engines.js) gravam sob
+ * `akatsuki@<versão>` e `daycore_rx@<versão>`, então as antigas nunca mais
+ * seriam lidas — só ocupariam espaço, sem TTL que as vença.
+ */
+function descartarCacheDoAkatsukiPy(db) {
+  const apagadas =
+    db.prepare("DELETE FROM cache.map_difficulty WHERE engine = 'akatsuki'").run().changes +
+    db.prepare("DELETE FROM cache.fc_pp WHERE engine = 'akatsuki'").run().changes;
+
+  if (apagadas > 0) {
+    console.log(`[db] ${apagadas} valor(es) do akatsuki-pp-py descartados; recalculados sob demanda.`);
+  }
+}
+
 // ─── Execução ─────────────────────────────────────────────────────────────────
 
 function run(db) {
@@ -299,6 +319,10 @@ function run(db) {
 
   if (versao < 6) {
     descartarCacheDoRosuUnico(db);
+  }
+
+  if (versao < 7) {
+    descartarCacheDoAkatsukiPy(db);
   }
 
   // Interpolado porque PRAGMA não aceita parâmetro; o valor é uma constante do

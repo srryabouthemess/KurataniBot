@@ -239,8 +239,7 @@ client.once('clientReady', async () => {
 
 async function encerrar(codigo) {
   await client.destroy();
-  pp.closePythonWorker();
-  pp.closeRosuWorker();
+  pp.closeWasmWorker();
   db.close();
   process.exit(codigo);
 }

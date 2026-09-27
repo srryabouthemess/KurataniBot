@@ -33,10 +33,10 @@ const ARQUIVO_LICENCA = /^(LICENSE|LICENCE|COPYING|NOTICE)([-.].*)?$/i;
 /**
  * O que o bot usa e o npm não vê — mantido à mão, porque não há de onde ler.
  *
- * O lock cobre o que o `npm install` baixa, e isso não é tudo: a lib Python do
- * PP do Relax é instalada por fora, as imagens em `assets/` vieram do jogo, a
- * fórmula do /matchcost foi portada do código do Bathbot e os `.wasm` do
- * vendor/rosu-pp-* levam crates Rust compilados dentro. São de terceiro do mesmo
+ * O lock cobre o que o `npm install` baixa, e isso não é tudo: as imagens em
+ * `assets/` vieram do jogo, a fórmula do /matchcost foi portada do código do
+ * Bathbot e os `.wasm` do vendor/rosu-pp-* e vendor/akatsuki-pp-* levam crates
+ * Rust compilados dentro. São de terceiro do mesmo
  * jeito, e nenhum aparece se este arquivo esperar o npm contar.
  *
  * Mexeu aqui? Acrescente a entrada; o gerador só a imprime.
@@ -61,38 +61,23 @@ const FORA_DO_NPM = [
     ],
   },
   {
-    titulo:    'akatsuki-pp-py — MIT',
+    titulo: 'Crates Rust dentro do vendor/akatsuki-pp-* — MIT / MIT OR Apache-2.0',
     corpo: [
-      'Calcula o PP das plays de **Relax**, que usa outro sistema de PP. É opcional e',
-      'quem opera o bot instala na própria máquina (veja [`docs/OPCIONAIS.md`](docs/OPCIONAIS.md)),',
-      'então o repositório não a redistribui — mas ela é dependência do código do mesmo',
-      'jeito: [`src/pp/pp_calc.py`](src/pp/pp_calc.py) a importa, e sem ela o PP do RX sai como `?pp`.',
+      'O `akatsuki-pp-akatsuki` e o `akatsuki-pp-daycore` acima são o binding de',
+      '[`vendor/akatsuki-pp-js`](vendor/akatsuki-pp-js) compilado em Wasm contra o',
+      '`akatsuki-pp-rs`, cada um no commit que o servidor roda. O npm só enxerga o',
+      'pacote JavaScript; estes vêm junto no binário:',
       '',
-      'De Max Ohn e tsunyoku — <https://github.com/osuAkatsuki/akatsuki-pp-py>.',
+      '| Crate | Licença |',
+      '| --- | --- |',
+      '| `akatsuki-pp` (<https://github.com/osuAkatsuki/akatsuki-pp-rs>, de Max Ohn e tsunyoku) | MIT |',
+      '| `rosu-map`, `rosu-mods` | MIT |',
+      '| `wasm-bindgen`, `once_cell`, `cfg-if` | MIT OR Apache-2.0 |',
+      '',
+      'O texto MIT do `akatsuki-pp` está no `LICENSE` de cada pacote, na seção de',
+      'textos acima. Os demais são usados pela opção MIT, cujo texto é o mesmo, com o',
+      'aviso de copyright de cada projeto no respectivo repositório.',
     ],
-    texto: [
-      'MIT License',
-      '',
-      'Copyright (c) 2021 Max',
-      '',
-      'Permission is hereby granted, free of charge, to any person obtaining a copy',
-      'of this software and associated documentation files (the "Software"), to deal',
-      'in the Software without restriction, including without limitation the rights',
-      'to use, copy, modify, merge, publish, distribute, sublicense, and/or sell',
-      'copies of the Software, and to permit persons to whom the Software is',
-      'furnished to do so, subject to the following conditions:',
-      '',
-      'The above copyright notice and this permission notice shall be included in all',
-      'copies or substantial portions of the Software.',
-      '',
-      'THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR',
-      'IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,',
-      'FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE',
-      'AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER',
-      'LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,',
-      'OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE',
-      'SOFTWARE.',
-    ].join('\n'),
   },
   {
     titulo: 'Bathbot — ISC',
@@ -244,8 +229,8 @@ function gerar() {
     'cumprimento.',
     '',
     `Cobre as **${pacotes.length} dependências de produção** do lock — as transitivas`,
-    'inclusive, que são a maioria — e mais quatro que o npm não enxerga: os crates Rust',
-    'compilados nos `.wasm` do rosu-pp, a lib Python do PP do Relax, os ícones de',
+    'inclusive, que são a maioria — e mais três que o npm não enxerga: os crates Rust',
+    'compilados nos `.wasm` do rosu-pp e do akatsuki-pp, os ícones de',
     'grade, que vieram do jogo, e o código do Bathbot de onde saiu a fórmula do',
     '`/matchcost`. Estas últimas estão em',
     '[O que não vem do npm](#o-que-não-vem-do-npm), no fim.',

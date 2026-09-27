@@ -9,16 +9,18 @@
  *
  *   Bancho    → o fork do rosu-pp que segue o osu!lazer master (rosu-pp-bancho)
  *   Daycore   → vanilla no fork do rosu-pp, no commit que o bancho.py dele roda
- *               (rosu-pp-daycore); Relax no akatsuki-pp
- *   Akatsuki  → o akatsuki-pp nos dois leaderboards, que é o que o servidor usa
+ *               (rosu-pp-daycore); Relax no akatsuki-pp-rs, no commit do
+ *               akatsuki-rx-py dele (akatsuki-pp-daycore)
+ *   Akatsuki  → o akatsuki-pp-rs nos dois leaderboards, no commit do
+ *               performance-service deles (akatsuki-pp-akatsuki)
  *
  * Servidor sem rework próprio (EZPP, e todo bancho.py vindo do `.env`) cai no
  * perfil do Daycore: é o bancho.py de referência deste bot, e o rework vanilla
  * dele é o do stable que o resto desses servidores também roda.
  *
- * Os dois builds do rosu-pp são pacotes separados no `vendor/` justamente para
- * poderem andar em ritmos diferentes: o do Bancho acompanha o lazer, o do
- * Daycore só muda quando o servidor muda (ver docs/OPCIONAIS.md).
+ * Cada build é um pacote separado no `vendor/` justamente para poderem andar em
+ * ritmos diferentes: o do Bancho acompanha o lazer, os outros só mudam quando o
+ * servidor muda (ver docs/OPCIONAIS.md).
  */
 
 const servers = require('../servers');
@@ -28,17 +30,22 @@ const servers = require('../servers');
  * score. O osu! oficial usa; o bancho.py do Daycore não passa o score para o
  * rosu-pp, então lá só a estimativa por combo opera — e o bot tem de fazer igual
  * para dar o mesmo número num choke.
+ *
+ * `viaAcc`: se o akatsuki-pp recebe accuracy + misses em vez dos hits. É como o
+ * score-service do Akatsuki pede o PP, e o número muda com isso (ver
+ * akatsukiWorkerThread.js); o bancho.py do Daycore passa os hits.
  */
 const MOTORES = {
-  bancho:   { id: 'bancho',   tipo: 'rosu',     pacote: 'rosu-pp-bancho',  scoreLegado: true },
-  daycore:  { id: 'daycore',  tipo: 'rosu',     pacote: 'rosu-pp-daycore', scoreLegado: false },
-  akatsuki: { id: 'akatsuki', tipo: 'akatsuki' },
+  bancho:     { id: 'bancho',     tipo: 'rosu',     pacote: 'rosu-pp-bancho',       scoreLegado: true },
+  daycore:    { id: 'daycore',    tipo: 'rosu',     pacote: 'rosu-pp-daycore',      scoreLegado: false },
+  akatsuki:   { id: 'akatsuki',   tipo: 'akatsuki', pacote: 'akatsuki-pp-akatsuki', viaAcc: true },
+  daycore_rx: { id: 'daycore_rx', tipo: 'akatsuki', pacote: 'akatsuki-pp-daycore',  viaAcc: false },
 };
 
 /** Motor do leaderboard vanilla e do de Relax, por perfil de servidor. */
 const PERFIS = {
-  bancho:   { vn: 'bancho',   rx: 'akatsuki' },
-  daycore:  { vn: 'daycore',  rx: 'akatsuki' },
+  bancho:   { vn: 'bancho',   rx: 'daycore_rx' },
+  daycore:  { vn: 'daycore',  rx: 'daycore_rx' },
   akatsuki: { vn: 'akatsuki', rx: 'akatsuki' },
 };
 
@@ -47,13 +54,11 @@ const PERFIL_PADRAO = 'daycore';
 /**
  * Chave do motor no cache em disco.
  *
- * Nos builds do rosu-pp ela leva a versão do pacote, que carrega o commit do
- * fork: a `map_difficulty` não tem TTL, e sem isto uma estrela calculada antes
+ * Ela leva a versão do pacote, que carrega o commit do motor: a `map_difficulty` não tem TTL, e sem isto uma estrela calculada antes
  * de um rework continuaria sendo servida depois dele. Com a versão na chave, o
  * build novo simplesmente não encontra as linhas do antigo.
  */
 function chaveDeCache(motor) {
-  if (motor.tipo !== 'rosu') return motor.id;
   try {
     return `${motor.id}@${require(`${motor.pacote}/package.json`).version}`;
   } catch {
@@ -72,8 +77,8 @@ function perfilDe(mode) {
 /**
  * O motor que responde pelo leaderboard `mode`.
  *
- * @returns {{id: string, tipo: 'rosu'|'akatsuki', pacote?: string,
- *            scoreLegado?: boolean, cache: string}}
+ * @returns {{id: string, tipo: 'rosu'|'akatsuki', pacote: string,
+ *            scoreLegado?: boolean, viaAcc?: boolean, cache: string}}
  */
 function motorDe(mode) {
   const perfil = perfilDe(mode);

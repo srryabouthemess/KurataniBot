@@ -210,9 +210,8 @@ caso('/invitecode (recusa)', 'invitecode', {}, { esperaRecusa: true });
 
   console.log(`\n${casos.length} comandos exercitados, ${falhas} problema(s).`);
 
-  // Os dois motores de PP são de vida longa; sem fechá-los o processo não sai.
-  pp.closePythonWorker();
-  pp.closeRosuWorker();
+  // As threads dos motores de PP são de vida longa; sem fechá-las o processo não sai.
+  pp.closeWasmWorker();
   db.close();
   process.exit(falhas === 0 ? 0 : 1);
 })();

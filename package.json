@@ -26,6 +26,8 @@
     "dotenv": "^17.4.0",
     "mysql2": "^3.24.4",
     "redis": "^6.2.0",
+    "akatsuki-pp-akatsuki": "file:vendor/akatsuki-pp-akatsuki",
+    "akatsuki-pp-daycore": "file:vendor/akatsuki-pp-daycore",
     "rosu-pp-bancho": "file:vendor/rosu-pp-bancho",
     "rosu-pp-daycore": "file:vendor/rosu-pp-daycore"
   },

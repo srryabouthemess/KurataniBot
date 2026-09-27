@@ -144,7 +144,7 @@ module.exports = {
       if (!attrs?.objects) return interaction.editReply(s.map_no_file);
 
       // Em paralelo: são cinco chamadas ao mesmo mapa, que a thread do rosu-pp
-      // só parseia na primeira (ver rosuWorker.js).
+      // só parseia na primeira (ver wasmWorker.js).
       //
       // `classic: true` pelo mesmo motivo do /simulate: é a mecânica que
       // praticamente todo mundo joga, e é a que o resto do bot assume ao

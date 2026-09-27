@@ -73,7 +73,6 @@ Nada disto é necessário — o bot já funciona no Bancho com o que está acima
 - **Comandos por texto** — `k!rs mrekk` em vez de `/rs`
 - **Emojis de rank** nas plays
 - **Usar em DM**
-- **PP no Relax**
 - **Administração de servidor** — nomear mapas, moderar contas
 
 Como ligar cada um: **[docs/OPCIONAIS.md](docs/OPCIONAIS.md)**.

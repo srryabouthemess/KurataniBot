@@ -3,8 +3,8 @@
  * Cálculo de performance points e tudo que ele precisa.
  *
  * Saiu do osuClient porque não é cliente de API nenhuma. O que sobrou aqui,
- * depois de os dois motores irem para fora do processo principal
- * (rosuWorker.js, pythonWorker.js) e o download do .osu para o beatmapFile.js, é a decisão:
+ * depois de os motores irem para fora do processo principal (wasmWorker.js) e o
+ * download do .osu para o beatmapFile.js, é a decisão:
  * o que vale a pena calcular, com os mods em que forma, e onde o resultado fica
  * guardado. QUAL motor responde por cada servidor está no engines.js.
  *
@@ -20,8 +20,7 @@ const {
 const { logErrorOnce } = require('../lib/logger');
 const { getBeatmapFile } = require('./beatmapFile');
 const { TtlCache } = require('../lib/ttlCache');
-const pythonWorker = require('./pythonWorker');
-const rosuWorker = require('./rosuWorker');
+const wasmWorker = require('./wasmWorker');
 const { MOTORES, motorDe } = require('./engines');
 
 const DEFAULT_MODE = servers.defaultKey();
@@ -32,15 +31,16 @@ const DEFAULT_MODE = servers.defaultKey();
 //   rosu-pp (fork, Wasm)  — um build para o Bancho, que segue o osu!lazer master
 //                           e confere com a API oficial em 1e-6; outro para o
 //                           vanilla do Daycore e de quem não tem rework próprio.
-//   akatsuki-pp-py        — o Relax dos bancho.py e os dois leaderboards do
-//                           Akatsuki (pythonWorker.js).
+//   akatsuki-pp (Wasm)    — o osuAkatsuki/akatsuki-pp-rs: um build no commit do
+//                           Akatsuki, para os dois leaderboards dele; outro no do
+//                           Relax do Daycore e de quem não tem rework próprio.
 //
 // A linha de informação do mapa (CS/AR/OD/HP, BPM, objetos) sai sempre do build
 // do Bancho: ela não depende de rework nenhum.
 //
-// Todos rodam fora do processo principal: o rosu-pp é Wasm síncrono e
-// paralisaria o event loop, e o Python é outro runtime. As libs são opcionais —
-// sem elas o bot continua respondendo, só sem os valores calculados localmente.
+// Todos rodam fora do processo principal, porque Wasm é síncrono e paralisaria
+// o event loop. Os pacotes são opcionais — sem eles o bot continua respondendo,
+// só sem os valores calculados localmente.
 
 /**
  * Os mods como o motor de cálculo precisa vê-los.
@@ -82,22 +82,29 @@ function engineMods(mode, mods) {
 const lazerMods = (mods) => stripImpliedDT(mods);
 
 /**
- * Manda uma operação para a thread do build do rosu-pp daquele motor.
+ * Manda uma operação para a thread do build daquele motor.
  *
  * Os bytes do mapa só são buscados se a thread não tiver aquele mapa parseado —
- * ela pede, e só então o download/cache é consultado (ver rosuWorker.js).
+ * ela pede, e só então o download/cache é consultado (ver wasmWorker.js).
  */
-const noRosu = (motor, op, mapId, args) =>
-  rosuWorker.calcular(motor.pacote, op, mapId, args, () => getBeatmapFile(mapId));
+const noMotor = (motor, op, mapId, args) =>
+  wasmWorker.calcular(motor, op, mapId, args, () => getBeatmapFile(mapId));
 
 /**
  * Os mods na forma que o motor recebe, que também é a forma da chave de cache.
  *
- * O akatsuki-pp é bitmask e lê a velocidade do bit do DT, então tirar o DT de um
- * nightcore apagaria o mod inteiro; o rosu-pp precisa do corte (ver lazerMods).
+ * O akatsuki-pp é bitmask e lê a velocidade só do bit do DT, então o nightcore
+ * vai com o DT junto — tirá-lo apagaria o mod inteiro, e é o que o stable manda
+ * e o bancho.py do Daycore garante (ver akatsukiWorkerThread.js). O rosu-pp
+ * precisa do corte contrário (ver lazerMods).
  */
-const modsDoMotor = (motor, mods) =>
-  motor.tipo === 'akatsuki' ? [...(mods ?? [])] : lazerMods(mods);
+function modsDoMotor(motor, mods) {
+  if (motor.tipo !== 'akatsuki') return lazerMods(mods);
+  const lista = [...(mods ?? [])];
+  const tem = (acr) => lista.some(mod => modAcronym(mod) === acr);
+  if (tem('NC') && !tem('DT')) lista.push('DT');
+  return lista;
+}
 
 /**
  * Calcula estrelas e combo máximo de um mapa com um dado conjunto de mods,
@@ -126,12 +133,10 @@ async function getDifficultyAttrs(mapId, mods, mode = DEFAULT_MODE) {
   const cached = db.getMapDifficulty(mapId, chaveMods, motor.cache);
   if (cached) return cached;
 
-  // Sem hits nem combo: o número que interessa aqui é a estrela, e ela não
-  // depende de como a play foi. O -1 do pp_calc.py preenche o resto assumindo
-  // SS/FC (ver calcPPPython).
-  const attrs = motor.tipo === 'akatsuki'
-    ? await calcPPPython(mapId, modsToBits(modsMotor), null, null, null, 0)
-    : await noRosu(motor, 'difficulty', mapId, { mods: modsMotor });
+  // O akatsuki-pp é bitmask; o rosu-pp leva a lista (ver modsDoMotor).
+  const attrs = await noMotor(motor, 'difficulty', mapId, {
+    mods: motor.tipo === 'akatsuki' ? modsToBits(modsMotor) : modsMotor,
+  });
   if (!attrs || !Number.isFinite(attrs.stars)) return null;
 
   // Combo zero quer dizer "mapa sem objeto nenhum", que não existe de verdade.
@@ -143,10 +148,8 @@ async function getDifficultyAttrs(mapId, mods, mode = DEFAULT_MODE) {
   // função pura do arquivo).
   if (!attrs.maxCombo) return null;
 
-  // Só os dois campos, e não o `attrs` inteiro: o retorno do akatsuki-pp traz um
-  // `pp` junto (o do SS que ele calculou de passagem), e devolvê-lo aqui faria a
-  // primeira chamada ter um campo que a chamada seguinte, vinda do cache, não
-  // tem. Um campo que existe às vezes é pior do que não existir.
+  // Só os dois campos, e não o `attrs` inteiro: um campo que a primeira chamada
+  // tem e a seguinte, vinda do cache, não tem é pior do que não existir.
   const resultado = { stars: attrs.stars, maxCombo: attrs.maxCombo };
 
   db.setMapDifficulty(mapId, chaveMods, motor.cache, resultado.stars, resultado.maxCombo);
@@ -193,7 +196,7 @@ async function getMapAttrs(beatmapId, mods) {
   // por um acrônimo que ele não conhece (ver rosuWorkerThread.js).
   //
   // Build do Bancho para qualquer servidor: CS/AR/OD/BPM não dependem de rework.
-  const attrs = await noRosu(MOTORES.bancho, 'attributes', beatmapId, {
+  const attrs = await noMotor(MOTORES.bancho, 'attributes', beatmapId, {
     mods: modsToBits(semCL),
     clockRate: clockRate(semCL),
   });
@@ -203,51 +206,6 @@ async function getMapAttrs(beatmapId, mods) {
 
   _mapAttrs.set(chave, attrs);
   return attrs;
-}
-
-// ─── akatsuki-pp ──────────────────────────────────────────────────────────────
-/**
- * Manda o cálculo para o worker Python (akatsuki-pp-py, o motor do Relax dos
- * servidores e dos dois leaderboards do Akatsuki).
- *
- * O `stars` retornado já considera os mods e vem do mesmo algoritmo que
- * calculou o PP, então é mais fiel ao RX do que o difficulty_rating da API
- * oficial (que é sempre sem mods).
- *
- * Os bytes do mapa saem daqui, do mesmo `getBeatmapFile` do caminho do rosu-pp:
- * o script já baixou o .osu por conta própria um dia, o que escapava do rate
- * limiter E do cache — cada cálculo de RX fazia uma requisição extra e não
- * controlada a osu.ppy.sh.
- *
- * @param {number} combo -1 = usar max_combo do mapa (assume FC)
- * @returns {Promise<{pp: number, stars: number, maxCombo: number}|null>}
- * Requer: pip install akatsuki-pp-py
- */
-async function calcPPPython(beatmapId, modsBits, n300, n100, n50, nmiss, combo = -1) {
-  let beatmapBytes;
-  try {
-    beatmapBytes = await getBeatmapFile(beatmapId);
-  } catch (error) {
-    logErrorOnce('pp:beatmapFile', error);
-    return null;
-  }
-
-  const resposta = await pythonWorker.calcular(beatmapBytes, {
-    mapId: beatmapId,
-    mods:  modsBits,
-    // -1 é o "não sei" que o pp_calc.py entende.
-    n300:  n300  ?? -1,
-    n100:  n100  ?? -1,
-    n50:   n50   ?? -1,
-    nmiss: nmiss ?? 0,
-    combo: combo ?? -1,
-  });
-
-  // isFinite e não `typeof === 'number'`: NaN e Infinity passam no typeof, e um
-  // deles escapando daqui vira "NaN pp" no embed lá na frente.
-  if (!resposta || !Number.isFinite(resposta.pp)) return null;
-
-  return { pp: resposta.pp, stars: resposta.stars, maxCombo: resposta.max_combo };
 }
 
 // ─── FC PP ────────────────────────────────────────────────────────────────────
@@ -261,8 +219,8 @@ async function calcPPPython(beatmapId, modsBits, n300, n100, n50, nmiss, combo =
  * scores diferentes com o mesmo FC pela frente compartilham a entrada.
  *
  * É por isso que a chave soma os misses ao n300: é exatamente o que os dois
- * motores fazem antes de calcular (`perfParams.n300 = n300 + misses` aqui, e
- * `calc_kwargs["n300"] = n300 + nmiss` no pp_calc.py). Um score com 2 misses e
+ * motores fazem antes de calcular (o `fc` do rosuWorkerThread.js e o do
+ * akatsukiWorkerThread.js). Um score com 2 misses e
  * outro com 5 no mesmo mapa caem na mesma linha quando o total bate — o que é
  * correto, porque o FC dos dois é o mesmo FC.
  *
@@ -293,7 +251,7 @@ function fcCacheKey({ beatmapId, mods, engine, n300, n100, n50, misses }) {
 /**
  * Devolve o pp e o guarda no cache, quando ele é um número de verdade.
  *
- * Falha não é gravada de propósito: uma queda de rede ou um Python ausente são
+ * Falha não é gravada de propósito: uma queda de rede ou um pacote ausente são
  * passageiros, e guardá-los transformaria "falhou uma vez" em "falha para
  * sempre" naquele mapa.
  *
@@ -308,13 +266,12 @@ function rememberFCpp(cacheKey, pp) {
 /**
  * Calcula o PP que o score teria rendido em Full Combo (sem misses).
  *
- * No motor do servidor (ver engines.js): rosu-pp via Wasm, ou akatsuki-pp-py
- * via Python.
+ * No motor do servidor (ver engines.js): um build do rosu-pp ou do akatsuki-pp.
  *
  * O arquivo .osu é público em https://osu.ppy.sh/osu/{beatmap_id}, então
  * funciona para Bancho e para servidor privado.
  *
- * Retorna null se a lib não estiver instalada, beatmap_id for desconhecido,
+ * Retorna null se o pacote do motor não carregar, beatmap_id for desconhecido,
  * o score já for FC, ou qualquer erro de rede/parse.
  *
  * @param {object} score  - score normalizado
@@ -344,10 +301,8 @@ async function getFCpp(score, mode = DEFAULT_MODE) {
   const motor = motorDe(mode);
 
   // A chave descreve o que o MOTOR vai receber, e os dois tipos recebem coisas
-  // diferentes: o akatsuki-pp leva o bitmask cru (com o DT que o NC arrasta), e
-  // o rosu-pp leva a lista colapsada. Guardar os dois sob a mesma chave faria
-  // `['DT','NC']` e `['NC']` colidirem no lado do Relax, onde eles dão 96.99pp
-  // e 39.21pp — o mesmo mapa com dois números legítimos e uma linha só.
+  // diferentes: o akatsuki-pp leva o bitmask com o DT que o NC exige, e o
+  // rosu-pp leva a lista colapsada (ver modsDoMotor).
   const modsMotor = modsDoMotor(motor, mods);
 
   const cacheKey = fcCacheKey({
@@ -361,29 +316,26 @@ async function getFCpp(score, mode = DEFAULT_MODE) {
   }
 
   try {
-    // ── akatsuki-pp-py via Python ──
-    // O download do .osu acontece dentro do calcPPPython, pelo mesmo
-    // getBeatmapFile do caminho do rosu-pp: cache em disco e rate limiter valem
-    // para os dois, e os bytes vão para o script por stdin.
+    // O arquivo .osu (público no Bancho, mesmo para mapa exclusivo de servidor
+    // privado) vem do cache em disco quando a thread pedir por ele.
     if (motor.tipo === 'akatsuki') {
       // O akatsuki-pp continua em bitmask: é outro motor, com outra API, e ele
       // não conhece nada que não caiba num bit — inclusive o ajuste de rate do
       // lazer, que some aqui. Não é perda de verdade: quem usa este motor é
       // bancho.py ou Ripple, e os dois guardam o score em bitmask, então um DT
       // ajustado não tem por onde chegar.
-      const result = await calcPPPython(beatmapId, modsToBits(score.mods), n300, n100, n50, misses);
+      const result = await noMotor(motor, 'fc', beatmapId, {
+        mods: modsToBits(modsMotor), n300, n100, n50, misses, viaAcc: motor.viaAcc,
+      });
       return rememberFCpp(cacheKey, result?.pp);
     }
 
-    // ── rosu-pp, no build do servidor ──
-    // O arquivo .osu (público no Bancho, mesmo para mapa exclusivo de servidor
-    // privado) vem do cache em disco quando a thread pedir por ele.
     //
     // Sem `accuracy`: o motor calcula a dele a partir dos acertos. Quando os
     // acertos reais não vieram, os 300 são deduzidos da contagem de objetos, o
     // que descreve o FC do mesmo jeito — e a accuracy bruta do score seria
     // justamente a do score COM choke, não a do FC que se quer estimar.
-    const resultado = await noRosu(motor, 'fc', beatmapId, {
+    const resultado = await noMotor(motor, 'fc', beatmapId, {
       mods: modsMotor,
       n300, n100, n50, misses,
     });
@@ -455,12 +407,15 @@ async function simulatePP(beatmapId, mods, hits, mode = DEFAULT_MODE, { classic 
     if (motor.tipo === 'akatsuki') {
       // stars/maxCombo vêm do próprio akatsuki-pp (já ajustados pelos mods),
       // então não precisamos consultar a API oficial aqui.
-      // O akatsuki-pp trabalha sempre com o mapa inteiro — não há como dizer
-      // "parei no objeto N". Devolver o valor do mapa completo para uma play
-      // interrompida seria inventar; melhor admitir que não sabe.
+      // Play interrompida fica sem número: nenhum dos dois servidores calcula
+      // pp de trecho (e o `passed_objects` do osu_2019 no commit do Akatsuki
+      // nem funciona), então qualquer valor seria inventado.
       if (passed !== null) return null;
-      // -1 é o "não sei" que o pp_calc.py entende (ver pp_calc.py, ao lado).
-      return await calcPPPython(beatmapId, modsToBits(mods), n300 ?? -1, n100, n50, misses, combo);
+      const resultado = await noMotor(motor, 'simulate', beatmapId, {
+        mods: modsToBits(mods), n300, n100, n50, misses, combo, viaAcc: motor.viaAcc,
+      });
+      if (!resultado || !Number.isFinite(resultado.pp)) return null;
+      return resultado;
     }
 
     // `classic` força o CL na lista; sem ele, vale a regra normal do servidor.
@@ -471,7 +426,7 @@ async function simulatePP(beatmapId, mods, hits, mode = DEFAULT_MODE, { classic 
       ? engineMods(mode, [...(mods ?? []), 'CL'])
       : engineMods(mode, mods));
 
-    const resultado = await noRosu(motor, 'simulate', beatmapId, {
+    const resultado = await noMotor(motor, 'simulate', beatmapId, {
       mods: modsMotor,
       n300, n100, n50, misses, combo,
       // Play interrompida: a dificuldade passa a ser a do trecho jogado.
@@ -524,12 +479,7 @@ async function getAdjustedStars(beatmapId, mods, mode = DEFAULT_MODE) {
 module.exports = {
   engineMods,
   getBeatmapFile,
-  // Mora no pythonWorker desde que o cálculo do Relax virou processo de vida
-  // longa, mas continua saindo daqui: é a porta de PP do bot, e o teste que
-  // cobre o registro de falhas já pedia por este caminho.
-  reportPythonFailure: pythonWorker.reportPythonFailure,
-  closePythonWorker:   pythonWorker.close,
-  closeRosuWorker:     rosuWorker.close,
+  closeWasmWorker: wasmWorker.close,
   getDifficultyAttrs,
   getMapAttrs,
   getAdjustedStars,

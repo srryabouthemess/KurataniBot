@@ -9,7 +9,6 @@ Cada seção é independente — ligue só o que você quer.
 - [Emojis de rank](#emojis-de-rank)
 - [Usando em DM](#usando-em-dm)
 - [O cálculo de PP](#o-cálculo-de-pp)
-- [PP no Relax](#pp-no-relax)
 - [Administração do servidor](#administração-do-servidor)
 - [Outras variáveis](#outras-variáveis)
 - [Testes](#testes)
@@ -123,16 +122,21 @@ Cada servidor calcula no motor que **ele próprio** roda — um FC pp ou uma est
 | Servidor | Vanilla | Relax |
 |---|---|---|
 | Bancho (osu! oficial) | `rosu-pp-bancho` | — |
-| Daycore | `rosu-pp-daycore` | akatsuki-pp |
-| Akatsuki | akatsuki-pp | akatsuki-pp |
-| Qualquer outro (EZPP, Gatari, bancho.py do `.env`) | `rosu-pp-daycore` | akatsuki-pp |
+| Daycore | `rosu-pp-daycore` | `akatsuki-pp-daycore` |
+| Akatsuki | `akatsuki-pp-akatsuki` | `akatsuki-pp-akatsuki` |
+| Qualquer outro (EZPP, Gatari, bancho.py do `.env`) | `rosu-pp-daycore` | `akatsuki-pp-daycore` |
 
 Os dois `rosu-pp-*` são o [`rosu-pp-js`](https://github.com/MaxOhn/rosu-pp-js) compilado contra o [fork do rosu-pp](https://github.com/srryabouthemess/rosu-pp):
 
 - **`rosu-pp-bancho`** segue a branch `pp-update-lazer-master`, que acompanha o **osu!lazer master**. Conferido contra a API oficial, ele reproduz o número publicado: erro relativo na casa de **1e-6**, choke incluído (613 scores dos quatro modos no pp-check, e 40 top plays pelo caminho do próprio bot).
 - **`rosu-pp-daycore`** fica no commit que o bancho.py do Daycore roda (hoje o mesmo `67a9c11`), e só anda quando o servidor anda. Ele imita o servidor também no que recebe: mecânica stable e **sem** o score total, então num choke só a estimativa de miss por combo opera, como lá.
 
-Nenhum dos dois precisa de nada para instalar: é Wasm, roda em qualquer plataforma com Node, e já vem compilado no repositório, em [`vendor/`](../vendor). O `npm install` só aponta o `node_modules` para lá.
+Os dois `akatsuki-pp-*` são o [`osuAkatsuki/akatsuki-pp-rs`](https://github.com/osuAkatsuki/akatsuki-pp-rs) — o motor do Relax dos servidores —, compilado pelo binding mínimo de [`vendor/akatsuki-pp-js`](../vendor/akatsuki-pp-js). O binding faz a mesma escolha que o servidor: Relax no osu!std sai do `osu_2019`, o resto do cálculo genérico com `lazer(false)`.
+
+- **`akatsuki-pp-akatsuki`** fica no commit que o [performance-service](https://github.com/osuAkatsuki/performance-service) do Akatsuki roda (hoje `c0e499e`), e recebe o que o score-service manda: **accuracy + misses, sem os hits**. O motor redistribui 100s e 50s pela conta dele, e o número muda com isso — com os hits, até 29pp de diferença. Conferido contra o perfil: 200 top plays de RX e 150 de vanilla batem no centésimo.
+- **`akatsuki-pp-daycore`** fica no commit do `akatsuki-rx-py` do bancho.py do Daycore (hoje `591de0d`), e recebe os **hits**, como lá. Conferido: 255 de 256 top plays de RX batem (a que sobra é de antes de o servidor trocar de motor).
+
+Nenhum precisa de nada para instalar: é Wasm, roda em qualquer plataforma com Node, e já vem compilado no repositório, em [`vendor/`](../vendor). O `npm install` só aponta o `node_modules` para lá. Sem um deles, o PP daquele servidor aparece como `?pp` e a estrela cai na publicada pela API.
 
 Cada build roda no seu worker thread, porque Wasm é síncrono e pararia o event loop; a thread só nasce no primeiro cálculo daquele build. A linha de informação do mapa (CS/AR/OD/HP, BPM, objetos) sai sempre do build do Bancho, porque não depende de rework. O `/diag` mostra uma linha por build com quantos cálculos ela serviu.
 
@@ -154,52 +158,20 @@ O `rosu-pp-daycore` acompanha o `docker/rosu-pp-<commit>.tar.gz` do bancho.py do
 
 Se o fork mudar algum campo público dos atributos, o `cargo check` do `rosu-pp-js` acusa — é só expor o campo novo nos três arquivos de `src/attributes/` e `src/strains.rs`. Depois, `npm install` e `npm test`: o `rosuWorker.test.js` roda contra os dois builds de verdade.
 
-Não precisa limpar cache: a chave da `map_difficulty` e da `fc_pp` leva a versão do pacote (`bancho@4.0.1-lazer-master.67a9c11`), então o build novo não encontra os números do antigo — por isso a versão tem de mudar junto com o commit.
-
----
-
-## PP no Relax
-
-O Relax usa outro sistema de PP, calculado por uma biblioteca Python. Ele também é quem dá a **estrela** de uma play de RX: o algoritmo é outro (a dimensão de velocidade sai da conta), então o valor do lazer — e o publicado pela API — descreve outro jogo.
-
-A mesma lib calcula também o **vanilla do Akatsuki**, que o servidor pontua no akatsuki-pp (ver [O cálculo de PP](#o-cálculo-de-pp)).
-
-**Sem a lib o bot funciona normalmente**: o PP calculado localmente do RX e do Akatsuki aparece como `?pp` e a estrela cai na publicada pela API, sem mods.
-
-Precisa de **Python 3.11** com a lib instalada, apontado no `.env`:
+Os `akatsuki-pp-*` se refazem do mesmo jeito, a partir do binding que está no repositório:
 
 ```bash
-PYTHON_BIN=C:/Users/SEU_USUARIO/AppData/Local/Programs/Python/Python311/python.exe
+cd vendor/akatsuki-pp-js
+# 1. Cargo.toml: akatsuki-pp = { git = "https://github.com/osuAkatsuki/akatsuki-pp-rs", rev = "<commit>" }
+wasm-pack build --target nodejs --release
+cp pkg/{akatsuki_pp_js.js,akatsuki_pp_js.d.ts,akatsuki_pp_js_bg.wasm,akatsuki_pp_js_bg.wasm.d.ts} \
+   ../akatsuki-pp-akatsuki/     # ou akatsuki-pp-daycore
+# 2. ../akatsuki-pp-<build>/package.json: "version": "1.1.2-<commit>"
 ```
 
-> **`PYTHON_BIN` vazio é a causa mais comum de "não funciona".** Vazio, o bot chama o `python` do PATH — que costuma ser uma versão mais nova, sem a lib.
+De onde vem cada commit: o do Akatsuki é o `rev` do `akatsuki-pp-rs` no `Cargo.toml` do performance-service; o do Daycore, o `AKATSUKI_PP_REV` do `Dockerfile` do bancho.py dele. O `akatsukiWorker.test.js` roda contra os dois builds de verdade.
 
-Confira com `npm run smoke`: a última linha mostra o PP do Relax.
-
-<details>
-<summary>Como instalar</summary>
-
-```powershell
-# Windows
-winget install --id Python.Python.3.11 --exact
-py -3.11 -m pip install akatsuki-pp-py
-```
-
-```bash
-# Linux/macOS — instale o 3.11 (deadsnakes no Ubuntu, pyenv no Debian/Arch,
-# dnf no Fedora, brew no macOS) e crie um venv:
-python3.11 -m venv ~/.kuratanibot-venv
-~/.kuratanibot-venv/bin/pip install akatsuki-pp-py
-# .env → PYTHON_BIN=/home/SEU_USUARIO/.kuratanibot-venv/bin/python
-```
-
-O `venv` existe porque o `pip` costuma recusar instalação no Python do sistema.
-
-**Por que 3.11:** a lib publica wheel pronto até essa versão. Em versões mais novas o `pip` cai no build a partir do fonte e exige o toolchain do Rust — dá para fazer, mas instalar o 3.11 ao lado é bem mais barato.
-
-**Como ele roda:** um processo de vida longa, iniciado na primeira play de RX e encerrado junto do bot. Antes era um interpretador novo por número, e só subi-lo custava 47ms por cálculo. Numa máquina sem a lib, a causa é logada uma vez e o bot para de tentar por um minuto.
-
-</details>
+Não precisa limpar cache: a chave da `map_difficulty` e da `fc_pp` leva a versão do pacote (`bancho@4.0.1-lazer-master.67a9c11`, `akatsuki@1.1.2-c0e499e`), então o build novo não encontra os números do antigo — por isso a versão tem de mudar junto com o commit.
 
 ---
 

@@ -8,9 +8,9 @@ está abaixo é de outras pessoas, e MIT, BSD e Apache pedem que o aviso de
 copyright e o texto da licença viajem junto com o software. Este arquivo é esse
 cumprimento.
 
-Cobre as **71 dependências de produção** do lock — as transitivas
-inclusive, que são a maioria — e mais quatro que o npm não enxerga: os crates Rust
-compilados nos `.wasm` do rosu-pp, a lib Python do PP do Relax, os ícones de
+Cobre as **73 dependências de produção** do lock — as transitivas
+inclusive, que são a maioria — e mais três que o npm não enxerga: os crates Rust
+compilados nos `.wasm` do rosu-pp e do akatsuki-pp, os ícones de
 grade, que vieram do jogo, e o código do Bathbot de onde saiu a fórmula do
 `/matchcost`. Estas últimas estão em
 [O que não vem do npm](#o-que-não-vem-do-npm), no fim.
@@ -19,7 +19,7 @@ grade, que vieram do jogo, e o código do Bathbot de onde saiu a fórmula do
 
 | Licença | Pacotes |
 | --- | --- |
-| MIT | 59 |
+| MIT | 61 |
 | Apache-2.0 | 10 |
 | BSD-2-Clause | 1 |
 | 0BSD | 1 |
@@ -47,6 +47,8 @@ grade, que vieram do jogo, e o código do Bathbot de onde saiu a fórmula do
 | `@types/ws` | 8.18.1 | MIT |
 | `@vladfrangu/async_event_emitter` | 2.4.7 | MIT |
 | `agent-base` | 6.0.2 | MIT |
+| `akatsuki-pp-akatsuki` | 1.1.2-c0e499e | MIT |
+| `akatsuki-pp-daycore` | 1.1.2-591de0d | MIT |
 | `asynckit` | 0.4.0 | MIT |
 | `aws-ssl-profiles` | 1.1.2 | MIT |
 | `axios` | 1.19.0 | MIT |
@@ -1635,6 +1637,32 @@ FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 OTHER DEALINGS IN THE SOFTWARE.
 ```
 
+### MIT — `akatsuki-pp-akatsuki` 1.1.2-c0e499e, `akatsuki-pp-daycore` 1.1.2-591de0d, `rosu-pp-bancho` 4.0.1-lazer-master.67a9c11, `rosu-pp-daycore` 4.0.1-lazer-master.67a9c11
+
+```text
+MIT License
+
+Copyright (c) 2021 Max
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
+
 ### MIT — `asynckit` 0.4.0
 
 ```text
@@ -2492,32 +2520,6 @@ IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-### MIT — `rosu-pp-bancho` 4.0.1-lazer-master.67a9c11, `rosu-pp-daycore` 4.0.1-lazer-master.67a9c11
-
-```text
-MIT License
-
-Copyright (c) 2021 Max
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-```
-
 ### MIT — `safer-buffer` 2.1.2
 
 ```text
@@ -2689,38 +2691,22 @@ Os três primeiros são de Max Ohn, sob o mesmo texto MIT do `rosu-pp-js` (na se
 de textos acima). Os demais são usados pela opção MIT, cujo texto é o mesmo, com
 o aviso de copyright de cada projeto no respectivo repositório.
 
-### akatsuki-pp-py — MIT
+### Crates Rust dentro do vendor/akatsuki-pp-* — MIT / MIT OR Apache-2.0
 
-Calcula o PP das plays de **Relax**, que usa outro sistema de PP. É opcional e
-quem opera o bot instala na própria máquina (veja [`docs/OPCIONAIS.md`](docs/OPCIONAIS.md)),
-então o repositório não a redistribui — mas ela é dependência do código do mesmo
-jeito: [`src/pp/pp_calc.py`](src/pp/pp_calc.py) a importa, e sem ela o PP do RX sai como `?pp`.
+O `akatsuki-pp-akatsuki` e o `akatsuki-pp-daycore` acima são o binding de
+[`vendor/akatsuki-pp-js`](vendor/akatsuki-pp-js) compilado em Wasm contra o
+`akatsuki-pp-rs`, cada um no commit que o servidor roda. O npm só enxerga o
+pacote JavaScript; estes vêm junto no binário:
 
-De Max Ohn e tsunyoku — <https://github.com/osuAkatsuki/akatsuki-pp-py>.
+| Crate | Licença |
+| --- | --- |
+| `akatsuki-pp` (<https://github.com/osuAkatsuki/akatsuki-pp-rs>, de Max Ohn e tsunyoku) | MIT |
+| `rosu-map`, `rosu-mods` | MIT |
+| `wasm-bindgen`, `once_cell`, `cfg-if` | MIT OR Apache-2.0 |
 
-```text
-MIT License
-
-Copyright (c) 2021 Max
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-```
+O texto MIT do `akatsuki-pp` está no `LICENSE` de cada pacote, na seção de
+textos acima. Os demais são usados pela opção MIT, cujo texto é o mesmo, com o
+aviso de copyright de cada projeto no respectivo repositório.
 
 ### Bathbot — ISC
 

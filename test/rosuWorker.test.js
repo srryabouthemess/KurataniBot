@@ -29,7 +29,8 @@ const assert = require('node:assert');
 const rosu = require('rosu-pp-bancho');
 
 const PACOTE = 'rosu-pp-bancho';
-const rosuWorker = require('../src/pp/rosuWorker');
+const BANCHO = { pacote: PACOTE, tipo: 'rosu' };
+const rosuWorker = require('../src/pp/wasmWorker');
 const { mapaSintetico } = require('./helpers');
 
 test.after(() => rosuWorker.close());
@@ -52,8 +53,8 @@ test('os atributos do mapa saem já ajustados pelos mods', async () => {
   // tempo é que muda. É o motivo de o cálculo ficar do lado do rosu-pp em vez
   // de virar uma segunda implementação em JS — o mapa sintético tem AR 9 e
   // OD 7, e nenhum dos dois vira 13.5 nem 10.5 no DT.
-  const semMods = await rosuWorker.calcular(PACOTE, 'attributes', 9001, { mods: 0 }, bytesDe);
-  const comDT   = await rosuWorker.calcular(PACOTE, 'attributes', 9001, { mods: 64 }, bytesDe);
+  const semMods = await rosuWorker.calcular(BANCHO, 'attributes', 9001, { mods: 0 }, bytesDe);
+  const comDT   = await rosuWorker.calcular(BANCHO, 'attributes', 9001, { mods: 64 }, bytesDe);
 
   const esperado = noProcesso(bm =>
     new rosu.BeatmapAttributesBuilder({ map: bm, mods: 64 }).build()
@@ -76,8 +77,8 @@ test('o rate ajustado chega como número, porque no bit ele não cabe', async ()
   // aparece na tela: BPM e AR/OD. O bitmask não tem onde guardar o ajuste, então
   // ele viaja ao lado — e o resultado tem de bater com o do rosu-pp recebendo os
   // mods como objeto, que é o caminho que NÃO se usa (ver rosuWorkerThread.js).
-  const dtCheio    = await rosuWorker.calcular(PACOTE, 'attributes', 9005, { mods: 64 }, bytesDe);
-  const dtAjustado = await rosuWorker.calcular(PACOTE,
+  const dtCheio    = await rosuWorker.calcular(BANCHO, 'attributes', 9005, { mods: 64 }, bytesDe);
+  const dtAjustado = await rosuWorker.calcular(BANCHO,
     'attributes', 9005, { mods: 64, clockRate: 1.4 }, bytesDe,
   );
 
@@ -100,8 +101,8 @@ test('o rate ajustado chega como número, porque no bit ele não cabe', async ()
 test('sem rate informado, quem manda continua sendo o bitmask', async () => {
   // O `clockRate` nulo é o "deduza dos mods" do rosu-pp. Se ele virasse 1 por
   // engano, todo score de DT passaria a exibir o mapa em velocidade normal.
-  const semRate = await rosuWorker.calcular(PACOTE, 'attributes', 9006, { mods: 64 }, bytesDe);
-  const nulo    = await rosuWorker.calcular(PACOTE, 'attributes', 9006, { mods: 64, clockRate: null }, bytesDe);
+  const semRate = await rosuWorker.calcular(BANCHO, 'attributes', 9006, { mods: 64 }, bytesDe);
+  const nulo    = await rosuWorker.calcular(BANCHO, 'attributes', 9006, { mods: 64, clockRate: null }, bytesDe);
 
   assert.equal(semRate.clockRate, 1.5);
   assert.equal(nulo.clockRate, 1.5);
@@ -113,11 +114,11 @@ test('o mapa viaja uma vez só, não a cada cálculo', async () => {
   // isso, e só pede os bytes quando não o tem.
   const mapId = 9002;
 
-  await rosuWorker.calcular(PACOTE, 'attributes', mapId, { mods: 0 }, bytesDe);
+  await rosuWorker.calcular(BANCHO, 'attributes', mapId, { mods: 0 }, bytesDe);
   const depoisDoPrimeiro = rosuWorker.stats()[PACOTE].bytesEnviados;
 
   for (const mods of [64, 16, 8, 2]) {
-    await rosuWorker.calcular(PACOTE, 'attributes', mapId, { mods }, bytesDe);
+    await rosuWorker.calcular(BANCHO, 'attributes', mapId, { mods }, bytesDe);
   }
 
   assert.equal(
@@ -133,7 +134,7 @@ test('mapa ilegível não derruba a thread', async () => {
   // lixo puro ele parseia o que der e devolve um mapa degenerado — sem objeto
   // nenhum e sem erro. É por isso que o getMapAttrs trata `objects` zerado como
   // "não sei", em vez de confiar no que voltou.
-  const ruim = await rosuWorker.calcular(PACOTE,
+  const ruim = await rosuWorker.calcular(BANCHO,
     'attributes', 9003, { mods: 0 },
     async () => Buffer.from('isto não é um beatmap'),
   );
@@ -141,7 +142,7 @@ test('mapa ilegível não derruba a thread', async () => {
   assert.equal(ruim.objects, 0, 'o mapa degenerado deveria vir sem objetos');
 
   // A play seguinte da mesma página precisa continuar funcionando.
-  const bom = await rosuWorker.calcular(PACOTE, 'attributes', 9004, { mods: 0 }, bytesDe);
+  const bom = await rosuWorker.calcular(BANCHO, 'attributes', 9004, { mods: 0 }, bytesDe);
   assert.ok(bom && bom.objects > 0, 'a thread deveria ter sobrevivido');
   assert.equal(rosuWorker.stats()[PACOTE].spawns - antes, 0, 'a thread foi reiniciada à toa');
 });
@@ -149,10 +150,10 @@ test('mapa ilegível não derruba a thread', async () => {
 test('operação desconhecida não derruba a thread', async () => {
   const antes = rosuWorker.stats()[PACOTE].spawns;
 
-  const resposta = await rosuWorker.calcular(PACOTE, 'inventada', 9001, { mods: 0 }, bytesDe);
+  const resposta = await rosuWorker.calcular(BANCHO, 'inventada', 9001, { mods: 0 }, bytesDe);
   assert.equal(resposta, null);
 
-  const bom = await rosuWorker.calcular(PACOTE, 'attributes', 9001, { mods: 0 }, bytesDe);
+  const bom = await rosuWorker.calcular(BANCHO, 'attributes', 9001, { mods: 0 }, bytesDe);
   assert.ok(bom, 'a thread deveria ter sobrevivido');
   assert.equal(rosuWorker.stats()[PACOTE].spawns - antes, 0);
 });
@@ -160,7 +161,7 @@ test('operação desconhecida não derruba a thread', async () => {
 // ─── Estrelas e PP ────────────────────────────────────────────────────────────
 
 test('a dificuldade sai com estrelas e combo do mapa', async () => {
-  const attrs = await rosuWorker.calcular(PACOTE, 'difficulty', 8001, { mods: [] }, bytesDe);
+  const attrs = await rosuWorker.calcular(BANCHO, 'difficulty', 8001, { mods: [] }, bytesDe);
 
   assert.ok(attrs, 'não veio resposta da thread');
   assert.ok(attrs.stars > 0, `estrelas deveriam ser positivas, vieram ${attrs.stars}`);
@@ -169,9 +170,9 @@ test('a dificuldade sai com estrelas e combo do mapa', async () => {
 });
 
 test('mod de dificuldade move a estrela, e o CL não', async () => {
-  const nm = await rosuWorker.calcular(PACOTE, 'difficulty', 8001, { mods: [] }, bytesDe);
-  const dt = await rosuWorker.calcular(PACOTE, 'difficulty', 8001, { mods: ['DT'] }, bytesDe);
-  const cl = await rosuWorker.calcular(PACOTE, 'difficulty', 8001, { mods: ['CL'] }, bytesDe);
+  const nm = await rosuWorker.calcular(BANCHO, 'difficulty', 8001, { mods: [] }, bytesDe);
+  const dt = await rosuWorker.calcular(BANCHO, 'difficulty', 8001, { mods: ['DT'] }, bytesDe);
+  const cl = await rosuWorker.calcular(BANCHO, 'difficulty', 8001, { mods: ['CL'] }, bytesDe);
 
   assert.ok(dt.stars > nm.stars, `DT (${dt.stars}) deveria passar de NM (${nm.stars})`);
 
@@ -184,9 +185,9 @@ test('mod de dificuldade move a estrela, e o CL não', async () => {
 test('o motor conhece TD e AP, e só um deles mexe na estrela', async () => {
   // Os dois faltavam no MOD_BITS, e o efeito era mudo: bit ausente some na
   // decodificação, então um score de touch aparecia como `+NM`.
-  const nm = await rosuWorker.calcular(PACOTE, 'difficulty', 8001, { mods: [] }, bytesDe);
-  const td = await rosuWorker.calcular(PACOTE, 'difficulty', 8001, { mods: ['TD'] }, bytesDe);
-  const ap = await rosuWorker.calcular(PACOTE, 'difficulty', 8001, { mods: ['AP'] }, bytesDe);
+  const nm = await rosuWorker.calcular(BANCHO, 'difficulty', 8001, { mods: [] }, bytesDe);
+  const td = await rosuWorker.calcular(BANCHO, 'difficulty', 8001, { mods: ['TD'] }, bytesDe);
+  const ap = await rosuWorker.calcular(BANCHO, 'difficulty', 8001, { mods: ['AP'] }, bytesDe);
 
   assert.ok(td && ap, 'o motor deveria aceitar os dois acrônimos');
 
@@ -205,8 +206,8 @@ test('o HD mexe na estrela — foi o rework de reading', async () => {
   // estava na lista de mods cosméticos (mods.js). Se voltar a empatar com o NM,
   // ou a lista está errada de novo, ou o vendor/rosu-pp-bancho regrediu para um
   // rosu-pp sem a skill de reading.
-  const nm = await rosuWorker.calcular(PACOTE, 'difficulty', 8001, { mods: [] }, bytesDe);
-  const hd = await rosuWorker.calcular(PACOTE, 'difficulty', 8001, { mods: ['HD'] }, bytesDe);
+  const nm = await rosuWorker.calcular(BANCHO, 'difficulty', 8001, { mods: [] }, bytesDe);
+  const hd = await rosuWorker.calcular(BANCHO, 'difficulty', 8001, { mods: ['HD'] }, bytesDe);
 
   assert.ok(hd.stars > nm.stars, `HD (${hd.stars}) deveria passar de NM (${nm.stars})`);
 });
@@ -216,9 +217,9 @@ test('o ajuste de rate muda a play, e é o motor quem aplica', async () => {
   // garante que o motor o CONSOME — se ele passasse a ignorar o ajuste, o 1,4x
   // empataria com o 1,5x e nada mais no bot denunciaria.
   const dt14Mods = [{ acronym: 'DT', settings: { speed_change: 1.4 } }];
-  const dtCheio = await rosuWorker.calcular(PACOTE, 'difficulty', 8010, { mods: ['DT'] }, bytesDe);
-  const dt14 = await rosuWorker.calcular(PACOTE, 'difficulty', 8010, { mods: dt14Mods }, bytesDe);
-  const nm = await rosuWorker.calcular(PACOTE, 'difficulty', 8010, { mods: [] }, bytesDe);
+  const dtCheio = await rosuWorker.calcular(BANCHO, 'difficulty', 8010, { mods: ['DT'] }, bytesDe);
+  const dt14 = await rosuWorker.calcular(BANCHO, 'difficulty', 8010, { mods: dt14Mods }, bytesDe);
+  const nm = await rosuWorker.calcular(BANCHO, 'difficulty', 8010, { mods: [] }, bytesDe);
 
   assert.ok(
     dt14.stars < dtCheio.stars && dt14.stars > nm.stars,
@@ -226,8 +227,8 @@ test('o ajuste de rate muda a play, e é o motor quem aplica', async () => {
   );
 
   const comum = { n300: null, n100: 0, n50: 0, misses: 0, combo: -1 };
-  const ppCheio = await rosuWorker.calcular(PACOTE, 'simulate', 8010, { mods: ['DT'], ...comum }, bytesDe);
-  const pp14 = await rosuWorker.calcular(PACOTE, 'simulate', 8010, { mods: dt14Mods, ...comum }, bytesDe);
+  const ppCheio = await rosuWorker.calcular(BANCHO, 'simulate', 8010, { mods: ['DT'], ...comum }, bytesDe);
+  const pp14 = await rosuWorker.calcular(BANCHO, 'simulate', 8010, { mods: dt14Mods, ...comum }, bytesDe);
 
   assert.ok(pp14.pp < ppCheio.pp, `1,4x (${pp14.pp}) deveria render menos que 1,5x (${ppCheio.pp})`);
 });
@@ -237,13 +238,13 @@ test('mod ou ajuste que o rosu-pp não conhece não apaga a play', async () => {
   // rosu-pp recusa a lista INTEIRA quando não reconhece algo nela. O que não
   // pode acontecer é a play deixar de ser calculada por isso: a thread cai no
   // bitmask + rate, que perde só o que não tem bit.
-  const dt = await rosuWorker.calcular(PACOTE, 'difficulty', 8011, { mods: ['DT'] }, bytesDe);
-  const ajusteEstranho = await rosuWorker.calcular(PACOTE,
+  const dt = await rosuWorker.calcular(BANCHO, 'difficulty', 8011, { mods: ['DT'] }, bytesDe);
+  const ajusteEstranho = await rosuWorker.calcular(BANCHO,
     'difficulty', 8011,
     { mods: [{ acronym: 'DT', settings: { ajuste_que_nao_existe: 3 } }] },
     bytesDe,
   );
-  const modEstranho = await rosuWorker.calcular(PACOTE,
+  const modEstranho = await rosuWorker.calcular(BANCHO,
     'difficulty', 8011, { mods: ['DT', 'ZZ'] }, bytesDe,
   );
 
@@ -256,10 +257,10 @@ test('mod ou ajuste que o rosu-pp não conhece não apaga a play', async () => {
 test('o FC pp ignora os misses e assume o combo cheio', async () => {
   // O "(FC: ~Xpp)" da linha da play. Um score com misses precisa render MAIS em
   // FC do que rendeu de verdade, senão o número não quer dizer nada.
-  const comMiss = await rosuWorker.calcular(PACOTE,
+  const comMiss = await rosuWorker.calcular(BANCHO,
     'simulate', 8001, { mods: ['CL'], n300: 190, n100: 5, n50: 0, misses: 5, combo: 40 }, bytesDe,
   );
-  const seFosseFC = await rosuWorker.calcular(PACOTE,
+  const seFosseFC = await rosuWorker.calcular(BANCHO,
     'fc', 8001, { mods: ['CL'], n300: 190, n100: 5, n50: 0, misses: 5 }, bytesDe,
   );
 
@@ -290,11 +291,11 @@ test('score hipotético só usa a estimativa por combo', async () => {
   const bytesComSliders = () => Promise.resolve(comSliders);
   const choke = { mods: ['CL'], n300: 180, n100: 12, n50: 3, misses: 5, combo: 40 };
 
-  const semScore = await rosuWorker.calcular(PACOTE, 'simulate', 8002, choke, bytesComSliders);
-  const zeroPontos = await rosuWorker.calcular(PACOTE,
+  const semScore = await rosuWorker.calcular(BANCHO, 'simulate', 8002, choke, bytesComSliders);
+  const zeroPontos = await rosuWorker.calcular(BANCHO,
     'simulate', 8002, { ...choke, legacyTotalScore: 0 }, bytesComSliders,
   );
-  const poucosPontos = await rosuWorker.calcular(PACOTE,
+  const poucosPontos = await rosuWorker.calcular(BANCHO,
     'simulate', 8002, { ...choke, legacyTotalScore: 1000 }, bytesComSliders,
   );
 
@@ -306,8 +307,8 @@ test('score hipotético só usa a estimativa por combo', async () => {
 
   // Em play de lazer (sem CL) o placar não é o legado, e a thread o descarta.
   const lazer = { ...choke, mods: [] };
-  const lazerSem = await rosuWorker.calcular(PACOTE, 'simulate', 8002, lazer, bytesComSliders);
-  const lazerCom = await rosuWorker.calcular(PACOTE,
+  const lazerSem = await rosuWorker.calcular(BANCHO, 'simulate', 8002, lazer, bytesComSliders);
+  const lazerCom = await rosuWorker.calcular(BANCHO,
     'simulate', 8002, { ...lazer, legacyTotalScore: 1000 }, bytesComSliders,
   );
   assert.equal(lazerCom.pp, lazerSem.pp, 'o placar não deveria pesar numa play de lazer');
@@ -319,10 +320,10 @@ test('play interrompida usa só o trecho jogado', async () => {
   // objeto que a pessoa nunca viu; com ele, a dificuldade é a do TRECHO jogado.
   const comum = { mods: ['CL'], n100: 0, n50: 0, misses: 0, combo: 40 };
 
-  const inteiro = await rosuWorker.calcular(PACOTE,
+  const inteiro = await rosuWorker.calcular(BANCHO,
     'simulate', 8001, { ...comum, n300: null, passedObjects: null }, bytesDe,
   );
-  const parcial = await rosuWorker.calcular(PACOTE,
+  const parcial = await rosuWorker.calcular(BANCHO,
     'simulate', 8001, { ...comum, n300: 40, passedObjects: 40 }, bytesDe,
   );
 
@@ -340,8 +341,8 @@ test('play interrompida usa só o trecho jogado', async () => {
 
 test('o build do Daycore roda na própria thread', async () => {
   const dia = { mods: ['HD', 'DT', 'CL'] };
-  const bancho  = await rosuWorker.calcular(PACOTE, 'difficulty', 9100, dia, bytesDe);
-  const daycore = await rosuWorker.calcular('rosu-pp-daycore', 'difficulty', 9100, dia, bytesDe);
+  const bancho  = await rosuWorker.calcular(BANCHO, 'difficulty', 9100, dia, bytesDe);
+  const daycore = await rosuWorker.calcular({ pacote: 'rosu-pp-daycore', tipo: 'rosu' }, 'difficulty', 9100, dia, bytesDe);
 
   // Hoje os dois estão no mesmo commit do fork; o número só pode divergir
   // quando um deles for atualizado sem o outro.
@@ -354,9 +355,9 @@ test('o build do Daycore roda na própria thread', async () => {
 });
 
 test('build que não carrega não derruba o outro', async () => {
-  const nada = await rosuWorker.calcular('rosu-pp-inexistente', 'difficulty', 9101, { mods: [] }, bytesDe);
+  const nada = await rosuWorker.calcular({ pacote: 'rosu-pp-inexistente', tipo: 'rosu' }, 'difficulty', 9101, { mods: [] }, bytesDe);
   assert.equal(nada, null);
 
-  const bom = await rosuWorker.calcular(PACOTE, 'difficulty', 9101, { mods: [] }, bytesDe);
+  const bom = await rosuWorker.calcular(BANCHO, 'difficulty', 9101, { mods: [] }, bytesDe);
   assert.ok(Number.isFinite(bom?.stars), 'o build do Bancho parou junto');
 });

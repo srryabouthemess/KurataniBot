@@ -2,6 +2,46 @@
 
 ---
 
+# Sessão de 2026-09-27 (akatsuki-pp no commit de cada servidor)
+
+O Relax e o vanilla do Akatsuki, e o Relax do Daycore, passam a calcular no
+[`osuAkatsuki/akatsuki-pp-rs`](https://github.com/osuAkatsuki/akatsuki-pp-rs)
+no commit que cada servidor roda. Antes os três saíam do `akatsuki-pp-py` do
+PyPI (1.0.5, commit `b96019f`), que nenhum deles usa.
+
+## 🔧 Mudanças
+
+- **Dois builds Wasm, sem Python.** [`vendor/akatsuki-pp-js`](vendor/akatsuki-pp-js), [`pp/engines.js`](src/pp/engines.js), [`pp/akatsukiWorkerThread.js`](src/pp/akatsukiWorkerThread.js)
+  - `akatsuki-pp-akatsuki` no `c0e499e` (o do performance-service do Akatsuki)
+    e `akatsuki-pp-daycore` no `591de0d` (o do `akatsuki-rx-py` do bancho.py do
+    Daycore), em `vendor/`, como os do rosu-pp. O binding reproduz a escolha do
+    servidor: Relax no std pelo `osu_2019`, o resto pelo cálculo genérico com
+    `lazer(false)`.
+  - Sai o `pp_calc.py`, o `pythonWorker.js` e o `PYTHON_BIN`: o PP do Relax
+    não depende mais de Python 3.11 instalado na máquina.
+- **O Akatsuki recebe accuracy, o Daycore recebe hits.** O score-service do
+  Akatsuki pede o PP com accuracy + misses, e o motor redistribui 100s e 50s
+  pela conta dele; com os hits o número saía até 29pp diferente. O motor diz
+  qual entrada usa (`viaAcc`).
+- **NC com DT.** O akatsuki-pp lê a velocidade só do bit do DT; um NC sozinho
+  (o `/simulate -nc`) saía na velocidade normal.
+- **Uma porta para as threads Wasm.** O `rosuWorker.js` virou
+  [`wasmWorker.js`](src/pp/wasmWorker.js) e escolhe o corpo da thread pelo tipo
+  do motor; o LRU de mapas e o protocolo foram para
+  [`wasmThread.js`](src/pp/wasmThread.js), comuns aos dois.
+- **Cache.** A chave do akatsuki-pp passa a levar a versão do build, como a do
+  rosu-pp; a migração 6 → 7 descarta as linhas do `akatsuki-pp-py`.
+
+## ✅ Conferido
+
+- Contra o pp publicado: 200 top plays de RX e 150 de vanilla do Akatsuki
+  batem no centésimo; 255 de 256 de RX do Daycore (a que sobra é de antes de o
+  servidor trocar de motor). Pelo `simulatePP` do bot, 45 de 45.
+- `akatsukiWorker.test.js` roda os dois builds de verdade; os testes de motor
+  por servidor e de migração acompanham. 833 testes + lint.
+
+---
+
 # Sessão de 2026-09-26 (Gatari)
 
 O **Gatari** (`gatari`, `gatari_rx`) entra como servidor embutido, ao lado do

@@ -4,8 +4,8 @@
  *
  * Saiu do pp.js porque não é cálculo de nada: é download com rate limiter,
  * retry, deduplicação de pedidos em voo e cache. O que o pp faz com esses bytes
- * é outro assunto — e hoje quem os consome já são dois motores em dois lugares
- * distintos (a thread do rosu e o processo do Python).
+ * é outro assunto — e hoje quem os consome são as threads de vários motores
+ * (ver wasmWorker.js).
  *
  * O arquivo é público em `https://osu.ppy.sh/osu/{id}` mesmo para mapa
  * exclusivo de servidor privado, então o endereço é sempre o do osu! oficial —

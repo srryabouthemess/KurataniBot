@@ -1,21 +1,21 @@
 /**
- * rosuWorker.js
- * O lado do processo principal da thread que calcula PP pelo rosu-pp.
+ * wasmWorker.js
+ * O lado do processo principal das threads que calculam PP pelos motores Wasm:
+ * os builds do rosu-pp e os do akatsuki-pp.
  *
- * Mesmo desenho do pythonWorker, e pela mesma razão: um recurso de vida longa,
- * pedidos casados por id, e nenhuma falha dele chegando a derrubar o bot. A
- * diferença é o meio — ali é um processo Python, aqui é um worker thread —, e
- * por isso os dois não compartilham código: o que muda entre eles é justamente
- * o transporte, que é quase tudo que estes arquivos fazem.
+ * Um recurso de vida longa, pedidos casados por id, e nenhuma falha dele
+ * chegando a derrubar o bot.
  *
- * O porquê da thread e do cache de mapas parseados está no rosuWorkerThread.js.
+ * O porquê da thread está no rosuWorkerThread.js; o do cache de mapas
+ * parseados, no wasmThread.js.
  *
  * ── Uma thread por build ──────────────────────────────────────────────────────
- * Cada servidor calcula no rosu-pp que ele roda (ver engines.js), e os builds
- * são pacotes Wasm diferentes. Cada um ganha a sua thread, com o seu cache de
- * mapas e o seu backoff: um build que não carrega não derruba o outro. A thread
- * só nasce no primeiro pedido, então um build que nenhum servidor configurado
- * usa nunca é carregado.
+ * Cada servidor calcula no motor que ele roda (ver engines.js), e os builds são
+ * pacotes Wasm diferentes. Cada um ganha a sua thread, com o seu cache de mapas
+ * e o seu backoff: um build que não carrega não derruba o outro. A thread só
+ * nasce no primeiro pedido, então um build que nenhum servidor configurado usa
+ * nunca é carregado. O script da thread sai do tipo do motor: as operações do
+ * rosu-pp e as do akatsuki-pp são outras.
  *
  * ── Bytes só quando faltam ────────────────────────────────────────────────────
  * O `.osu` tem 50–300KB, e mandá-lo em todo cálculo seria trocar um custo de CPU
@@ -29,7 +29,11 @@ const { Worker } = require('node:worker_threads');
 
 const { logErrorOnce } = require('../lib/logger');
 
-const SCRIPT = path.join(__dirname, 'rosuWorkerThread.js');
+/** Tipo do motor (ver engines.js) → corpo da thread. */
+const SCRIPTS = {
+  rosu:     path.join(__dirname, 'rosuWorkerThread.js'),
+  akatsuki: path.join(__dirname, 'akatsukiWorkerThread.js'),
+};
 
 /**
  * Teto por pedido. Generoso porque um mapa muito longo passa de 30ms de
@@ -42,14 +46,15 @@ const RESTART_BACKOFF_MS = 60_000;
 
 let _nextId = 1;
 
-/** pacote → { pacote, worker, blockedUntil, stats } */
+/** pacote → { pacote, script, worker, blockedUntil, stats } */
 const _pools = new Map();
 
-function poolDe(pacote) {
+function poolDe({ pacote, tipo }) {
   let pool = _pools.get(pacote);
   if (!pool) {
     pool = {
       pacote,
+      script: SCRIPTS[tipo],
       worker: null,
       blockedUntil: 0,
       stats: { spawns: 0, served: 0, failed: 0, bytesEnviados: 0 },
@@ -63,7 +68,7 @@ function poolDe(pacote) {
 
 /**
  * Segurar o event loop só enquanto houver pedido em voo — mesma razão do
- * pythonWorker: uma thread ociosa não é motivo para o processo seguir de pé, e
+ * processo: uma thread ociosa não é motivo para o processo seguir de pé, e
  * uma desreferenciada durante o cálculo deixaria o Node sair no meio dele.
  */
 function referenciar(worker) {
@@ -96,7 +101,7 @@ function derrubar(pool, worker, motivo) {
   // faltando, que não melhora tentando de novo na play seguinte.
   if (worker.served === 0) {
     pool.blockedUntil = Date.now() + RESTART_BACKOFF_MS;
-    logErrorOnce(`rosuWorker:${pool.pacote}`, new Error(motivo));
+    logErrorOnce(`wasmWorker:${pool.pacote}`, new Error(motivo));
   }
 
   worker.thread.terminate().catch(() => {});
@@ -105,10 +110,10 @@ function derrubar(pool, worker, motivo) {
 function iniciar(pool) {
   let thread;
   try {
-    thread = new Worker(SCRIPT, { workerData: { pacote: pool.pacote } });
+    thread = new Worker(pool.script, { workerData: { pacote: pool.pacote } });
   } catch (error) {
     pool.blockedUntil = Date.now() + RESTART_BACKOFF_MS;
-    logErrorOnce(`rosuWorker:spawn:${pool.pacote}`, error);
+    logErrorOnce(`wasmWorker:spawn:${pool.pacote}`, error);
     return null;
   }
 
@@ -149,7 +154,7 @@ function receber(pool, worker, resposta) {
 
   if (resposta.error) {
     pool.stats.failed++;
-    logErrorOnce(`rosuWorker:calc:${pool.pacote}`, new Error(resposta.error));
+    logErrorOnce(`wasmWorker:calc:${pool.pacote}`, new Error(resposta.error));
     return pendente.resolve(null);
   }
 
@@ -179,18 +184,19 @@ function enviar(pool, worker, pedido) {
 }
 
 /**
- * Executa uma operação do rosu-pp na thread do build pedido.
+ * Executa uma operação na thread do build pedido.
  *
- * @param {string} pacote o build do rosu-pp-js (ver engines.js)
+ * @param {{pacote: string, tipo: 'rosu'|'akatsuki'}} motor o build (ver engines.js)
  * @param {'attributes'|'difficulty'|'fc'|'simulate'} op
  * @param {number} mapId
- * @param {object} args parâmetros da operação (ver rosuWorkerThread.js)
+ * @param {object} args parâmetros da operação (ver rosuWorkerThread.js e
+ *   akatsukiWorkerThread.js; `attributes` só o rosu-pp tem)
  * @param {() => Promise<Uint8Array>} obterBytes chamado só quando a thread não
  *   tem o mapa parseado — é o que evita mandar o .osu em todo cálculo
  * @returns {Promise<object|null>} null em qualquer falha
  */
-async function calcular(pacote, op, mapId, args, obterBytes) {
-  const pool = poolDe(pacote);
+async function calcular(motor, op, mapId, args, obterBytes) {
+  const pool = poolDe(motor);
   const worker = garantir(pool);
   if (!worker) return null;
 
@@ -202,7 +208,7 @@ async function calcular(pacote, op, mapId, args, obterBytes) {
   try {
     bytes = await obterBytes();
   } catch (error) {
-    logErrorOnce('rosuWorker:bytes', error);
+    logErrorOnce('wasmWorker:bytes', error);
     return null;
   }
   if (!bytes) return null;

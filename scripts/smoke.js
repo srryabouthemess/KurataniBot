@@ -70,12 +70,12 @@ const PLAYERS = {
     }
   }
 
-  // O cálculo de PP do Relax passa por um Python separado; se ele não estiver
-  // instalado, o valor vem null e o resto do bot continua funcionando.
+  // O cálculo de PP do Relax passa pelo akatsuki-pp; se o pacote não carregar,
+  // o valor vem null e o resto do bot continua funcionando.
   const rx = await osu.simulatePP(1103981, ['DT'], { n100: 5 }, 'private_rx');
   console.log(rx
     ? `ok     PP do Relax  ${rx.pp.toFixed(4)}pp / ${rx.stars.toFixed(4)}★`
-    : 'aviso  PP do Relax  indisponível (akatsuki-pp-py não instalado)');
+    : 'aviso  PP do Relax  indisponível (akatsuki-pp não carregou)');
 
   process.exit(failures === 0 ? 0 : 1);
 })();

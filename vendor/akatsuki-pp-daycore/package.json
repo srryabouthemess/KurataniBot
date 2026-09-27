@@ -1,0 +1,17 @@
+{
+  "name": "akatsuki-pp-daycore",
+  "description": "akatsuki-pp-js (vendor/akatsuki-pp-js) compilado contra osuAkatsuki/akatsuki-pp-rs@591de0d: o mesmo commit do akatsuki-rx-py do bancho.py do Daycore, Relax",
+  "version": "1.1.2-591de0d",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/osuAkatsuki/akatsuki-pp-rs"
+  },
+  "files": [
+    "akatsuki_pp_js_bg.wasm",
+    "akatsuki_pp_js.js",
+    "akatsuki_pp_js.d.ts"
+  ],
+  "main": "akatsuki_pp_js.js",
+  "types": "akatsuki_pp_js.d.ts"
+}

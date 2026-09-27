@@ -102,13 +102,6 @@ const config = {
     return bool('EXIT_ON_UNCAUGHT');
   },
 
-  /**
-   * No Windows o instalador do python.org cria o binário "python"; na maioria
-   * das distros Linux (PEP 394) só "python3" existe por padrão.
-   */
-  get pythonBin() {
-    return str('PYTHON_BIN') ?? (process.platform === 'win32' ? 'python' : 'python3');
-  },
 
   get daycore() {
     return {
@@ -160,7 +153,7 @@ const VARS = [
   'DISCORD_TOKEN', 'CLIENT_ID', 'COMMAND_PREFIX',
   'OSU_CLIENT_ID', 'OSU_CLIENT_SECRET',
   'KURATANI_DATA_DIR', 'BEATMAP_CACHE_MAX', 'FC_PP_CACHE_MAX',
-  'EXIT_ON_UNCAUGHT', 'PYTHON_BIN',
+  'EXIT_ON_UNCAUGHT',
   'DAYCORE_GUILD_ID', 'DAYCORE_ANNOUNCE_CHANNEL_ID', 'DAYCORE_ROLE_LOG_CHANNEL_ID',
   'DAYCORE_CUSTOM_MAP_CHANNEL_ID', 'NOMINATION_THRESHOLD',
   'REDIS_HOST', 'REDIS_PORT', 'REDIS_USER', 'REDIS_PASS', 'REDIS_DB',

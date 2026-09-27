@@ -245,15 +245,13 @@ async function shutdown(signal) {
   // um Promise.all: o gateway sai primeiro, para não atender uma interação com o
   // banco já fechado, e o banco fecha por último.
   //
-  // Os dois motores de cálculo são recursos de vida longa — um processo
-  // (Python) e um worker thread (rosu-pp). Sem fechá-los aqui, ficariam órfãos
-  // a cada restart.
+  // As threads dos motores de cálculo são recursos de vida longa. Sem fechá-las
+  // aqui, ficariam órfãs a cada restart.
   const etapas = [
     ['gateway',      () => client.destroy()],
     ['eventos',      () => daycoreEvents.close()],
     ['redis',        () => daycoreAdmin.closeRedis()],
-    ['python',       () => pp.closePythonWorker()],
-    ['rosu',         () => pp.closeRosuWorker()],
+    ['motores',      () => pp.closeWasmWorker()],
     ['banco',        () => db.close()],
   ];
 

@@ -11,9 +11,10 @@
 # Dependências
 node_modules/
 
-# Bytecode do Python (gerado ao importar/compilar o pp_calc.py)
-__pycache__/
-*.pyc
+# Build do binding do akatsuki-pp (vendor/akatsuki-pp-js; o que vale é o que
+# vai para vendor/akatsuki-pp-<servidor>)
+vendor/akatsuki-pp-js/target/
+vendor/akatsuki-pp-js/pkg/
 
 # Logs
 *.log

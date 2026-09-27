@@ -15,10 +15,10 @@
  * ACELERA, e a estrela na tela era menor que a do mapa parado.
  *
  * ── Por que o teste olha o MOTOR, e não o número ──────────────────────────────
- * Cravar "7.15 virou X" exigiria as duas libs instaladas e transformaria o teste
+ * Cravar "7.15 virou X" transformaria o teste
  * numa cópia do rework de PP da vez: qualquer atualização do akatsuki-pp o
  * quebraria sem nada estar errado. O que precisa continuar valendo é a decisão —
- * servidor de Relax pergunta ao Python, o Bancho pergunta ao rosu-pp — e é ela
+ * servidor de Relax pergunta ao akatsuki-pp, o Bancho pergunta ao rosu-pp — e é ela
  * que está afirmada aqui. O resto do mapa servidor → motor está no
  * motorPorServidor.test.js.
  */
@@ -37,11 +37,16 @@ process.env.KURATANI_DATA_DIR = DATA_DIR;
 // porque é dele a escolha entre um motor e outro.
 
 const chamadasRosu = [];
-const rosuPath = require.resolve('../src/pp/rosuWorker');
-require.cache[rosuPath] = {
-  id: rosuPath, filename: rosuPath, loaded: true,
+const chamadasAkatsuki = [];
+const wasmPath = require.resolve('../src/pp/wasmWorker');
+require.cache[wasmPath] = {
+  id: wasmPath, filename: wasmPath, loaded: true,
   exports: {
-    calcular: async (pacote, op, mapId, args) => {
+    calcular: async ({ pacote, tipo }, op, mapId, args) => {
+      if (tipo === 'akatsuki') {
+        chamadasAkatsuki.push({ pacote, op, mapId, args, mods: args.mods });
+        return { pp: 200, stars: 6.66, maxCombo: 500 };
+      }
       chamadasRosu.push({ pacote, op, mapId, args });
       return { pp: 100, stars: 5.55, maxCombo: 500 };
     },
@@ -50,19 +55,6 @@ require.cache[rosuPath] = {
   },
 };
 
-const chamadasPython = [];
-const pythonPath = require.resolve('../src/pp/pythonWorker');
-require.cache[pythonPath] = {
-  id: pythonPath, filename: pythonPath, loaded: true,
-  exports: {
-    calcular: async (bytes, params) => {
-      chamadasPython.push(params);
-      return { pp: 200, stars: 6.66, max_combo: 500 };
-    },
-    reportPythonFailure: () => {},
-    close: () => {},
-  },
-};
 
 // O .osu não interessa aqui, e baixá-lo tornaria o teste dependente de rede.
 const filePath = require.resolve('../src/pp/beatmapFile');
@@ -94,7 +86,7 @@ const novoMapa = () => proximoMapa++;
 
 test.beforeEach(() => {
   chamadasRosu.length = 0;
-  chamadasPython.length = 0;
+  chamadasAkatsuki.length = 0;
 });
 
 test('o Relax do Akatsuki existe no registro', () => {
@@ -108,20 +100,20 @@ test('o Bancho continua no rosu-pp', async () => {
 
   assert.equal(estrelas, '5.55');
   assert.equal(chamadasRosu.length, 1);
-  assert.equal(chamadasPython.length, 0);
+  assert.equal(chamadasAkatsuki.length, 0);
 });
 
 test('servidor de Relax vai para o akatsuki-pp, com o RX no bitmask', async () => {
   const estrelas = await pp.getAdjustedStars(novoMapa(), ['HD', 'NC', 'RX'], RELAX);
 
   assert.equal(estrelas, '6.66');
-  assert.equal(chamadasPython.length, 1);
+  assert.equal(chamadasAkatsuki.length, 1);
   assert.equal(chamadasRosu.length, 0, 'o rosu-pp respondeu por uma play de Relax');
 
   // O bit do RX é o que faz o motor calcular Relax em vez de vanilla; sem ele o
   // número sairia do algoritmo errado dentro do motor certo.
   const bitDoRX = modsToBits(['RX']);
-  assert.equal((chamadasPython[0].mods & bitDoRX) === bitDoRX, true);
+  assert.equal((chamadasAkatsuki[0].mods & bitDoRX) === bitDoRX, true);
 });
 
 test('sem mod de dificuldade, o Relax ainda calcula — o vanilla é que confia na API', async () => {
@@ -134,7 +126,7 @@ test('sem mod de dificuldade, o Relax ainda calcula — o vanilla é que confia 
 
   const relax = await pp.getAdjustedStars(novoMapa(), ['CL'], RELAX);
   assert.equal(relax, '6.66');
-  assert.equal(chamadasPython.length, 1);
+  assert.equal(chamadasAkatsuki.length, 1);
 });
 
 test('o cache separa os dois motores, e não serve um pelo outro', async () => {
@@ -148,12 +140,12 @@ test('o cache separa os dois motores, e não serve um pelo outro', async () => {
   // linha do primeiro e os dois sairiam iguais.
   assert.equal(doRelax, '6.66');
   assert.equal(doVanilla, '5.55');
-  assert.equal(chamadasPython.length, 1);
+  assert.equal(chamadasAkatsuki.length, 1);
   assert.equal(chamadasRosu.length, 1);
 
   // E a segunda exibição de cada um não recalcula nada.
   assert.equal(await pp.getAdjustedStars(mapa, mods, RELAX), '6.66');
   assert.equal(await pp.getAdjustedStars(mapa, mods, VANILLA), '5.55');
-  assert.equal(chamadasPython.length, 1);
+  assert.equal(chamadasAkatsuki.length, 1);
   assert.equal(chamadasRosu.length, 1);
 });

@@ -47,8 +47,8 @@ const base = {
 };
 
 test('os misses entram na chave como 300, que é o que o FC seria', () => {
-  // Os dois motores somam os misses ao n300 antes de calcular (perfParams.n300
-  // no rosu, calc_kwargs["n300"] no pp_calc.py). Então um score com 3 misses e
+  // Os dois motores somam os misses ao n300 antes de calcular (o `fc` do
+  // rosuWorkerThread.js e o do akatsukiWorkerThread.js). Então um score com 3 misses e
   // outro com nenhum, mas com o mesmo total de objetos acertados, têm
   // literalmente o mesmo FC pela frente — e devem dividir a entrada.
   const comMiss  = pp.fcCacheKey({ ...base, n300: 897, misses: 3 });

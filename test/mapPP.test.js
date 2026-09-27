@@ -42,15 +42,15 @@ process.env.KURATANI_DATA_DIR = DATA_DIR;
 /**
  * O motor, trocado por um que só anota o que recebeu.
  *
- * Entra no lugar do `rosuWorker` e não do `pp`, de propósito: é justamente o
+ * Entra no lugar do `wasmWorker` e não do `pp`, de propósito: é justamente o
  * `pp` que este teste quer exercitar de verdade — ele é quem decide os mods.
  */
 const chamadasMotor = [];
-const rosuPath = require.resolve('../src/pp/rosuWorker');
+const rosuPath = require.resolve('../src/pp/wasmWorker');
 require.cache[rosuPath] = {
   id: rosuPath, filename: rosuPath, loaded: true,
   exports: {
-    calcular: async (pacote, op, mapId, args) => {
+    calcular: async ({ pacote }, op, mapId, args) => {
       chamadasMotor.push({ pacote, op, mapId, args });
       return { pp: 100, stars: 5, maxCombo: 500 };
     },
