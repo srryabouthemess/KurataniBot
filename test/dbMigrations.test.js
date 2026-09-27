@@ -72,6 +72,29 @@ test('banco numa versão intermediária é levado até a atual', t => {
   assert.equal(db.getUserLang('discord-A'), 'en', 'o dado existente deveria sobreviver');
 });
 
+test('o cache do lazer-calculator sai, e o do Relax fica', t => {
+  // O vanilla passou a ser calculado pelo rosu-pp, com `engine = 'rosu'` na
+  // chave. As linhas `lazer` não seriam mais lidas, e sem TTL também não
+  // venceriam nunca.
+  const { dbPath, load } = dbWorkspace(t);
+
+  const primeiro = load();
+  primeiro.setMapDifficulty(1, 'DT', 'lazer', 6.5, 900);
+  primeiro.setMapDifficulty(1, 'DT,RX', 'akatsuki', 4.2, 900);
+  const fc = { mapId: 1, mods: 'DT', n300: 800, n100: 10, n50: 0 };
+  primeiro.setCachedFCpp({ ...fc, engine: 'lazer' }, 500);
+  primeiro.setCachedFCpp({ ...fc, engine: 'akatsuki' }, 300);
+  primeiro.close();
+
+  comHandle(dbPath, h => h.exec('PRAGMA user_version = 4'));
+
+  const db = load();
+  assert.equal(db.getMapDifficulty(1, 'DT', 'lazer'), null);
+  assert.ok(db.getMapDifficulty(1, 'DT,RX', 'akatsuki'), 'a estrela do Relax deveria sobreviver');
+  assert.equal(db.getCachedFCpp({ ...fc, engine: 'lazer' }), null);
+  assert.equal(db.getCachedFCpp({ ...fc, engine: 'akatsuki' }), 300);
+});
+
 /** Carrega esperando a recusa, e fecha o handle que a conexão já abriu. */
 function recusa(load) {
   let erro = null;

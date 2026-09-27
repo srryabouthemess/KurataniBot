@@ -130,10 +130,9 @@ function commandSource(rel) {
 /**
  * Um `.osu` válido e mínimo, com `n` círculos.
  *
- * Sintético de propósito: os testes dos dois motores de cálculo rodam contra as
- * libs de verdade, e um mapa inventado aqui não depende do cache da máquina nem
- * da rede. Mora nos helpers porque o rosuWorker e o lazerWorker precisam do
- * MESMO mapa — é o que torna os números dos dois comparáveis.
+ * Sintético de propósito: os testes do motor de cálculo rodam contra a lib de
+ * verdade, e um mapa inventado aqui não depende do cache da máquina nem da
+ * rede.
  */
 function mapaSintetico(n) {
   const objetos = [];

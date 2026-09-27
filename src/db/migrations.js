@@ -37,7 +37,7 @@ const path = require('path');
 
 const { DATA_DIR } = require('../paths');
 
-const VERSAO_ATUAL = 4;
+const VERSAO_ATUAL = 5;
 
 /** A versão mais antiga que as migrações abaixo sabem levar até a atual. */
 const VERSAO_MINIMA = 1;
@@ -228,6 +228,30 @@ function acrescentarEngineNaMapDifficulty(db) {
   console.log('[db] map_difficulty agora separa lazer de akatsuki; as estrelas de RX serão recalculadas sob demanda.');
 }
 
+// ─── 4 → 5: o vanilla passa a ser calculado pelo rosu-pp ──────────────────────
+
+/**
+ * Apaga as linhas do motor `lazer` da map_difficulty e da fc_pp.
+ *
+ * O vanilla trocou o lazer-calculator pelo rosu-pp do fork, e a chave passou a
+ * dizer `engine = 'rosu'`. As linhas antigas deixariam de ser encontradas de
+ * qualquer jeito, mas nenhuma das duas tabelas tem TTL que as vença — ficariam
+ * ocupando espaço para sempre. Não se aproveitam como `rosu` porque o fork segue
+ * o lazer master, que pode estar à frente do build do lazer-calculator que as
+ * gravou; aproveitá-las seria misturar dois momentos do algoritmo na mesma tela.
+ *
+ * O Relax (`akatsuki`) fica: é outro motor, e ele não mudou.
+ */
+function descartarCacheDoLazer(db) {
+  const apagadas =
+    db.prepare("DELETE FROM cache.map_difficulty WHERE engine = 'lazer'").run().changes +
+    db.prepare("DELETE FROM cache.fc_pp WHERE engine = 'lazer'").run().changes;
+
+  if (apagadas > 0) {
+    console.log(`[db] ${apagadas} valor(es) do lazer-calculator descartados; o rosu-pp recalcula sob demanda.`);
+  }
+}
+
 // ─── Execução ─────────────────────────────────────────────────────────────────
 
 function run(db) {
@@ -244,6 +268,10 @@ function run(db) {
 
   if (versao < 4) {
     acrescentarEngineNaMapDifficulty(db);
+  }
+
+  if (versao < 5) {
+    descartarCacheDoLazer(db);
   }
 
   // Interpolado porque PRAGMA não aceita parâmetro; o valor é uma constante do

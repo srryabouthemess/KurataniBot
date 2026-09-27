@@ -8,10 +8,11 @@ está abaixo é de outras pessoas, e MIT, BSD e Apache pedem que o aviso de
 copyright e o texto da licença viajem junto com o software. Este arquivo é esse
 cumprimento.
 
-Cobre as **73 dependências de produção** do lock — as transitivas
-inclusive, que são a maioria — e mais três que o npm não enxerga: a lib Python do
-PP do Relax, os ícones de grade, que vieram do jogo, e o código do Bathbot de onde
-saiu a fórmula do `/matchcost`. Estas últimas estão em
+Cobre as **70 dependências de produção** do lock — as transitivas
+inclusive, que são a maioria — e mais quatro que o npm não enxerga: os crates Rust
+compilados no `.wasm` do rosu-pp-js, a lib Python do PP do Relax, os ícones de
+grade, que vieram do jogo, e o código do Bathbot de onde saiu a fórmula do
+`/matchcost`. Estas últimas estão em
 [O que não vem do npm](#o-que-não-vem-do-npm), no fim.
 
 ## O que há aqui
@@ -20,23 +21,8 @@ saiu a fórmula do `/matchcost`. Estas últimas estão em
 | --- | --- |
 | MIT | 58 |
 | Apache-2.0 | 10 |
-| LGPL-3.0-only | 3 |
 | BSD-2-Clause | 1 |
 | 0BSD | 1 |
-
-## A única que não é permissiva
-
-O **`@tosuapp/lazer-calculator`** é **LGPL-3.0-only**, e todo o resto é
-permissivo (MIT/BSD/Apache/0BSD). A diferença importa: a LGPL alcança quem
-redistribui o binário dela, e pede que quem receba possa **trocar a biblioteca**
-por outra versão.
-
-O desenho do bot já satisfaz isso sem esforço, e não por acaso: ele carrega o
-calculador como binário separado, num processo filho ([`lazerWorker.js`](src/pp/lazerWorker.js)),
-e o pacote vem do npm em vez de compilado junto. Quem clona o repositório troca a
-versão mexendo no `package.json` — o código do bot não é obra derivada dele, e o
-próprio `npm install` pula o pacote em plataforma sem binário, com o bot
-continuando de pé.
 
 ## Pacotes
 
@@ -57,9 +43,6 @@ continuando de pé.
 | `@sapphire/async-queue` | 1.5.5 | MIT |
 | `@sapphire/shapeshift` | 4.0.0 | MIT |
 | `@sapphire/snowflake` | 3.5.5 | MIT |
-| `@tosuapp/lazer-calculator-linux-x64` <sup>linux-x64</sup> | 0.6.1-20260729-main.0 | LGPL-3.0-only |
-| `@tosuapp/lazer-calculator-prebuilt` <sup>win32/linux-x64</sup> | 0.6.1-20260729-main.0 | LGPL-3.0-only |
-| `@tosuapp/lazer-calculator-win32-x64` <sup>win32-x64</sup> | 0.6.1-20260729-main.0 | LGPL-3.0-only |
 | `@types/node` | 25.5.2 | MIT |
 | `@types/ws` | 8.18.1 | MIT |
 | `@vladfrangu/async_event_emitter` | 2.4.7 | MIT |
@@ -107,7 +90,7 @@ continuando de pé.
 | `named-placeholders` | 1.1.6 | MIT |
 | `proxy-from-env` | 2.1.0 | MIT |
 | `redis` | 6.2.0 | MIT |
-| `rosu-pp-js` | 4.0.1 | MIT |
+| `rosu-pp-js` | 4.0.1-lazer-master.67a9c11 | MIT |
 | `safer-buffer` | 2.1.2 | MIT |
 | `sql-escaper` | 1.5.1 | MIT |
 | `ts-mixer` | 6.0.4 | MIT |
@@ -116,10 +99,9 @@ continuando de pé.
 | `undici-types` | 7.18.2 | MIT |
 | `ws` | 8.21.0 | MIT |
 
-O que está marcado com plataforma só instala onde o `os`/`cpu` bate. O binário do
-calculador tem uma variante por sistema, e as duas aparecem aqui porque o bot roda
-em Windows (desenvolvimento) e Linux (VPS) — a lista sai do lock justamente para
-não depender de qual das duas a máquina que gerou o arquivo baixou.
+O que está marcado com plataforma só instala onde o `os`/`cpu` bate. A lista sai
+do lock justamente para não depender de qual plataforma a máquina que gerou o
+arquivo é.
 
 ## Textos das licenças
 
@@ -1568,176 +1550,6 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
 
-### LGPL-3.0-only — `@tosuapp/lazer-calculator-prebuilt` 0.6.1-20260729-main.0, `@tosuapp/lazer-calculator-win32-x64` 0.6.1-20260729-main.0
-
-```text
-GNU LESSER GENERAL PUBLIC LICENSE
-                       Version 3, 29 June 2007
-
- Copyright (C) 2007 Free Software Foundation, Inc. <https://fsf.org/>
- Everyone is permitted to copy and distribute verbatim copies
- of this license document, but changing it is not allowed.
-
-
-  This version of the GNU Lesser General Public License incorporates
-the terms and conditions of version 3 of the GNU General Public
-License, supplemented by the additional permissions listed below.
-
-  0. Additional Definitions.
-
-  As used herein, "this License" refers to version 3 of the GNU Lesser
-General Public License, and the "GNU GPL" refers to version 3 of the GNU
-General Public License.
-
-  "The Library" refers to a covered work governed by this License,
-other than an Application or a Combined Work as defined below.
-
-  An "Application" is any work that makes use of an interface provided
-by the Library, but which is not otherwise based on the Library.
-Defining a subclass of a class defined by the Library is deemed a mode
-of using an interface provided by the Library.
-
-  A "Combined Work" is a work produced by combining or linking an
-Application with the Library.  The particular version of the Library
-with which the Combined Work was made is also called the "Linked
-Version".
-
-  The "Minimal Corresponding Source" for a Combined Work means the
-Corresponding Source for the Combined Work, excluding any source code
-for portions of the Combined Work that, considered in isolation, are
-based on the Application, and not on the Linked Version.
-
-  The "Corresponding Application Code" for a Combined Work means the
-object code and/or source code for the Application, including any data
-and utility programs needed for reproducing the Combined Work from the
-Application, but excluding the System Libraries of the Combined Work.
-
-  1. Exception to Section 3 of the GNU GPL.
-
-  You may convey a covered work under sections 3 and 4 of this License
-without being bound by section 3 of the GNU GPL.
-
-  2. Conveying Modified Versions.
-
-  If you modify a copy of the Library, and, in your modifications, a
-facility refers to a function or data to be supplied by an Application
-that uses the facility (other than as an argument passed when the
-facility is invoked), then you may convey a copy of the modified
-version:
-
-   a) under this License, provided that you make a good faith effort to
-   ensure that, in the event an Application does not supply the
-   function or data, the facility still operates, and performs
-   whatever part of its purpose remains meaningful, or
-
-   b) under the GNU GPL, with none of the additional permissions of
-   this License applicable to that copy.
-
-  3. Object Code Incorporating Material from Library Header Files.
-
-  The object code form of an Application may incorporate material from
-a header file that is part of the Library.  You may convey such object
-code under terms of your choice, provided that, if the incorporated
-material is not limited to numerical parameters, data structure
-layouts and accessors, or small macros, inline functions and templates
-(ten or fewer lines in length), you do both of the following:
-
-   a) Give prominent notice with each copy of the object code that the
-   Library is used in it and that the Library and its use are
-   covered by this License.
-
-   b) Accompany the object code with a copy of the GNU GPL and this license
-   document.
-
-  4. Combined Works.
-
-  You may convey a Combined Work under terms of your choice that,
-taken together, effectively do not restrict modification of the
-portions of the Library contained in the Combined Work and reverse
-engineering for debugging such modifications, if you also do each of
-the following:
-
-   a) Give prominent notice with each copy of the Combined Work that
-   the Library is used in it and that the Library and its use are
-   covered by this License.
-
-   b) Accompany the Combined Work with a copy of the GNU GPL and this license
-   document.
-
-   c) For a Combined Work that displays copyright notices during
-   execution, include the copyright notice for the Library among
-   these notices, as well as a reference directing the user to the
-   copies of the GNU GPL and this license document.
-
-   d) Do one of the following:
-
-       0) Convey the Minimal Corresponding Source under the terms of this
-       License, and the Corresponding Application Code in a form
-       suitable for, and under terms that permit, the user to
-       recombine or relink the Application with a modified version of
-       the Linked Version to produce a modified Combined Work, in the
-       manner specified by section 6 of the GNU GPL for conveying
-       Corresponding Source.
-
-       1) Use a suitable shared library mechanism for linking with the
-       Library.  A suitable mechanism is one that (a) uses at run time
-       a copy of the Library already present on the user's computer
-       system, and (b) will operate properly with a modified version
-       of the Library that is interface-compatible with the Linked
-       Version.
-
-   e) Provide Installation Information, but only if you would otherwise
-   be required to provide such information under section 6 of the
-   GNU GPL, and only to the extent that such information is
-   necessary to install and execute a modified version of the
-   Combined Work produced by recombining or relinking the
-   Application with a modified version of the Linked Version. (If
-   you use option 4d0, the Installation Information must accompany
-   the Minimal Corresponding Source and Corresponding Application
-   Code. If you use option 4d1, you must provide the Installation
-   Information in the manner specified by section 6 of the GNU GPL
-   for conveying Corresponding Source.)
-
-  5. Combined Libraries.
-
-  You may place library facilities that are a work based on the
-Library side by side in a single library together with other library
-facilities that are not Applications and are not covered by this
-License, and convey such a combined library under terms of your
-choice, if you do both of the following:
-
-   a) Accompany the combined library with a copy of the same work based
-   on the Library, uncombined with any other library facilities,
-   conveyed under the terms of this License.
-
-   b) Give prominent notice with the combined library that part of it
-   is a work based on the Library, and explaining where to find the
-   accompanying uncombined form of the same work.
-
-  6. Revised Versions of the GNU Lesser General Public License.
-
-  The Free Software Foundation may publish revised and/or new versions
-of the GNU Lesser General Public License from time to time. Such new
-versions will be similar in spirit to the present version, but may
-differ in detail to address new problems or concerns.
-
-  Each version is given a distinguishing version number. If the
-Library as you received it specifies that a certain numbered version
-of the GNU Lesser General Public License "or any later version"
-applies to it, you have the option of following the terms and
-conditions either of that published version or of any later version
-published by the Free Software Foundation. If the Library as you
-received it does not specify a version number of the GNU Lesser
-General Public License, you may choose any version of the GNU Lesser
-General Public License ever published by the Free Software Foundation.
-
-  If the Library as you received it specifies that a proxy can decide
-whether future versions of the GNU Lesser General Public License shall
-apply, that proxy's public statement of acceptance of any version is
-permanent authorization for you to choose that version for the
-Library.
-```
-
 ### MIT — `@sapphire/shapeshift` 4.0.0
 
 ```text
@@ -2679,7 +2491,7 @@ IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-### MIT — `rosu-pp-js` 4.0.1
+### MIT — `rosu-pp-js` 4.0.1-lazer-master.67a9c11
 
 ```text
 MIT License
@@ -2840,8 +2652,7 @@ Estes declaram a licença no `package.json` mas não incluem um arquivo dela no
 pacote publicado — ou são o binário da outra plataforma, que esta máquina não
 instalou e de onde não dá para ler nada. O identificador abaixo é o que o pacote
 declara; o texto completo está no repositório de cada um. Quando um irmão do
-mesmo conjunto publica o texto, ele está na seção acima — é o caso do binário do
-calculador, cuja LGPL-3.0 acompanha as outras duas variantes.
+mesmo conjunto publica o texto, ele está na seção acima.
 
 | Pacote | Versão | Licença declarada |
 | --- | --- | --- |
@@ -2852,15 +2663,29 @@ calculador, cuja LGPL-3.0 acompanha as outras duas variantes.
 | `@redis/time-series` | 6.2.0 | MIT |
 | `@sapphire/async-queue` | 1.5.5 | MIT |
 | `@sapphire/snowflake` | 3.5.5 | MIT |
-| `@tosuapp/lazer-calculator-linux-x64` | 0.6.1-20260729-main.0 | LGPL-3.0-only |
 | `agent-base` | 6.0.2 | MIT |
 | `https-proxy-agent` | 5.0.1 | MIT |
 | `redis` | 6.2.0 | MIT |
 
 ## O que não vem do npm
 
-O lock só conhece o que o `npm install` baixa, e o bot usa três coisas de terceiro
+O lock só conhece o que o `npm install` baixa, e o bot usa quatro coisas de terceiro
 fora disso. Elas entram aqui à mão, pela mesma razão que o resto do arquivo existe.
+
+### Crates Rust dentro do vendor/rosu-pp-js — MIT / MIT OR Apache-2.0
+
+O `rosu-pp-js` acima é Wasm, e o `.wasm` dele carrega compilado o código Rust de
+que depende. O npm só enxerga o pacote JavaScript; estes vêm junto no binário:
+
+| Crate | Licença |
+| --- | --- |
+| `rosu-pp` ([fork](https://github.com/srryabouthemess/rosu-pp/tree/pp-update-lazer-master) de <https://github.com/MaxOhn/rosu-pp>) | MIT |
+| `rosu-map`, `rosu-mods` | MIT |
+| `serde`, `wasm-bindgen`, `js-sys`, `once_cell`, `cfg-if` | MIT OR Apache-2.0 |
+
+Os três primeiros são de Max Ohn, sob o mesmo texto MIT do `rosu-pp-js` (na seção
+de textos acima). Os demais são usados pela opção MIT, cujo texto é o mesmo, com
+o aviso de copyright de cada projeto no respectivo repositório.
 
 ### akatsuki-pp-py — MIT
 

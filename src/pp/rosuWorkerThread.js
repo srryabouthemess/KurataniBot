@@ -1,34 +1,36 @@
 /**
  * rosuWorkerThread.js
- * O corpo do worker thread que lê os atributos de mapa pelo rosu-pp. **Não
- * importe este arquivo do processo principal** — ele só faz sentido dentro de um
- * Worker.
+ * O corpo do worker thread que calcula estrelas, PP e atributos de mapa pelo
+ * rosu-pp. **Não importe este arquivo do processo principal** — ele só faz
+ * sentido dentro de um Worker.
  *
- * ── O que sobrou aqui ─────────────────────────────────────────────────────────
- * Estrelas e PP saíram deste arquivo quando o cálculo passou para o
- * lazer-calculator, que reproduz o número oficial exatamente (ver pp.js). O que
- * ficou é a única coisa que o motor novo NÃO expõe: CS/AR/OD/HP ajustados por
- * mod, o BPM na velocidade do clock e a contagem de objetos. É informação de
- * mapa, não de PP — a linha que o embed imprime ao lado do título —, e para ela
- * o rosu-pp serve inteiro: essas contas não mudam entre reworks.
+ * ── Qual rosu-pp ──────────────────────────────────────────────────────────────
+ * O do fork (srryabouthemess/rosu-pp, branch `pp-update-lazer-master`), que
+ * segue o osu!lazer master: medido contra a API oficial em 613 scores dos
+ * quatro modos, o erro relativo fica na casa de 1e-6. O rosu-pp-js que o envolve
+ * é compilado contra esse fork e mora em `vendor/rosu-pp-js` (ver
+ * docs/OPCIONAIS.md para refazer o build). Foi o que aposentou o
+ * lazer-calculator: mesmo número, sem o runtime .NET, sem processo-filho e sem
+ * o parse de ~18ms.
  *
  * ── Por que uma thread ────────────────────────────────────────────────────────
- * O rosu-pp é Wasm síncrono: enquanto ele calcula, o event loop não anda. O
- * cálculo que sobrou é o barato dos dois, mas o parse (1,54ms nos 12 maiores
- * .osu do cache) continua acontecendo aqui, e uma página de mapas inéditos são
- * cinco deles seguidos — com o bot sem responder a ninguém e sem mandar
- * heartbeat para o gateway no meio.
+ * O rosu-pp é Wasm síncrono: enquanto ele calcula, o event loop não anda. Uma
+ * página de mapas inéditos são cinco parses e cinco cálculos seguidos — com o
+ * bot sem responder a ninguém e sem mandar heartbeat para o gateway no meio.
  *
  * ── Por que o LRU de mapa mora AQUI ───────────────────────────────────────────
  * Guardar o mapa parseado deste lado é o que permite o processo principal mandar
  * os bytes UMA vez por mapa, em vez de 50–300KB por cálculo — e o que evita
- * reparsear o mesmo .osu a cada virada de página.
+ * reparsear o mesmo .osu no caminho das estrelas e de novo no do FC pp.
  *
  * A memória de um Beatmap é do Wasm, e o coletor do JS não a recolhe: cada um
- * precisa de `free()` explícito, inclusive ao ser descartado pelo teto.
+ * precisa de `free()` explícito, inclusive ao ser descartado pelo teto. O mesmo
+ * vale para os calculadores e os atributos que eles devolvem (ver `usar`).
  */
 
 const { parentPort } = require('node:worker_threads');
+
+const { modAcronym, modsToBits, clockRate } = require('../mods');
 
 // A lib é opcional: sem ela o bot continua respondendo, só sem os valores de PP
 // calculados localmente. O erro vai na primeira resposta, para o lado de lá
@@ -86,9 +88,129 @@ function guardarMapa(mapId, beatmap) {
   }
 }
 
+// ─── Mods ─────────────────────────────────────────────────────────────────────
+
+const classico = (mods) => (mods ?? []).some((mod) => modAcronym(mod) === 'CL');
+
+/**
+ * Roda `calcular` com os mods inteiros e, se o rosu-pp recusar a lista, de novo
+ * com bitmask + rate.
+ *
+ * Os mods vão como objeto porque é o único jeito de o ajuste de cada um (um DT a
+ * 1,4x, o `no_slider_head_accuracy` do CL) chegar ao motor. Só que o rosu-pp
+ * recusa a lista INTEIRA quando encontra um acrônimo ou ajuste que não conhece
+ * (`failed to deserialize mods`), e os mods vêm da API oficial, que ganha mod
+ * novo sem avisar. Sem o segundo caminho, um mod inédito apagaria a estrela e o
+ * pp da play. O bitmask perde o que não tem bit, mas o rate viaja ao lado e o
+ * CL vira o `lazer: false` que os dois caminhos já mandam.
+ */
+function comMods(mods, calcular) {
+  try {
+    return calcular({ mods: mods ?? [], clockRate: null });
+  } catch (error) {
+    if (!/deserialize mods/i.test(error?.message ?? '')) throw error;
+    return calcular({ mods: modsToBits(mods), clockRate: clockRate(mods) });
+  }
+}
+
+/** Executa `fn` com um objeto Wasm e o libera em seguida, dê certo ou não. */
+function usar(objeto, fn) {
+  try {
+    return fn(objeto);
+  } finally {
+    objeto.free();
+  }
+}
+
+/**
+ * Calcula a performance e devolve só números — o resultado é memória Wasm, e
+ * não atravessa a fronteira da thread.
+ *
+ * `lazer` sai do CL: sem ele o rosu-pp assume mecânica de lazer, que conta fim de
+ * slider e pesa o combo de outro jeito. É o mesmo "CL na lista quer dizer
+ * stable" que o pp.js já garante no engineMods.
+ *
+ * ── `legacyTotalScore` só em score clássico ───────────────────────────────────
+ * Ele alimenta a estimativa de miss POR SCORE, que o osu! usa junto da
+ * estimativa por combo ficando com a maior das duas. Passar o score do lazer no
+ * lugar do legado derruba o resultado num choke (medido num top play do mrekk:
+ * 1052.16pp contra os 1781.65pp corretos). Score hipotético manda null, e aí só
+ * a estimativa por combo opera. (No lazer master, zero passou a valer o mesmo
+ * que null; no lazer-calculator de antes, 0 achava miss de mais.)
+ */
+function performance(beatmap, mods, estado) {
+  const lazer = !classico(mods);
+
+  return comMods(mods, (argsMods) => usar(
+    new rosu.Performance({
+      ...argsMods,
+      lazer,
+      n300:   estado.n300   ?? null,
+      n100:   estado.n100   ?? null,
+      n50:    estado.n50    ?? null,
+      misses: estado.misses ?? null,
+      combo:  estado.combo  ?? null,
+      passedObjects: estado.passedObjects ?? null,
+      legacyTotalScore: lazer ? null : (estado.legacyTotalScore ?? null),
+      sliderEndHits: estado.sliderEndHits ?? null,
+      largeTickHits: estado.largeTickHits ?? null,
+      smallTickHits: estado.smallTickHits ?? null,
+    }),
+    (calc) => usar(calc.calculate(beatmap), (attrs) => ({
+      pp: attrs.pp,
+      stars: attrs.difficulty.stars,
+      maxCombo: attrs.difficulty.maxCombo,
+    })),
+  ));
+}
+
 // ─── Operações ────────────────────────────────────────────────────────────────
 // Todas recebem um Beatmap já parseado e devolvem valores simples — o que
 // atravessa a fronteira da thread precisa ser serializável.
+
+function difficulty(beatmap, { mods }) {
+  const lazer = !classico(mods);
+
+  return comMods(mods, (argsMods) => usar(
+    new rosu.Difficulty({ ...argsMods, lazer }),
+    (calc) => usar(calc.calculate(beatmap), (attrs) => ({
+      stars: attrs.stars,
+      maxCombo: attrs.maxCombo ?? null,
+    })),
+  ));
+}
+
+/**
+ * PP de um FC hipotético: os misses viram 300 (é o que "se tivesse sido FC"
+ * quer dizer) e o combo é o máximo do mapa.
+ *
+ * Sem os 300 reais, o rosu-pp deduz: tudo que não foi 100, 50 ou miss é 300, o
+ * que descreve o FC do mesmo jeito.
+ */
+function fc(beatmap, { mods, n300, n100, n50, misses }) {
+  const { pp } = performance(beatmap, mods, {
+    n300: n300 == null ? null : n300 + (misses ?? 0),
+    n100, n50,
+    misses: 0,
+  });
+  return { pp };
+}
+
+/**
+ * PP de um score hipotético ou já jogado.
+ *
+ * `passedObjects` é o que torna honesta uma play interrompida: a dificuldade
+ * passa a ser a do TRECHO jogado, e o combo máximo devolvido também.
+ */
+function simulate(beatmap, { mods, n300, n100, n50, misses, combo, passedObjects,
+                             legacyTotalScore, sliderEndHits, largeTickHits, smallTickHits }) {
+  return performance(beatmap, mods, {
+    n300, n100, n50, misses,
+    // Combo negativo é o "não sei" que vem do pp.js; aí vale o máximo do mapa.
+    combo: combo != null && combo >= 0 ? combo : null,
+    passedObjects, legacyTotalScore, sliderEndHits, largeTickHits, smallTickHits,
+  });
+}
 
 /**
  * Os números do mapa como quem jogou os sentiu: CS/AR/OD/HP já ajustados pelos
@@ -140,7 +262,7 @@ function attributes(beatmap, { mods, clockRate }) {
   };
 }
 
-const OPERACOES = { attributes };
+const OPERACOES = { attributes, difficulty, fc, simulate };
 
 // ─── Protocolo ────────────────────────────────────────────────────────────────
 // Pedido:  { id, op, mapId, args, bytes? }

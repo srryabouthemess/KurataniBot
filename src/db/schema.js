@@ -201,13 +201,13 @@ function apply(db) {
     --
     -- A coluna "engine" está na chave pela mesma razão que na fc_pp abaixo: a
     -- estrela de um mapa no Relax sai do akatsuki-pp, que zera a dimensão de
-    -- velocidade, e a do vanilla sai do lazer-calculator. São dois números
+    -- velocidade, e a do vanilla sai do rosu-pp. São dois números
     -- legítimos para o mesmo (mapa, mods), e sem a coluna o primeiro a ser
     -- calculado valeria para os dois — sem TTL para vencer.
     CREATE TABLE IF NOT EXISTS cache.map_difficulty (
       map_id    INTEGER NOT NULL,
       mods      TEXT    NOT NULL,
-      engine    TEXT    NOT NULL,  -- 'lazer' | 'akatsuki'
+      engine    TEXT    NOT NULL,  -- 'rosu' | 'akatsuki'
       stars     REAL    NOT NULL,
       max_combo INTEGER,
       PRIMARY KEY (map_id, mods, engine)
@@ -224,7 +224,7 @@ function apply(db) {
     -- num mapa já calculado mil vezes antes.
     --
     -- A coluna "engine" está na chave porque os dois motores dão números
-    -- diferentes de propósito: o lazer-calculator para o algoritmo oficial, o
+    -- diferentes de propósito: o rosu-pp para o algoritmo oficial, o
     -- akatsuki-pp para o Relax. A mecânica lazer/stable NÃO é mais uma dimensão
     -- separada — ela virou o mod CL dentro de "mods", como no osu! de verdade.
     --
@@ -235,7 +235,7 @@ function apply(db) {
     CREATE TABLE IF NOT EXISTS cache.fc_pp (
       map_id    INTEGER NOT NULL,
       mods      TEXT    NOT NULL,  -- forma canônica, ex.: 'CL,DT,HD'
-      engine    TEXT    NOT NULL,  -- 'lazer' | 'akatsuki'
+      engine    TEXT    NOT NULL,  -- 'rosu' | 'akatsuki'
       n300      INTEGER NOT NULL,  -- já com os misses somados (ver pp.js)
       n100      INTEGER NOT NULL,
       n50       INTEGER NOT NULL,

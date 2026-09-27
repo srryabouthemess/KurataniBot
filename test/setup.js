@@ -51,8 +51,8 @@ if (!veioDeFora) {
   // ela e fica responsável por apagá-la INTEIRA no fim.
   //
   // Isso é o que dá conta dos processos que morrem por sinal em vez de sair
-  // sozinhos — o `lazerWorker` faz `fork` de um filho Node, que herda este
-  // preload e é encerrado com `kill()`. Nesses o `exit` nunca roda, e a pasta
+  // sozinhos — um filho Node que herda este preload e é encerrado com
+  // `kill()`. Nesses o `exit` nunca roda, e a pasta
   // ficaria para trás a cada `npm test`. Como todas penduram na mesma mãe,
   // apagar a mãe apaga também as órfãs.
   const abriuARodada = !process.env[RAIZ_ENV];

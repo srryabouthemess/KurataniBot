@@ -143,8 +143,8 @@ module.exports = {
       // oficial conhece mas cujo arquivo não baixou.
       if (!attrs?.objects) return interaction.editReply(s.map_no_file);
 
-      // Em paralelo: são cinco chamadas ao mesmo mapa, que o processo do
-      // lazer-calculator só parseia na primeira (ver lazerWorker.js).
+      // Em paralelo: são cinco chamadas ao mesmo mapa, que a thread do rosu-pp
+      // só parseia na primeira (ver rosuWorker.js).
       //
       // `classic: true` pelo mesmo motivo do /simulate: é a mecânica que
       // praticamente todo mundo joga, e é a que o resto do bot assume ao

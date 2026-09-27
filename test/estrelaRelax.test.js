@@ -2,8 +2,8 @@
  * A estrela de uma play de Relax sai do motor que pontuou a play.
  *
  * ── O que aconteceu ───────────────────────────────────────────────────────────
- * O `getAdjustedStars` mandava TUDO para o lazer-calculator. Para o vanilla isso
- * é exatamente certo — ele é o C# do próprio osu!, e bate com o site. Para o
+ * O `getAdjustedStars` mandava TUDO para o motor vanilla (na época, o
+ * lazer-calculator). Para o vanilla isso é exatamente certo — ele bate com o site. Para o
  * Relax não: quem pontuou aquele score foi o akatsuki-pp, e as duas contas não
  * são a mesma. O lazer TEM um caminho para o mod RX (zera a velocidade e corta o
  * flashlight), então nada estourava e nada ficava vazio — saía um número
@@ -18,7 +18,7 @@
  * Cravar "7.15 virou X" exigiria as duas libs instaladas e transformaria o teste
  * numa cópia do rework de PP da vez: qualquer atualização do akatsuki-pp o
  * quebraria sem nada estar errado. O que precisa continuar valendo é a decisão —
- * servidor de Relax pergunta ao Python, servidor vanilla pergunta ao lazer — e é
+ * servidor de Relax pergunta ao Python, servidor vanilla pergunta ao rosu-pp — e é
  * ela que está afirmada aqui.
  */
 const test = require('node:test');
@@ -35,13 +35,13 @@ process.env.KURATANI_DATA_DIR = DATA_DIR;
 // Não é o `pp` que está sendo dublado: ele é justamente o que se quer exercitar,
 // porque é dele a escolha entre um motor e outro.
 
-const chamadasLazer = [];
-const lazerPath = require.resolve('../src/pp/lazerWorker');
-require.cache[lazerPath] = {
-  id: lazerPath, filename: lazerPath, loaded: true,
+const chamadasRosu = [];
+const rosuPath = require.resolve('../src/pp/rosuWorker');
+require.cache[rosuPath] = {
+  id: rosuPath, filename: rosuPath, loaded: true,
   exports: {
     calcular: async (op, mapId, args) => {
-      chamadasLazer.push({ op, mapId, args });
+      chamadasRosu.push({ op, mapId, args });
       return { pp: 100, stars: 5.55, maxCombo: 500 };
     },
     close: () => {},
@@ -91,7 +91,7 @@ let proximoMapa = 700000;
 const novoMapa = () => proximoMapa++;
 
 test.beforeEach(() => {
-  chamadasLazer.length = 0;
+  chamadasRosu.length = 0;
   chamadasPython.length = 0;
 });
 
@@ -101,11 +101,11 @@ test('o par VN/RX do Akatsuki existe no registro', () => {
   assert.equal(servers.isRelax(VANILLA), false);
 });
 
-test('servidor vanilla continua no lazer-calculator', async () => {
+test('servidor vanilla continua no rosu-pp', async () => {
   const estrelas = await pp.getAdjustedStars(novoMapa(), ['HD', 'DT'], VANILLA);
 
   assert.equal(estrelas, '5.55');
-  assert.equal(chamadasLazer.length, 1);
+  assert.equal(chamadasRosu.length, 1);
   assert.equal(chamadasPython.length, 0);
 });
 
@@ -114,7 +114,7 @@ test('servidor de Relax vai para o akatsuki-pp, com o RX no bitmask', async () =
 
   assert.equal(estrelas, '6.66');
   assert.equal(chamadasPython.length, 1);
-  assert.equal(chamadasLazer.length, 0, 'o lazer respondeu por uma play de Relax');
+  assert.equal(chamadasRosu.length, 0, 'o rosu-pp respondeu por uma play de Relax');
 
   // O bit do RX é o que faz o motor calcular Relax em vez de vanilla; sem ele o
   // número sairia do algoritmo errado dentro do motor certo.
@@ -128,7 +128,7 @@ test('sem mod de dificuldade, o Relax ainda calcula — o vanilla é que confia 
   // API traz é a estrela do vanilla, que é justamente o que não serve.
   const semMods = await pp.getAdjustedStars(novoMapa(), ['CL'], VANILLA);
   assert.equal(semMods, null);
-  assert.equal(chamadasLazer.length, 0);
+  assert.equal(chamadasRosu.length, 0);
 
   const relax = await pp.getAdjustedStars(novoMapa(), ['CL'], RELAX);
   assert.equal(relax, '6.66');
@@ -147,11 +147,11 @@ test('o cache separa os dois motores, e não serve um pelo outro', async () => {
   assert.equal(doRelax, '6.66');
   assert.equal(doVanilla, '5.55');
   assert.equal(chamadasPython.length, 1);
-  assert.equal(chamadasLazer.length, 1);
+  assert.equal(chamadasRosu.length, 1);
 
   // E a segunda exibição de cada um não recalcula nada.
   assert.equal(await pp.getAdjustedStars(mapa, mods, RELAX), '6.66');
   assert.equal(await pp.getAdjustedStars(mapa, mods, VANILLA), '5.55');
   assert.equal(chamadasPython.length, 1);
-  assert.equal(chamadasLazer.length, 1);
+  assert.equal(chamadasRosu.length, 1);
 });

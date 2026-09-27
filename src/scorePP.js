@@ -60,11 +60,20 @@ async function localScorePP(score, mode, { partial = false } = {}) {
       // maior das duas: sem este campo só a primeira opera, e um choke sai bem
       // abaixo do oficial (medido num top play: 1052.16pp contra 1781.65pp).
       //
-      // O `score` normalizado já é o valor certo nos dois casos, porque o
-      // normalizeScore prefere o legacy_total_score quando ele existe: em play
-      // clássica ele vira LegacyTotalScore lá dentro, e em play de lazer o
-      // total_score entra como TotalScore mesmo (ver lazerWorkerChild.js).
+      // O `score` normalizado já é o valor certo, porque o normalizeScore
+      // prefere o legacy_total_score quando ele existe. Em play de lazer (sem
+      // CL) ele é descartado lá na thread (ver performance em
+      // rosuWorkerThread.js).
       legacyTotalScore: score.score ?? null,
+
+      // Fins de slider e ticks: na mecânica de lazer (sem CL) eles são acerto de
+      // verdade e entram na accuracy — sem eles o motor supõe que todos foram
+      // acertados. Medido num +DT de lazer: 247.65pp contra os 246.22pp
+      // oficiais, e exato com os três informados. Em play clássica o motor os
+      // ignora; nos servidores bancho.py eles nem existem, e o null é o "supor".
+      sliderEndHits: hits.slider_tail_hit ?? null,
+      largeTickHits: hits.large_tick_hit  ?? null,
+      smallTickHits: hits.small_tick_hit  ?? null,
     },
     mode,
   );

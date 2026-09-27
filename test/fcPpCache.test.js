@@ -69,8 +69,8 @@ test('mapa, mods e motor separam entradas', () => {
   const classico   = pp.fcCacheKey({ ...base, mods: ['DT', 'CL'] });
   const akatsuki   = pp.fcCacheKey({ ...base, relax: true });
 
-  assert.equal(referencia.engine, 'lazer');
-  assert.equal(classico.engine,   'lazer');
+  assert.equal(referencia.engine, 'rosu');
+  assert.equal(classico.engine,   'rosu');
   assert.equal(akatsuki.engine,   'akatsuki');
 
   assert.equal(referencia.mods, 'DT');

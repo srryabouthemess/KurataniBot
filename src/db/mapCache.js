@@ -124,7 +124,7 @@ function setBeatmapMeta(mapId, data) {
 // ─── Atributos de dificuldade ─────────────────────────────────────────────────
 
 /**
- * @param {string} engine 'lazer' | 'akatsuki' — o mesmo eixo da fc_pp: o Relax
+ * @param {string} engine 'rosu' | 'akatsuki' — o mesmo eixo da fc_pp: o Relax
  *   é calculado por outro motor, e a estrela dele é outro número.
  * @returns {{stars: number, maxCombo: number|null}|null}
  */

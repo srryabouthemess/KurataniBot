@@ -245,22 +245,15 @@ async function shutdown(signal) {
   // um Promise.all: o gateway sai primeiro, para não atender uma interação com o
   // banco já fechado, e o banco fecha por último.
   //
-  // Os três motores de cálculo são recursos de vida longa — dois processos
-  // (Python e lazer-calculator) e um worker thread (rosu-pp). Sem fechá-los
-  // aqui, ficariam órfãos a cada restart.
-  //
-  // O do lazer-calculator termina em segfault por dentro, sempre: é o runtime
-  // .NET dele que não descarrega, e foi por isso que ele virou processo em vez
-  // de thread (ver lazerWorkerChild.js). Como filho, ele leva o próprio
-  // estrago — o `db.close()` do fim continua acontecendo, que era exatamente o
-  // que a versão em thread impedia.
+  // Os dois motores de cálculo são recursos de vida longa — um processo
+  // (Python) e um worker thread (rosu-pp). Sem fechá-los aqui, ficariam órfãos
+  // a cada restart.
   const etapas = [
     ['gateway',      () => client.destroy()],
     ['eventos',      () => daycoreEvents.close()],
     ['redis',        () => daycoreAdmin.closeRedis()],
     ['python',       () => pp.closePythonWorker()],
     ['rosu',         () => pp.closeRosuWorker()],
-    ['lazer',        () => pp.closeLazerWorker()],
     ['banco',        () => db.close()],
   ];
 

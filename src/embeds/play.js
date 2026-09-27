@@ -142,9 +142,9 @@ const misses = (play) => (missCount(play) > 0 ? `❌ ${missCount(play)}` : null)
  * ── O til saiu ────────────────────────────────────────────────────────────────
  * O `~` marcava "este número foi calculado aqui, não veio pontuado pelo
  * servidor" — uma ressalva de PRECISÃO, de quando o motor local era o rosu-pp e
- * ficava reworks atrás do osu!. Ela deixou de descrever a realidade: o
- * lazer-calculator compila o C# do próprio osu!, e medido contra a API oficial
- * em 12 top plays reais o erro é de 0,00%. No Relax quem calcula é o
+ * ficava reworks atrás do osu!. Ela deixou de descrever a realidade: o motor
+ * local hoje é um fork do rosu-pp no lazer master, e medido contra a API oficial
+ * em 613 scores o erro relativo fica na casa de 1e-6. No Relax quem calcula é o
  * akatsuki-pp, que é o mesmo motor dos servidores de RX — ou seja, a mesma
  * conta que pontuou o score.
  *

@@ -26,10 +26,7 @@
     "dotenv": "^17.4.0",
     "mysql2": "^3.24.4",
     "redis": "^6.2.0",
-    "rosu-pp-js": "^4.0.1"
-  },
-  "optionalDependencies": {
-    "@tosuapp/lazer-calculator-prebuilt": "^0.6.1-20260729-main.0"
+    "rosu-pp-js": "file:vendor/rosu-pp-js"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

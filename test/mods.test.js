@@ -8,7 +8,7 @@
  * resposta perfeitamente plausível.
  *
  * De que lado do `difficultyMods` cada mod cai é medido contra o motor de
- * verdade, no lazerWorker.test.js — aqui ficam só as consequências da decisão.
+ * verdade, no rosuWorker.test.js — aqui ficam só as consequências da decisão.
  */
 const test = require('node:test');
 const assert = require('node:assert');
@@ -32,7 +32,7 @@ test('acrônimo e bitmask fecham nos dois sentidos', () => {
 });
 
 test('TD é cosmético e AP não é', () => {
-  // As estrelas que sustentam isto estão medidas no lazerWorker.test.js. Aqui
+  // As estrelas que sustentam isto estão medidas no rosuWorker.test.js. Aqui
   // o que se trava é a consequência: com o AP na lista de cosméticos, o bot
   // exibiria a estrela SEM mods como se fosse a da play.
   assert.deepStrictEqual(mods.difficultyMods(['TD']), []);
@@ -93,8 +93,8 @@ test('a chave de cache não depende da ordem em que os mods chegaram', () => {
 
 // ─── Rate ajustado ────────────────────────────────────────────────────────────
 // O acrônimo deixou de descrever a play: no lazer o DT vem com um `speed_change`
-// escolhido por quem jogou. O quanto isso muda está medido contra os motores de
-// verdade (lazerWorker.test.js e rosuWorker.test.js); aqui ficam as
+// escolhido por quem jogou. O quanto isso muda está medido contra o motor de
+// verdade (rosuWorker.test.js); aqui ficam as
 // consequências — o que vai para a tela e o que separa uma chave de cache da
 // outra.
 

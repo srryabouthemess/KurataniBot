@@ -10,9 +10,9 @@
  *
  * ── De onde sai a lista ───────────────────────────────────────────────────────
  * Do `package-lock.json`, e não do `node_modules`: o lock traz as dependências
- * opcionais das DUAS plataformas (o binário do lazer-calculator é win32-x64
- * aqui e linux-x64 na VPS), então o arquivo sai igual em qualquer máquina em vez
- * de depender de onde foi gerado. O lock também já carrega o campo `license` de
+ * opcionais de TODAS as plataformas, inclusive as que a máquina atual não
+ * instala, então o arquivo sai igual em qualquer máquina em vez de depender de
+ * onde foi gerado. O lock também já carrega o campo `license` de
  * cada pacote, que é o que o npm leu do `package.json` publicado.
  *
  * O TEXTO da licença, esse só existe no pacote instalado. Pacote que a
@@ -34,14 +34,31 @@ const ARQUIVO_LICENCA = /^(LICENSE|LICENCE|COPYING|NOTICE)([-.].*)?$/i;
  * O que o bot usa e o npm não vê — mantido à mão, porque não há de onde ler.
  *
  * O lock cobre o que o `npm install` baixa, e isso não é tudo: a lib Python do
- * PP do Relax é instalada por fora, as imagens em `assets/` vieram do jogo e a
- * fórmula do /matchcost foi portada do código do Bathbot. As três são de
- * terceiro do mesmo jeito, e nenhuma aparece se este arquivo esperar o npm
- * contar.
+ * PP do Relax é instalada por fora, as imagens em `assets/` vieram do jogo, a
+ * fórmula do /matchcost foi portada do código do Bathbot e o `.wasm` do
+ * vendor/rosu-pp-js leva crates Rust compilados dentro. São de terceiro do mesmo
+ * jeito, e nenhum aparece se este arquivo esperar o npm contar.
  *
  * Mexeu aqui? Acrescente a entrada; o gerador só a imprime.
  */
 const FORA_DO_NPM = [
+  {
+    titulo: 'Crates Rust dentro do vendor/rosu-pp-js — MIT / MIT OR Apache-2.0',
+    corpo: [
+      'O `rosu-pp-js` acima é Wasm, e o `.wasm` dele carrega compilado o código Rust de',
+      'que depende. O npm só enxerga o pacote JavaScript; estes vêm junto no binário:',
+      '',
+      '| Crate | Licença |',
+      '| --- | --- |',
+      '| `rosu-pp` ([fork](https://github.com/srryabouthemess/rosu-pp/tree/pp-update-lazer-master) de <https://github.com/MaxOhn/rosu-pp>) | MIT |',
+      '| `rosu-map`, `rosu-mods` | MIT |',
+      '| `serde`, `wasm-bindgen`, `js-sys`, `once_cell`, `cfg-if` | MIT OR Apache-2.0 |',
+      '',
+      'Os três primeiros são de Max Ohn, sob o mesmo texto MIT do `rosu-pp-js` (na seção',
+      'de textos acima). Os demais são usados pela opção MIT, cujo texto é o mesmo, com',
+      'o aviso de copyright de cada projeto no respectivo repositório.',
+    ],
+  },
   {
     titulo:    'akatsuki-pp-py — MIT',
     corpo: [
@@ -138,9 +155,13 @@ function pacotesDoLock(lock) {
   const porChave = new Map();
 
   for (const [chave, info] of Object.entries(lock.packages)) {
-    if (!chave || info.dev || info.extraneous) continue;
+    // `link` é o atalho que uma dependência `file:` deixa em node_modules; o
+    // pacote de verdade é a entrada do caminho local (ex.: vendor/rosu-pp-js).
+    if (!chave || info.dev || info.extraneous || info.link) continue;
 
-    const nome = chave.slice(chave.lastIndexOf('node_modules/') + 'node_modules/'.length);
+    const nome = chave.includes('node_modules/')
+      ? chave.slice(chave.lastIndexOf('node_modules/') + 'node_modules/'.length)
+      : (info.name ?? path.basename(chave));
     const id = `${nome}@${info.version}`;
     if (porChave.has(id)) continue;
 
@@ -222,9 +243,10 @@ function gerar() {
     'cumprimento.',
     '',
     `Cobre as **${pacotes.length} dependências de produção** do lock — as transitivas`,
-    'inclusive, que são a maioria — e mais três que o npm não enxerga: a lib Python do',
-    'PP do Relax, os ícones de grade, que vieram do jogo, e o código do Bathbot de onde',
-    'saiu a fórmula do `/matchcost`. Estas últimas estão em',
+    'inclusive, que são a maioria — e mais quatro que o npm não enxerga: os crates Rust',
+    'compilados no `.wasm` do rosu-pp-js, a lib Python do PP do Relax, os ícones de',
+    'grade, que vieram do jogo, e o código do Bathbot de onde saiu a fórmula do',
+    '`/matchcost`. Estas últimas estão em',
     '[O que não vem do npm](#o-que-não-vem-do-npm), no fim.',
     '');
 
@@ -234,30 +256,15 @@ function gerar() {
   }
   w('');
 
-  w('## A única que não é permissiva', '',
-    'O **`@tosuapp/lazer-calculator`** é **LGPL-3.0-only**, e todo o resto é',
-    'permissivo (MIT/BSD/Apache/0BSD). A diferença importa: a LGPL alcança quem',
-    'redistribui o binário dela, e pede que quem receba possa **trocar a biblioteca**',
-    'por outra versão.',
-    '',
-    'O desenho do bot já satisfaz isso sem esforço, e não por acaso: ele carrega o',
-    'calculador como binário separado, num processo filho ([`lazerWorker.js`](src/pp/lazerWorker.js)),',
-    'e o pacote vem do npm em vez de compilado junto. Quem clona o repositório troca a',
-    'versão mexendo no `package.json` — o código do bot não é obra derivada dele, e o',
-    'próprio `npm install` pula o pacote em plataforma sem binário, com o bot',
-    'continuando de pé.',
-    '');
-
   w('## Pacotes', '', '| Pacote | Versão | Licença |', '| --- | --- | --- |');
   for (const p of pacotes) {
     const marca = p.plataforma ? ` <sup>${p.plataforma}</sup>` : '';
     w(`| \`${p.nome}\`${marca} | ${p.versao} | ${p.licenca ?? '(não declarada)'} |`);
   }
   w('',
-    'O que está marcado com plataforma só instala onde o `os`/`cpu` bate. O binário do',
-    'calculador tem uma variante por sistema, e as duas aparecem aqui porque o bot roda',
-    'em Windows (desenvolvimento) e Linux (VPS) — a lista sai do lock justamente para',
-    'não depender de qual das duas a máquina que gerou o arquivo baixou.',
+    'O que está marcado com plataforma só instala onde o `os`/`cpu` bate. A lista sai',
+    'do lock justamente para não depender de qual plataforma a máquina que gerou o',
+    'arquivo é.',
     '');
 
   w('## Textos das licenças', '');
@@ -272,8 +279,7 @@ function gerar() {
       'pacote publicado — ou são o binário da outra plataforma, que esta máquina não',
       'instalou e de onde não dá para ler nada. O identificador abaixo é o que o pacote',
       'declara; o texto completo está no repositório de cada um. Quando um irmão do',
-      'mesmo conjunto publica o texto, ele está na seção acima — é o caso do binário do',
-      'calculador, cuja LGPL-3.0 acompanha as outras duas variantes.',
+      'mesmo conjunto publica o texto, ele está na seção acima.',
       '',
       '| Pacote | Versão | Licença declarada |', '| --- | --- | --- |');
     for (const p of semTexto) {
@@ -283,7 +289,7 @@ function gerar() {
   }
 
   w('## O que não vem do npm', '',
-    'O lock só conhece o que o `npm install` baixa, e o bot usa três coisas de terceiro',
+    'O lock só conhece o que o `npm install` baixa, e o bot usa quatro coisas de terceiro',
     'fora disso. Elas entram aqui à mão, pela mesma razão que o resto do arquivo existe.',
     '');
 

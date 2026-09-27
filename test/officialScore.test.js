@@ -62,7 +62,7 @@ test('só o mod que mexe no mapa tira a estrela das mãos da API', () => {
 
   // O HD saiu da lista de cosméticos: desde o rework de 03/07/2026 ele mexe na
   // estrela (a skill de reading), e a API só publica o valor SEM mods — deixá-lo
-  // aqui faria todo `+HD` exibir a estrela errada. Ver lazerWorker.test.js, que
+  // aqui faria todo `+HD` exibir a estrela errada. Ver rosuWorker.test.js, que
   // cobre o outro lado disto no motor.
   assert.deepEqual(difficultyMods(['HD', 'CL']), ['HD']);
 
@@ -112,7 +112,7 @@ test('o ajuste de rate sobrevive à normalização', () => {
   // Era aqui que ele morria: o `.map(m => m.acronym)` jogava fora o
   // `settings`, e um DT a 1,4x virava um DT comum antes de chegar a qualquer
   // cálculo. O bot exibia +DT e cobrava o pp de 1,5x — 12,4% a mais, medido no
-  // lazerWorker.test.js.
+  // rosuWorker.test.js.
   const s = normalizeScore({
     ...FC_STABLE,
     mods: [{ acronym: 'DT', settings: { speed_change: 1.4 } }, { acronym: 'CL' }],

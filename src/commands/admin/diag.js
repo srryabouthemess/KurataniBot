@@ -9,7 +9,6 @@ const metrics = require('../../lib/metrics');
 // caminho de PP para montar um embed de contadores.
 const pythonWorker = require('../../pp/pythonWorker');
 const rosuWorker = require('../../pp/rosuWorker');
-const lazerWorker = require('../../pp/lazerWorker');
 const { t } = require('../../i18n');
 
 /**
@@ -84,7 +83,6 @@ module.exports = {
     const s = t(interaction);
     const { uptimeMs, contadores, caches } = metrics.snapshot();
     const workers = {
-      lazer:  lazerWorker.stats(),
       rosu:   rosuWorker.stats(),
       python: pythonWorker.stats(),
     };
@@ -111,9 +109,8 @@ module.exports = {
     embed.addFields({
       name: s.diag_workers,
       value: [
-        // O de PP vem primeiro: é o que responde pelos números que as pessoas
-        // veem. O rosu-pp ficou só com os atributos de mapa (ver pp.js).
-        s.diag_worker_line('lazer-calc', workers.lazer.vivo, workers.lazer.served, workers.lazer.failed),
+        // O vanilla vem primeiro: é o que responde pela maioria dos números que
+        // as pessoas veem (estrelas, PP e a linha do mapa).
         s.diag_worker_line('rosu-pp', workers.rosu.vivo, workers.rosu.served, workers.rosu.failed),
         s.diag_worker_line('akatsuki-pp', workers.python.vivo, workers.python.served, workers.python.failed),
       ].join('\n'),

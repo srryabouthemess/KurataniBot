@@ -16,7 +16,7 @@ import js from '@eslint/js';
  */
 export default [
   {
-    ignores: ['node_modules/**', '*.migrated'],
+    ignores: ['node_modules/**', 'vendor/**', '*.migrated'],
   },
 
   js.configs.recommended,

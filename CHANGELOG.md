@@ -2,6 +2,63 @@
 
 ---
 
+# Sessão de 2026-09-26 (motor de PP no fork do rosu-pp)
+
+O vanilla deixou o `@tosuapp/lazer-calculator` e passou a ser calculado pelo
+[fork do rosu-pp](https://github.com/srryabouthemess/rosu-pp/tree/pp-update-lazer-master)
+que segue o osu!lazer master. O número continua o oficial — conferido pelo
+caminho do próprio bot (`normalizeScore` → `localScorePP`) em 40 top plays da
+API, 30 delas com choke: maior erro relativo **4,3e-6**. O que sai é o runtime
+.NET, o processo-filho, o segfault no encerramento e os ~18ms de parse por mapa.
+
+## 🔧 Mudanças
+
+- **Um motor só para o vanilla.** [`rosuWorkerThread.js`](src/pp/rosuWorkerThread.js), [`pp/index.js`](src/pp/index.js)
+  - `difficulty`, `fc` e `simulate` foram para a thread do rosu-pp, ao lado do
+    `attributes` que já estava lá. `lazerWorker.js` e `lazerWorkerChild.js`
+    saíram, com a fixture de segfault e o teste dela.
+  - Os mods vão como objeto, com os ajustes (DT a 1,4x, ajustes do CL). O
+    rosu-pp recusa a lista inteira quando não conhece um mod ou ajuste, então a
+    thread refaz o cálculo com bitmask + rate nesse caso — mod novo da API não
+    apaga a play.
+  - A mecânica sai do CL (`lazer: false`), e o `legacyTotalScore` só é
+    repassado em score clássico, como o `isLegacyScore` do motor anterior.
+- **O rosu-pp-js vem do repositório.** [`vendor/rosu-pp-js`](vendor/rosu-pp-js), [`docs/OPCIONAIS.md`](docs/OPCIONAIS.md)
+  - É o `rosu-pp-js` 4.0.1 compilado contra o fork (`67a9c11`), com os campos
+    de reading do osu! expostos no binding (`reading`,
+    `readingDifficultNoteCount`, `ppReading`). O `package.json` aponta para
+    `file:vendor/rosu-pp-js`: a VPS continua só com `git pull` + `npm ci`, sem
+    Rust. Como refazer o build está no OPCIONAIS.
+  - Sai a dependência opcional `@tosuapp/lazer-calculator-prebuilt`, e com ela
+    a única licença não permissiva do projeto (LGPL-3.0). O gerador de notices
+    aprendeu dependência `file:` e lista os crates Rust compilados no `.wasm`.
+- **Cache: `engine = 'rosu'`, e a migração 4→5 apaga as linhas `lazer`.** [`migrations.js`](src/db/migrations.js)
+  - Não se aproveitam: o fork segue o lazer master, que pode estar à frente do
+    build do lazer-calculator que as gravou. As de Relax (`akatsuki`) ficam.
+
+## 🐛 Correções
+
+- **Play de lazer ignorava fins de slider e ticks.** [`scorePP.js`](src/scorePP.js)
+  - A API manda `slider_tail_hit`, `large_tick_hit` e `small_tick_hit`, e o
+    `normalizeScore` os preservava, mas o cálculo supunha todos acertados. Sem
+    CL eles entram na accuracy: um +DT de lazer saía 247.65pp contra 246.22pp
+    oficiais, e sai exato com os três repassados.
+
+## 🧪 Testes
+
+- Os testes do motor foram do `lazerWorker.test.js` para o
+  [`rosuWorker.test.js`](test/rosuWorker.test.js), contra o Wasm de verdade:
+  HD mexendo na estrela (reading), TD/AP, rate ajustado, mod e ajuste
+  desconhecidos caindo no bitmask, FC acima do choke e play interrompida.
+- O de placar mudou de sentido: no lazer master, placar legado 0 passou a
+  valer o mesmo que placar nenhum (no lazer-calculator de antes, 0 achava miss
+  de mais). O teste agora cobra o empate, e que um placar de verdade mexe no
+  número.
+- Migração 4→5 coberta em [`dbMigrations.test.js`](test/dbMigrations.test.js).
+  Suíte em 812 testes.
+
+---
+
 # Sessão de 2026-09-25 (match cost)
 
 Porte do `/matchcost` do Bathbot: o desempenho de cada jogador numa partida

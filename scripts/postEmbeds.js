@@ -241,9 +241,6 @@ async function encerrar(codigo) {
   await client.destroy();
   pp.closePythonWorker();
   pp.closeRosuWorker();
-  // O do lazer-calculator entra aqui pela mesma razão dos outros dois, e a
-  // ordem é a do index.js: fechar os motores antes do banco.
-  pp.closeLazerWorker();
   db.close();
   process.exit(codigo);
 }

@@ -118,27 +118,28 @@ São *application emojis*: funcionam em qualquer servidor e em DM, sem "servidor
 
 ## O cálculo de PP
 
-Estrelas e PP saem do [`@tosuapp/lazer-calculator`](https://github.com/tosuapp/lazer-calculator), que compila o C# do próprio osu!lazer. Conferido contra a API oficial, ele reproduz o número publicado **exatamente**: erro de 0,00% em 12 top plays reais, choke incluído.
+Estrelas, PP e a linha de informação do mapa (CS/AR/OD/HP, BPM, objetos) saem do [`rosu-pp`](https://github.com/srryabouthemess/rosu-pp/tree/pp-update-lazer-master) — um fork que segue o **osu!lazer master**. Conferido contra a API oficial, ele reproduz o número publicado: erro relativo na casa de **1e-6**, choke incluído (613 scores dos quatro modos no pp-check, e 40 top plays pelo caminho do próprio bot).
 
-Ele se instala junto com o resto (`npm install`) e **não precisa de nada** — nem .NET, nem compilador: o binário já vem pronto.
+Ele **não precisa de nada** para instalar: é Wasm, roda em qualquer plataforma com Node, e já vem compilado no repositório, em [`vendor/rosu-pp-js`](../vendor/rosu-pp-js). O `npm install` só aponta o `node_modules` para lá.
 
-### Se ele não estiver disponível
+O cálculo roda num worker thread, porque Wasm é síncrono e pararia o event loop. O `/diag` mostra a linha `rosu-pp` com quantos cálculos ela serviu.
 
-A lib só tem binário para **Windows x64** e **Linux x64**. Em qualquer outra plataforma (VPS ARM, macOS) o `npm install` a pula sem falhar, e o bot continua respondendo normalmente — só sem os números calculados localmente:
+### Atualizando o motor
 
-| O que some | O que continua |
-|---|---|
-| `(FC: ~Xpp)` na linha da play | o PP real do score, que vem da API |
-| estrela ajustada por mod, no vanilla | a estrela sem mods, publicada pela API |
-| `/simulate` e `/whatif` | todo o resto dos comandos |
+O `vendor/rosu-pp-js` é o [`rosu-pp-js`](https://github.com/MaxOhn/rosu-pp-js) compilado contra o fork. Para refazê-lo depois de mexer no fork (Arch: `pacman -S rust-wasm wasm-pack binaryen`):
 
-A causa vai para o log **uma vez só**, e o `/diag` mostra a linha `lazer-calc` como fora do ar.
+```bash
+# no rosu-pp-js, branch fork-lazer-master
+# 1. Cargo.toml: rosu-pp = { git = "https://github.com/srryabouthemess/rosu-pp", rev = "<commit novo>" }
+wasm-pack build --target nodejs --release
+cp pkg/{LICENSE,README.md,rosu_pp_js.js,rosu_pp_js.d.ts,rosu_pp_js_bg.wasm,rosu_pp_js_bg.wasm.d.ts} \
+   ../../KurataniBot/vendor/rosu-pp-js/
+# 2. vendor/rosu-pp-js/package.json: "version": "4.0.1-lazer-master.<commit novo>"
+```
 
-### Por que ele roda em processo separado
+Se o fork mudar algum campo público dos atributos, o `cargo check` do `rosu-pp-js` acusa — é só expor o campo novo nos três arquivos de `src/attributes/` e `src/strains.rs`. Depois, `npm install` e `npm test`: o `rosuWorker.test.js` roda contra o motor de verdade.
 
-O runtime .NET da lib não descarrega: o simples `require()` dela, sem calcular nada, termina o processo em segfault. Num worker thread isso derrubaria o bot inteiro — e no meio do encerramento, antes de o banco fechar. Como processo-filho, o estrago fica todo do lado de lá, e o `/diag` conta quantos cálculos ele serviu.
-
-> O `rosu-pp-js` continua no projeto, mas só para CS/AR/OD/HP ajustados por mod, BPM e contagem de objetos — a linha de informação do mapa. Ele é a única fonte desses valores, e eles não mudam entre reworks.
+Mudou o algoritmo? A `map_difficulty` e a `fc_pp` não têm TTL, então os números antigos ficariam lá. Apague as linhas `engine = 'rosu'` das duas (ou suba uma migração, como a 4→5 fez com as do lazer-calculator).
 
 ---
 
