@@ -2,6 +2,45 @@
 
 ---
 
+# Sessão de 2026-09-26 (um motor de PP por servidor)
+
+Cada servidor passa a calcular no motor que **ele próprio** roda. Um FC pp ou uma
+estrela de outro rework punha na tela um número que nenhum score daquele
+servidor teria — o vanilla do Akatsuki, por exemplo, saía no rework do lazer
+(8.61★ no FREEDOM DiVE +HDHR) enquanto o servidor pontua no akatsuki-pp (8.07★).
+
+| Servidor | Vanilla | Relax |
+|---|---|---|
+| Bancho | `rosu-pp-bancho` | — |
+| Daycore | `rosu-pp-daycore` | akatsuki-pp |
+| Akatsuki | akatsuki-pp | akatsuki-pp |
+| Os demais (EZPP, bancho.py do `.env`) | perfil do Daycore | perfil do Daycore |
+
+## 🔧 Mudanças
+
+- **O mapa servidor → motor.** [`pp/engines.js`](src/pp/engines.js), [`servers.js`](src/servers.js), [`pp/index.js`](src/pp/index.js)
+  - O servidor declara um `ppProfile` (`bancho` no oficial, `akatsuki` no
+    Akatsuki); quem não declara cai no do Daycore. O `pp/index.js` deixou de
+    decidir por `relax` e pergunta o motor ao `engines.js`.
+  - O motor do Daycore não recebe o score total, como o bancho.py dele: num
+    choke só a estimativa de miss por combo opera, e o bot dá o mesmo número.
+  - O atalho da estrela sem mod (usar o `difficulty_rating` da API) vale só no
+    Bancho: nos outros motores a estrela publicada é de outro rework.
+  - A linha do mapa (CS/AR/OD/BPM) continua no build do Bancho: não depende de
+    rework.
+- **Dois builds do rosu-pp no vendor.** [`vendor/rosu-pp-bancho`](vendor/rosu-pp-bancho), [`vendor/rosu-pp-daycore`](vendor/rosu-pp-daycore), [`rosuWorker.js`](src/pp/rosuWorker.js)
+  - O `vendor/rosu-pp-js` virou `rosu-pp-bancho` (segue o lazer master) e
+    ganhou um irmão, `rosu-pp-daycore`, no commit que o bancho.py do Daycore
+    roda — hoje o mesmo `67a9c11`, mas agora os dois andam separados.
+  - Uma thread por build, cada uma com o seu cache de mapas e o seu backoff; a
+    thread só nasce no primeiro pedido. O `/diag` mostra uma linha por build.
+- **Cache com o build e a versão na chave, e a migração 5→6.** [`migrations.js`](src/db/migrations.js)
+  - `engine` agora é `bancho@<versão>` / `daycore@<versão>`: atualizar um build
+    não serve mais estrela do rework anterior. As linhas `rosu` saem na
+    migração; as `akatsuki` ficam.
+
+---
+
 # Sessão de 2026-09-26 (motor de PP no fork do rosu-pp)
 
 O vanilla deixou o `@tosuapp/lazer-calculator` e passou a ser calculado pelo

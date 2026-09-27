@@ -224,6 +224,8 @@ const BUILTINS = {
     relax:     false,
     webUrl:    'https://akatsuki.gg',
     avatars:   'https://a.akatsuki.gg',
+    // O Akatsuki pontua os dois leaderboards no akatsuki-pp (ver pp/engines.js).
+    ppProfile: 'akatsuki',
     builtinRelax: true,
   },
 
@@ -272,6 +274,7 @@ function load() {
     rx:        0,
     relax:     false,
     webUrl:    'https://osu.ppy.sh',
+    ppProfile: 'bancho',
   });
 
   for (const chave of builtinsPedidos()) {

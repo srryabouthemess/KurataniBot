@@ -1,9 +1,9 @@
 {
-  "name": "rosu-pp-js",
+  "name": "rosu-pp-bancho",
   "collaborators": [
     "MaxOhn <ohn.m@hotmail.de>"
   ],
-  "description": "rosu-pp-js compilado contra srryabouthemess/rosu-pp@67a9c11 (pp-update-lazer-master)",
+  "description": "rosu-pp-js compilado contra srryabouthemess/rosu-pp@67a9c11 (pp-update-lazer-master): o motor do osu! oficial",
   "version": "4.0.1-lazer-master.67a9c11",
   "license": "MIT",
   "repository": {

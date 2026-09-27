@@ -26,7 +26,8 @@
     "dotenv": "^17.4.0",
     "mysql2": "^3.24.4",
     "redis": "^6.2.0",
-    "rosu-pp-js": "file:vendor/rosu-pp-js"
+    "rosu-pp-bancho": "file:vendor/rosu-pp-bancho",
+    "rosu-pp-daycore": "file:vendor/rosu-pp-daycore"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

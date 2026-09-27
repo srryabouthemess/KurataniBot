@@ -95,6 +95,28 @@ test('o cache do lazer-calculator sai, e o do Relax fica', t => {
   assert.equal(db.getCachedFCpp({ ...fc, engine: 'akatsuki' }), 300);
 });
 
+test('o cache do rosu-pp sem servidor sai, e o do akatsuki-pp fica', t => {
+  // O rosu-pp virou um build por servidor, e a chave passou a dizer qual (com a
+  // versão junto). As linhas `rosu` não se sabe de qual vieram.
+  const { dbPath, load } = dbWorkspace(t);
+
+  const primeiro = load();
+  primeiro.setMapDifficulty(1, 'DT', 'rosu', 6.5, 900);
+  primeiro.setMapDifficulty(1, 'DT,RX', 'akatsuki', 4.2, 900);
+  const fc = { mapId: 1, mods: 'DT', n300: 800, n100: 10, n50: 0 };
+  primeiro.setCachedFCpp({ ...fc, engine: 'rosu' }, 500);
+  primeiro.setCachedFCpp({ ...fc, engine: 'akatsuki' }, 300);
+  primeiro.close();
+
+  comHandle(dbPath, h => h.exec('PRAGMA user_version = 5'));
+
+  const db = load();
+  assert.equal(db.getMapDifficulty(1, 'DT', 'rosu'), null);
+  assert.ok(db.getMapDifficulty(1, 'DT,RX', 'akatsuki'), 'a estrela do akatsuki-pp deveria sobreviver');
+  assert.equal(db.getCachedFCpp({ ...fc, engine: 'rosu' }), null);
+  assert.equal(db.getCachedFCpp({ ...fc, engine: 'akatsuki' }), 300);
+});
+
 /** Carrega esperando a recusa, e fecha o handle que a conexão já abriu. */
 function recusa(load) {
   let erro = null;

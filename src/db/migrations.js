@@ -37,7 +37,7 @@ const path = require('path');
 
 const { DATA_DIR } = require('../paths');
 
-const VERSAO_ATUAL = 5;
+const VERSAO_ATUAL = 6;
 
 /** A versão mais antiga que as migrações abaixo sabem levar até a atual. */
 const VERSAO_MINIMA = 1;
@@ -252,6 +252,29 @@ function descartarCacheDoLazer(db) {
   }
 }
 
+// ─── 5 → 6: um rosu-pp por servidor ───────────────────────────────────────────
+
+/**
+ * Apaga as linhas do motor `rosu` da map_difficulty e da fc_pp.
+ *
+ * O rosu-pp virou dois builds, um para o Bancho e outro para o Daycore e quem
+ * não tem rework próprio (ver pp/engines.js), e a chave passou a dizer qual —
+ * com a versão do pacote junto, para um rework novo não herdar os números do
+ * anterior. As linhas `rosu` não se sabe de qual servidor vieram, e as duas
+ * tabelas não têm TTL que as vença.
+ *
+ * O `akatsuki` fica: o motor é o mesmo, e a chave dele não mudou.
+ */
+function descartarCacheDoRosuUnico(db) {
+  const apagadas =
+    db.prepare("DELETE FROM cache.map_difficulty WHERE engine = 'rosu'").run().changes +
+    db.prepare("DELETE FROM cache.fc_pp WHERE engine = 'rosu'").run().changes;
+
+  if (apagadas > 0) {
+    console.log(`[db] ${apagadas} valor(es) do rosu-pp sem servidor descartados; recalculados sob demanda.`);
+  }
+}
+
 // ─── Execução ─────────────────────────────────────────────────────────────────
 
 function run(db) {
@@ -272,6 +295,10 @@ function run(db) {
 
   if (versao < 5) {
     descartarCacheDoLazer(db);
+  }
+
+  if (versao < 6) {
+    descartarCacheDoRosuUnico(db);
   }
 
   // Interpolado porque PRAGMA não aceita parâmetro; o valor é uma constante do

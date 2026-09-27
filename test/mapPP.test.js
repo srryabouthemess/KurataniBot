@@ -50,8 +50,8 @@ const rosuPath = require.resolve('../src/pp/rosuWorker');
 require.cache[rosuPath] = {
   id: rosuPath, filename: rosuPath, loaded: true,
   exports: {
-    calcular: async (op, mapId, args) => {
-      chamadasMotor.push({ op, mapId, args });
+    calcular: async (pacote, op, mapId, args) => {
+      chamadasMotor.push({ pacote, op, mapId, args });
       return { pp: 100, stars: 5, maxCombo: 500 };
     },
     close: () => {},

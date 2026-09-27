@@ -35,18 +35,19 @@ const ARQUIVO_LICENCA = /^(LICENSE|LICENCE|COPYING|NOTICE)([-.].*)?$/i;
  *
  * O lock cobre o que o `npm install` baixa, e isso não é tudo: a lib Python do
  * PP do Relax é instalada por fora, as imagens em `assets/` vieram do jogo, a
- * fórmula do /matchcost foi portada do código do Bathbot e o `.wasm` do
- * vendor/rosu-pp-js leva crates Rust compilados dentro. São de terceiro do mesmo
+ * fórmula do /matchcost foi portada do código do Bathbot e os `.wasm` do
+ * vendor/rosu-pp-* levam crates Rust compilados dentro. São de terceiro do mesmo
  * jeito, e nenhum aparece se este arquivo esperar o npm contar.
  *
  * Mexeu aqui? Acrescente a entrada; o gerador só a imprime.
  */
 const FORA_DO_NPM = [
   {
-    titulo: 'Crates Rust dentro do vendor/rosu-pp-js — MIT / MIT OR Apache-2.0',
+    titulo: 'Crates Rust dentro do vendor/rosu-pp-* — MIT / MIT OR Apache-2.0',
     corpo: [
-      'O `rosu-pp-js` acima é Wasm, e o `.wasm` dele carrega compilado o código Rust de',
-      'que depende. O npm só enxerga o pacote JavaScript; estes vêm junto no binário:',
+      'O `rosu-pp-bancho` e o `rosu-pp-daycore` acima são o `rosu-pp-js` compilado em Wasm,',
+      'e o `.wasm` de cada um carrega o código Rust de que depende. O npm só enxerga o',
+      'pacote JavaScript; estes vêm junto no binário:',
       '',
       '| Crate | Licença |',
       '| --- | --- |',
@@ -156,7 +157,7 @@ function pacotesDoLock(lock) {
 
   for (const [chave, info] of Object.entries(lock.packages)) {
     // `link` é o atalho que uma dependência `file:` deixa em node_modules; o
-    // pacote de verdade é a entrada do caminho local (ex.: vendor/rosu-pp-js).
+    // pacote de verdade é a entrada do caminho local (ex.: vendor/rosu-pp-bancho).
     if (!chave || info.dev || info.extraneous || info.link) continue;
 
     const nome = chave.includes('node_modules/')
@@ -244,7 +245,7 @@ function gerar() {
     '',
     `Cobre as **${pacotes.length} dependências de produção** do lock — as transitivas`,
     'inclusive, que são a maioria — e mais quatro que o npm não enxerga: os crates Rust',
-    'compilados no `.wasm` do rosu-pp-js, a lib Python do PP do Relax, os ícones de',
+    'compilados nos `.wasm` do rosu-pp, a lib Python do PP do Relax, os ícones de',
     'grade, que vieram do jogo, e o código do Bathbot de onde saiu a fórmula do',
     '`/matchcost`. Estas últimas estão em',
     '[O que não vem do npm](#o-que-não-vem-do-npm), no fim.',

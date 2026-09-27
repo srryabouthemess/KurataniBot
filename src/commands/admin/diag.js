@@ -109,9 +109,11 @@ module.exports = {
     embed.addFields({
       name: s.diag_workers,
       value: [
-        // O vanilla vem primeiro: é o que responde pela maioria dos números que
-        // as pessoas veem (estrelas, PP e a linha do mapa).
-        s.diag_worker_line('rosu-pp', workers.rosu.vivo, workers.rosu.served, workers.rosu.failed),
+        // Os builds do rosu-pp vêm primeiro: respondem pela maioria dos números
+        // que as pessoas veem (estrelas, PP e a linha do mapa). Só aparecem os
+        // que já receberam algum pedido — a thread nasce no primeiro.
+        ...Object.entries(workers.rosu).map(([pacote, w]) =>
+          s.diag_worker_line(pacote, w.vivo, w.served, w.failed)),
         s.diag_worker_line('akatsuki-pp', workers.python.vivo, workers.python.served, workers.python.failed),
       ].join('\n'),
     });

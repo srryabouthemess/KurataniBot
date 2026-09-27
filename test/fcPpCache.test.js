@@ -42,7 +42,7 @@ test.after(() => {
 const base = {
   beatmapId: 123456,
   mods: ['DT'],
-  relax: false,
+  engine: 'bancho@teste',
   n300: 900, n100: 50, n50: 10, misses: 0,
 };
 
@@ -67,16 +67,19 @@ test('mapa, mods e motor separam entradas', () => {
   // mod CL dentro de `mods` — é o mesmo que o osu! faz, e é o que permite a
   // tabela ter uma coluna a menos.
   const classico   = pp.fcCacheKey({ ...base, mods: ['DT', 'CL'] });
-  const akatsuki   = pp.fcCacheKey({ ...base, relax: true });
+  const akatsuki   = pp.fcCacheKey({ ...base, engine: 'akatsuki' });
+  // O mesmo rosu-pp em outro build (o do Daycore) é outro motor: os dois podem
+  // estar em commits diferentes do fork.
+  const daycore    = pp.fcCacheKey({ ...base, engine: 'daycore@teste' });
 
-  assert.equal(referencia.engine, 'rosu');
-  assert.equal(classico.engine,   'rosu');
+  assert.equal(referencia.engine, 'bancho@teste');
+  assert.equal(classico.engine,   'bancho@teste');
   assert.equal(akatsuki.engine,   'akatsuki');
 
   assert.equal(referencia.mods, 'DT');
   assert.equal(classico.mods,   'CL,DT');
 
-  const chaves = [referencia, outroMapa, outrosMods, classico, akatsuki]
+  const chaves = [referencia, outroMapa, outrosMods, classico, akatsuki, daycore]
     .map(k => JSON.stringify(k));
   assert.equal(new Set(chaves).size, chaves.length, 'duas chaves distintas colidiram');
 });
@@ -118,7 +121,7 @@ test('a separação da chave vale também na tabela', () => {
   // cobre as mesmas dimensões — um índice mais estreito colidiria em silêncio.
   const lazer    = pp.fcCacheKey({ ...base, beatmapId: 222222 });
   const classico = pp.fcCacheKey({ ...base, beatmapId: 222222, mods: ['DT', 'CL'] });
-  const akatsuki = pp.fcCacheKey({ ...base, beatmapId: 222222, relax: true });
+  const akatsuki = pp.fcCacheKey({ ...base, beatmapId: 222222, engine: 'akatsuki' });
   const outroHit = pp.fcCacheKey({ ...base, beatmapId: 222222, n100: 51 });
 
   db.setCachedFCpp(lazer,    100);

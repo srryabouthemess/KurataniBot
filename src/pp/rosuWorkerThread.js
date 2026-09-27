@@ -5,13 +5,15 @@
  * sentido dentro de um Worker.
  *
  * ── Qual rosu-pp ──────────────────────────────────────────────────────────────
- * O do fork (srryabouthemess/rosu-pp, branch `pp-update-lazer-master`), que
- * segue o osu!lazer master: medido contra a API oficial em 613 scores dos
- * quatro modos, o erro relativo fica na casa de 1e-6. O rosu-pp-js que o envolve
- * é compilado contra esse fork e mora em `vendor/rosu-pp-js` (ver
- * docs/OPCIONAIS.md para refazer o build). Foi o que aposentou o
- * lazer-calculator: mesmo número, sem o runtime .NET, sem processo-filho e sem
- * o parse de ~18ms.
+ * O build vem no `workerData.pacote`: cada servidor calcula no rosu-pp que ele
+ * roda (ver engines.js), e cada build tem a sua thread. Os dois são do fork
+ * (srryabouthemess/rosu-pp) e moram em `vendor/` (ver docs/OPCIONAIS.md para
+ * refazer o build):
+ *
+ *   rosu-pp-bancho  → branch `pp-update-lazer-master`, que segue o osu!lazer
+ *                     master: medido contra a API oficial em 613 scores dos
+ *                     quatro modos, o erro relativo fica na casa de 1e-6.
+ *   rosu-pp-daycore → o commit que o bancho.py do Daycore usa no vanilla.
  *
  * ── Por que uma thread ────────────────────────────────────────────────────────
  * O rosu-pp é Wasm síncrono: enquanto ele calcula, o event loop não anda. Uma
@@ -28,7 +30,7 @@
  * vale para os calculadores e os atributos que eles devolvem (ver `usar`).
  */
 
-const { parentPort } = require('node:worker_threads');
+const { parentPort, workerData } = require('node:worker_threads');
 
 const { modAcronym, modsToBits, clockRate } = require('../mods');
 
@@ -38,9 +40,9 @@ const { modAcronym, modsToBits, clockRate } = require('../mods');
 let rosu = null;
 let erroDeCarga = null;
 try {
-  rosu = require('rosu-pp-js');
+  rosu = require(workerData.pacote);
 } catch (error) {
-  erroDeCarga = `rosu-pp-js indisponível: ${error.message}`;
+  erroDeCarga = `${workerData?.pacote} indisponível: ${error.message}`;
 }
 
 // ─── Mapas já parseados ───────────────────────────────────────────────────────

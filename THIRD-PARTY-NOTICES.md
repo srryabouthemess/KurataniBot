@@ -8,9 +8,9 @@ está abaixo é de outras pessoas, e MIT, BSD e Apache pedem que o aviso de
 copyright e o texto da licença viajem junto com o software. Este arquivo é esse
 cumprimento.
 
-Cobre as **70 dependências de produção** do lock — as transitivas
+Cobre as **71 dependências de produção** do lock — as transitivas
 inclusive, que são a maioria — e mais quatro que o npm não enxerga: os crates Rust
-compilados no `.wasm` do rosu-pp-js, a lib Python do PP do Relax, os ícones de
+compilados nos `.wasm` do rosu-pp, a lib Python do PP do Relax, os ícones de
 grade, que vieram do jogo, e o código do Bathbot de onde saiu a fórmula do
 `/matchcost`. Estas últimas estão em
 [O que não vem do npm](#o-que-não-vem-do-npm), no fim.
@@ -19,7 +19,7 @@ grade, que vieram do jogo, e o código do Bathbot de onde saiu a fórmula do
 
 | Licença | Pacotes |
 | --- | --- |
-| MIT | 58 |
+| MIT | 59 |
 | Apache-2.0 | 10 |
 | BSD-2-Clause | 1 |
 | 0BSD | 1 |
@@ -90,7 +90,8 @@ grade, que vieram do jogo, e o código do Bathbot de onde saiu a fórmula do
 | `named-placeholders` | 1.1.6 | MIT |
 | `proxy-from-env` | 2.1.0 | MIT |
 | `redis` | 6.2.0 | MIT |
-| `rosu-pp-js` | 4.0.1-lazer-master.67a9c11 | MIT |
+| `rosu-pp-bancho` | 4.0.1-lazer-master.67a9c11 | MIT |
+| `rosu-pp-daycore` | 4.0.1-lazer-master.67a9c11 | MIT |
 | `safer-buffer` | 2.1.2 | MIT |
 | `sql-escaper` | 1.5.1 | MIT |
 | `ts-mixer` | 6.0.4 | MIT |
@@ -2491,7 +2492,7 @@ IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-### MIT — `rosu-pp-js` 4.0.1-lazer-master.67a9c11
+### MIT — `rosu-pp-bancho` 4.0.1-lazer-master.67a9c11, `rosu-pp-daycore` 4.0.1-lazer-master.67a9c11
 
 ```text
 MIT License
@@ -2672,10 +2673,11 @@ mesmo conjunto publica o texto, ele está na seção acima.
 O lock só conhece o que o `npm install` baixa, e o bot usa quatro coisas de terceiro
 fora disso. Elas entram aqui à mão, pela mesma razão que o resto do arquivo existe.
 
-### Crates Rust dentro do vendor/rosu-pp-js — MIT / MIT OR Apache-2.0
+### Crates Rust dentro do vendor/rosu-pp-* — MIT / MIT OR Apache-2.0
 
-O `rosu-pp-js` acima é Wasm, e o `.wasm` dele carrega compilado o código Rust de
-que depende. O npm só enxerga o pacote JavaScript; estes vêm junto no binário:
+O `rosu-pp-bancho` e o `rosu-pp-daycore` acima são o `rosu-pp-js` compilado em Wasm,
+e o `.wasm` de cada um carrega o código Rust de que depende. O npm só enxerga o
+pacote JavaScript; estes vêm junto no binário:
 
 | Crate | Licença |
 | --- | --- |

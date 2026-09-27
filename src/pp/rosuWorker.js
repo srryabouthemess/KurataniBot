@@ -10,6 +10,13 @@
  *
  * O porquê da thread e do cache de mapas parseados está no rosuWorkerThread.js.
  *
+ * ── Uma thread por build ──────────────────────────────────────────────────────
+ * Cada servidor calcula no rosu-pp que ele roda (ver engines.js), e os builds
+ * são pacotes Wasm diferentes. Cada um ganha a sua thread, com o seu cache de
+ * mapas e o seu backoff: um build que não carrega não derruba o outro. A thread
+ * só nasce no primeiro pedido, então um build que nenhum servidor configurado
+ * usa nunca é carregado.
+ *
  * ── Bytes só quando faltam ────────────────────────────────────────────────────
  * O `.osu` tem 50–300KB, e mandá-lo em todo cálculo seria trocar um custo de CPU
  * por um de cópia. Então o pedido vai primeiro sem nada: se a thread não tiver o
@@ -33,10 +40,24 @@ const REQUEST_TIMEOUT_MS = 15_000;
 /** Quanto esperar antes de tentar subir de novo uma thread que nasceu morta. */
 const RESTART_BACKOFF_MS = 60_000;
 
-let _worker = null;
 let _nextId = 1;
-let _blockedUntil = 0;
-const _stats = { spawns: 0, served: 0, failed: 0, bytesEnviados: 0 };
+
+/** pacote → { pacote, worker, blockedUntil, stats } */
+const _pools = new Map();
+
+function poolDe(pacote) {
+  let pool = _pools.get(pacote);
+  if (!pool) {
+    pool = {
+      pacote,
+      worker: null,
+      blockedUntil: 0,
+      stats: { spawns: 0, served: 0, failed: 0, bytesEnviados: 0 },
+    };
+    _pools.set(pacote, pool);
+  }
+  return pool;
+}
 
 // ─── Ciclo de vida ────────────────────────────────────────────────────────────
 
@@ -61,59 +82,59 @@ function encerrarPendentes(worker) {
   worker.pending.clear();
 }
 
-function derrubar(worker, motivo) {
+function derrubar(pool, worker, motivo) {
   // 'error' e 'exit' chegam os dois para a mesma thread, e o close() do shutdown
   // chega antes. Sem esta trava a mesma morte relataria a causa duas vezes e
   // estenderia o backoff sem razão.
   if (worker.done) return;
   worker.done = true;
 
-  if (_worker === worker) _worker = null;
+  if (pool.worker === worker) pool.worker = null;
   encerrarPendentes(worker);
 
   // Uma thread que morreu SEM nunca ter respondido nada é quase sempre lib
   // faltando, que não melhora tentando de novo na play seguinte.
   if (worker.served === 0) {
-    _blockedUntil = Date.now() + RESTART_BACKOFF_MS;
-    logErrorOnce('rosuWorker', new Error(motivo));
+    pool.blockedUntil = Date.now() + RESTART_BACKOFF_MS;
+    logErrorOnce(`rosuWorker:${pool.pacote}`, new Error(motivo));
   }
 
   worker.thread.terminate().catch(() => {});
 }
 
-function iniciar() {
+function iniciar(pool) {
   let thread;
   try {
-    thread = new Worker(SCRIPT);
+    thread = new Worker(SCRIPT, { workerData: { pacote: pool.pacote } });
   } catch (error) {
-    _blockedUntil = Date.now() + RESTART_BACKOFF_MS;
-    logErrorOnce('rosuWorker:spawn', error);
+    pool.blockedUntil = Date.now() + RESTART_BACKOFF_MS;
+    logErrorOnce(`rosuWorker:spawn:${pool.pacote}`, error);
     return null;
   }
 
   const worker = { thread, pending: new Map(), served: 0, done: false };
-  _stats.spawns++;
+  pool.stats.spawns++;
 
   desreferenciar(worker);
 
-  thread.on('message', (resposta) => receber(worker, resposta));
-  thread.on('error', (error) => derrubar(worker, `a thread do rosu-pp falhou: ${error.message}`));
-  thread.on('exit', () => derrubar(worker, 'a thread do rosu-pp encerrou'));
+  thread.on('message', (resposta) => receber(pool, worker, resposta));
+  thread.on('error', (error) => derrubar(pool, worker, `a thread do ${pool.pacote} falhou: ${error.message}`));
+  thread.on('exit', () => derrubar(pool, worker, `a thread do ${pool.pacote} encerrou`));
 
   return worker;
 }
 
-function garantir() {
-  if (_worker) return _worker;
-  if (Date.now() < _blockedUntil) return null;
+function garantir(pool) {
+  if (pool.worker) return pool.worker;
+  if (Date.now() < pool.blockedUntil) return null;
 
-  _worker = iniciar();
-  return _worker;
+  pool.worker = iniciar(pool);
+  return pool.worker;
 }
 
 // ─── Pedido e resposta ────────────────────────────────────────────────────────
 
-function receber(worker, resposta) {
+function receber(pool, worker, resposta) {
   const pendente = worker.pending.get(resposta.id);
   // Resposta sem dono é o caso normal de um pedido que já expirou.
   if (!pendente) return;
@@ -127,24 +148,24 @@ function receber(worker, resposta) {
   if (resposta.needBytes) return pendente.resolve({ needBytes: true });
 
   if (resposta.error) {
-    _stats.failed++;
-    logErrorOnce('rosuWorker:calc', new Error(resposta.error));
+    pool.stats.failed++;
+    logErrorOnce(`rosuWorker:calc:${pool.pacote}`, new Error(resposta.error));
     return pendente.resolve(null);
   }
 
   worker.served++;
-  _stats.served++;
+  pool.stats.served++;
   pendente.resolve({ value: resposta.value });
 }
 
-function enviar(worker, pedido) {
+function enviar(pool, worker, pedido) {
   const id = _nextId++;
 
   return new Promise((resolve) => {
     const timer = setTimeout(() => {
       worker.pending.delete(id);
-      _stats.failed++;
-      derrubar(worker, `o rosu-pp não respondeu em ${REQUEST_TIMEOUT_MS}ms`);
+      pool.stats.failed++;
+      derrubar(pool, worker, `o ${pool.pacote} não respondeu em ${REQUEST_TIMEOUT_MS}ms`);
       resolve(null);
     }, REQUEST_TIMEOUT_MS);
 
@@ -158,8 +179,9 @@ function enviar(worker, pedido) {
 }
 
 /**
- * Executa uma operação do rosu-pp na thread.
+ * Executa uma operação do rosu-pp na thread do build pedido.
  *
+ * @param {string} pacote o build do rosu-pp-js (ver engines.js)
  * @param {'attributes'|'difficulty'|'fc'|'simulate'} op
  * @param {number} mapId
  * @param {object} args parâmetros da operação (ver rosuWorkerThread.js)
@@ -167,11 +189,12 @@ function enviar(worker, pedido) {
  *   tem o mapa parseado — é o que evita mandar o .osu em todo cálculo
  * @returns {Promise<object|null>} null em qualquer falha
  */
-async function calcular(op, mapId, args, obterBytes) {
-  const worker = garantir();
+async function calcular(pacote, op, mapId, args, obterBytes) {
+  const pool = poolDe(pacote);
+  const worker = garantir(pool);
   if (!worker) return null;
 
-  const primeira = await enviar(worker, { op, mapId, args });
+  const primeira = await enviar(pool, worker, { op, mapId, args });
   if (!primeira) return null;
   if (!primeira.needBytes) return primeira.value;
 
@@ -185,11 +208,11 @@ async function calcular(op, mapId, args, obterBytes) {
   if (!bytes) return null;
 
   // A thread pode ter morrido entre as duas viagens.
-  const vivo = garantir();
+  const vivo = garantir(pool);
   if (!vivo) return null;
 
-  _stats.bytesEnviados += bytes.length;
-  const segunda = await enviar(vivo, { op, mapId, args, bytes });
+  pool.stats.bytesEnviados += bytes.length;
+  const segunda = await enviar(pool, vivo, { op, mapId, args, bytes });
 
   // Um segundo `needBytes` significaria que a thread descartou o mapa entre
   // guardar e usar, o que não acontece — o cálculo é síncrono do lado de lá.
@@ -198,22 +221,27 @@ async function calcular(op, mapId, args, obterBytes) {
   return segunda.value;
 }
 
-/** Encerra a thread. Chamado no shutdown do bot (ver index.js). */
+/** Encerra todas as threads. Chamado no shutdown do bot (ver index.js). */
 function close() {
-  if (!_worker) return;
+  for (const pool of _pools.values()) {
+    const worker = pool.worker;
+    if (!worker) continue;
+    pool.worker = null;
 
-  const worker = _worker;
-  _worker = null;
-
-  // Marcado antes de terminar: o 'exit' chega depois, e sem isto um shutdown
-  // normal seria relatado como falha da thread.
-  worker.done = true;
-  encerrarPendentes(worker);
-  worker.thread.terminate().catch(() => {});
+    // Marcado antes de terminar: o 'exit' chega depois, e sem isto um shutdown
+    // normal seria relatado como falha da thread.
+    worker.done = true;
+    encerrarPendentes(worker);
+    worker.thread.terminate().catch(() => {});
+  }
 }
 
+/** Por build, só dos que já receberam algum pedido. */
 function stats() {
-  return { ..._stats, vivo: Boolean(_worker), bloqueadoAte: _blockedUntil };
+  return Object.fromEntries([..._pools.values()].map(pool => [
+    pool.pacote,
+    { ...pool.stats, vivo: Boolean(pool.worker), bloqueadoAte: pool.blockedUntil },
+  ]));
 }
 
 module.exports = { calcular, close, stats };

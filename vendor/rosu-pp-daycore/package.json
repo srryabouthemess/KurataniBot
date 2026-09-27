@@ -1,0 +1,27 @@
+{
+  "name": "rosu-pp-daycore",
+  "collaborators": [
+    "MaxOhn <ohn.m@hotmail.de>"
+  ],
+  "description": "rosu-pp-js compilado contra srryabouthemess/rosu-pp@67a9c11: o mesmo commit que o bancho.py do Daycore usa no vanilla",
+  "version": "4.0.1-lazer-master.67a9c11",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MaxOhn/rosu-pp-js"
+  },
+  "files": [
+    "rosu_pp_js_bg.wasm",
+    "rosu_pp_js.js",
+    "rosu_pp_js.d.ts"
+  ],
+  "main": "rosu_pp_js.js",
+  "types": "rosu_pp_js.d.ts",
+  "keywords": [
+    "osu",
+    "pp",
+    "stars",
+    "performance",
+    "difficulty"
+  ]
+}

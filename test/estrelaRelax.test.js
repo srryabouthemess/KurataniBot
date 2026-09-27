@@ -18,8 +18,9 @@
  * Cravar "7.15 virou X" exigiria as duas libs instaladas e transformaria o teste
  * numa cópia do rework de PP da vez: qualquer atualização do akatsuki-pp o
  * quebraria sem nada estar errado. O que precisa continuar valendo é a decisão —
- * servidor de Relax pergunta ao Python, servidor vanilla pergunta ao rosu-pp — e é
- * ela que está afirmada aqui.
+ * servidor de Relax pergunta ao Python, o Bancho pergunta ao rosu-pp — e é ela
+ * que está afirmada aqui. O resto do mapa servidor → motor está no
+ * motorPorServidor.test.js.
  */
 const test = require('node:test');
 const assert = require('node:assert');
@@ -40,8 +41,8 @@ const rosuPath = require.resolve('../src/pp/rosuWorker');
 require.cache[rosuPath] = {
   id: rosuPath, filename: rosuPath, loaded: true,
   exports: {
-    calcular: async (op, mapId, args) => {
-      chamadasRosu.push({ op, mapId, args });
+    calcular: async (pacote, op, mapId, args) => {
+      chamadasRosu.push({ pacote, op, mapId, args });
       return { pp: 100, stars: 5.55, maxCombo: 500 };
     },
     close: () => {},
@@ -80,10 +81,11 @@ test.after(() => {
   fs.rmSync(DATA_DIR, { recursive: true, force: true });
 });
 
-// O Akatsuki é embutido (ver servers.js), então o par VN/RX existe sem depender
-// do .env de quem roda a suíte.
-const VANILLA = 'akatsuki';
-const RELAX   = servers.relaxKey(VANILLA);
+// Os dois existem sem depender do .env de quem roda a suíte: o oficial é fixo e
+// o Akatsuki é embutido (ver servers.js). O vanilla do Akatsuki não serve aqui —
+// ele também é akatsuki-pp.
+const VANILLA = 'official';
+const RELAX   = servers.relaxKey('akatsuki');
 
 // Cada teste tem o seu mapa: a map_difficulty não tem TTL, e dois testes no
 // mesmo id fariam o segundo ler o que o primeiro gravou.
@@ -95,13 +97,13 @@ test.beforeEach(() => {
   chamadasPython.length = 0;
 });
 
-test('o par VN/RX do Akatsuki existe no registro', () => {
+test('o Relax do Akatsuki existe no registro', () => {
   assert.ok(RELAX, 'sem a variante _rx não há o que testar');
   assert.equal(servers.isRelax(RELAX), true);
   assert.equal(servers.isRelax(VANILLA), false);
 });
 
-test('servidor vanilla continua no rosu-pp', async () => {
+test('o Bancho continua no rosu-pp', async () => {
   const estrelas = await pp.getAdjustedStars(novoMapa(), ['HD', 'DT'], VANILLA);
 
   assert.equal(estrelas, '5.55');

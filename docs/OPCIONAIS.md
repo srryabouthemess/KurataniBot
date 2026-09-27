@@ -118,28 +118,43 @@ São *application emojis*: funcionam em qualquer servidor e em DM, sem "servidor
 
 ## O cálculo de PP
 
-Estrelas, PP e a linha de informação do mapa (CS/AR/OD/HP, BPM, objetos) saem do [`rosu-pp`](https://github.com/srryabouthemess/rosu-pp/tree/pp-update-lazer-master) — um fork que segue o **osu!lazer master**. Conferido contra a API oficial, ele reproduz o número publicado: erro relativo na casa de **1e-6**, choke incluído (613 scores dos quatro modos no pp-check, e 40 top plays pelo caminho do próprio bot).
+Cada servidor calcula no motor que **ele próprio** roda — um FC pp ou uma estrela vindos de outro rework mostrariam um número que nenhum score daquele servidor teria. A escolha mora em [`src/pp/engines.js`](../src/pp/engines.js):
 
-Ele **não precisa de nada** para instalar: é Wasm, roda em qualquer plataforma com Node, e já vem compilado no repositório, em [`vendor/rosu-pp-js`](../vendor/rosu-pp-js). O `npm install` só aponta o `node_modules` para lá.
+| Servidor | Vanilla | Relax |
+|---|---|---|
+| Bancho (osu! oficial) | `rosu-pp-bancho` | — |
+| Daycore | `rosu-pp-daycore` | akatsuki-pp |
+| Akatsuki | akatsuki-pp | akatsuki-pp |
+| Qualquer outro (EZPP, bancho.py do `.env`) | `rosu-pp-daycore` | akatsuki-pp |
 
-O cálculo roda num worker thread, porque Wasm é síncrono e pararia o event loop. O `/diag` mostra a linha `rosu-pp` com quantos cálculos ela serviu.
+Os dois `rosu-pp-*` são o [`rosu-pp-js`](https://github.com/MaxOhn/rosu-pp-js) compilado contra o [fork do rosu-pp](https://github.com/srryabouthemess/rosu-pp):
 
-### Atualizando o motor
+- **`rosu-pp-bancho`** segue a branch `pp-update-lazer-master`, que acompanha o **osu!lazer master**. Conferido contra a API oficial, ele reproduz o número publicado: erro relativo na casa de **1e-6**, choke incluído (613 scores dos quatro modos no pp-check, e 40 top plays pelo caminho do próprio bot).
+- **`rosu-pp-daycore`** fica no commit que o bancho.py do Daycore roda (hoje o mesmo `67a9c11`), e só anda quando o servidor anda. Ele imita o servidor também no que recebe: mecânica stable e **sem** o score total, então num choke só a estimativa de miss por combo opera, como lá.
 
-O `vendor/rosu-pp-js` é o [`rosu-pp-js`](https://github.com/MaxOhn/rosu-pp-js) compilado contra o fork. Para refazê-lo depois de mexer no fork (Arch: `pacman -S rust-wasm wasm-pack binaryen`):
+Nenhum dos dois precisa de nada para instalar: é Wasm, roda em qualquer plataforma com Node, e já vem compilado no repositório, em [`vendor/`](../vendor). O `npm install` só aponta o `node_modules` para lá.
+
+Cada build roda no seu worker thread, porque Wasm é síncrono e pararia o event loop; a thread só nasce no primeiro cálculo daquele build. A linha de informação do mapa (CS/AR/OD/HP, BPM, objetos) sai sempre do build do Bancho, porque não depende de rework. O `/diag` mostra uma linha por build com quantos cálculos ela serviu.
+
+### Atualizando um dos builds
+
+Para refazer um deles depois de mexer no fork (Arch: `pacman -S rust-wasm wasm-pack binaryen`):
 
 ```bash
 # no rosu-pp-js, branch fork-lazer-master
-# 1. Cargo.toml: rosu-pp = { git = "https://github.com/srryabouthemess/rosu-pp", rev = "<commit novo>" }
+# 1. Cargo.toml: rosu-pp = { git = "https://github.com/srryabouthemess/rosu-pp", rev = "<commit>" }
 wasm-pack build --target nodejs --release
 cp pkg/{LICENSE,README.md,rosu_pp_js.js,rosu_pp_js.d.ts,rosu_pp_js_bg.wasm,rosu_pp_js_bg.wasm.d.ts} \
-   ../../KurataniBot/vendor/rosu-pp-js/
-# 2. vendor/rosu-pp-js/package.json: "version": "4.0.1-lazer-master.<commit novo>"
+   ../../KurataniBot/vendor/rosu-pp-bancho/     # ou rosu-pp-daycore
+# 2. vendor/rosu-pp-<build>/package.json: "version": "4.0.1-lazer-master.<commit>"
+#    (o `name` fica o do build, não o rosu-pp-js do pkg)
 ```
 
-Se o fork mudar algum campo público dos atributos, o `cargo check` do `rosu-pp-js` acusa — é só expor o campo novo nos três arquivos de `src/attributes/` e `src/strains.rs`. Depois, `npm install` e `npm test`: o `rosuWorker.test.js` roda contra o motor de verdade.
+O `rosu-pp-daycore` acompanha o `docker/rosu-pp-<commit>.tar.gz` do bancho.py do Daycore: quando o servidor trocar de commit, troque este junto.
 
-Mudou o algoritmo? A `map_difficulty` e a `fc_pp` não têm TTL, então os números antigos ficariam lá. Apague as linhas `engine = 'rosu'` das duas (ou suba uma migração, como a 4→5 fez com as do lazer-calculator).
+Se o fork mudar algum campo público dos atributos, o `cargo check` do `rosu-pp-js` acusa — é só expor o campo novo nos três arquivos de `src/attributes/` e `src/strains.rs`. Depois, `npm install` e `npm test`: o `rosuWorker.test.js` roda contra os dois builds de verdade.
+
+Não precisa limpar cache: a chave da `map_difficulty` e da `fc_pp` leva a versão do pacote (`bancho@4.0.1-lazer-master.67a9c11`), então o build novo não encontra os números do antigo — por isso a versão tem de mudar junto com o commit.
 
 ---
 
@@ -147,7 +162,9 @@ Mudou o algoritmo? A `map_difficulty` e a `fc_pp` não têm TTL, então os núme
 
 O Relax usa outro sistema de PP, calculado por uma biblioteca Python. Ele também é quem dá a **estrela** de uma play de RX: o algoritmo é outro (a dimensão de velocidade sai da conta), então o valor do lazer — e o publicado pela API — descreve outro jogo.
 
-**Sem a lib o bot funciona normalmente**: o PP do RX aparece como `?pp` e a estrela cai na do vanilla, sem mods.
+A mesma lib calcula também o **vanilla do Akatsuki**, que o servidor pontua no akatsuki-pp (ver [O cálculo de PP](#o-cálculo-de-pp)).
+
+**Sem a lib o bot funciona normalmente**: o PP calculado localmente do RX e do Akatsuki aparece como `?pp` e a estrela cai na publicada pela API, sem mods.
 
 Precisa de **Python 3.11** com a lib instalada, apontado no `.env`:
 
