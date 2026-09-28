@@ -1,4 +1,5 @@
-const { SlashCommandBuilder, EmbedBuilder, ApplicationIntegrationType, InteractionContextType, MessageFlags } = require('discord.js');
+const { SlashCommandBuilder, EmbedBuilder, AttachmentBuilder, ApplicationIntegrationType, InteractionContextType, MessageFlags } = require('discord.js');
+const axios = require('axios');
 const osu = require('../../osuClient');
 const servers = require('../../servers');
 const modo = require('../../modo');
@@ -25,13 +26,38 @@ const code = (valor) => `\`${valor}\``;
 const dec2 = (n, locale) =>
   Number(n ?? 0).toLocaleString(locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
+const AVATAR_MAX_BYTES = 4 * 1024 * 1024;
+const AVATAR_EXT = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/gif': 'gif', 'image/webp': 'webp' };
+
+/**
+ * O avatar de servidor privado vai ANEXADO, e não como link.
+ *
+ * Com o link, o Discord busca a imagem pelo proxy dele, e no Daycore essa busca
+ * falha calada: o `a.daycore.org` responde 200 para qualquer um de fora, e o
+ * perfil saía sem foto mesmo assim. Anexada, a imagem sai do bot, que consegue
+ * buscá-la. Falhar aqui não derruba o perfil — volta para o link, que é o que
+ * havia antes.
+ */
+async function avatarAttachment(url) {
+  if (!url) return null;
+  try {
+    const res = await axios.get(url, {
+      responseType: 'arraybuffer', timeout: 5000, maxContentLength: AVATAR_MAX_BYTES,
+    });
+    const ext = AVATAR_EXT[String(res.headers['content-type'] ?? '').split(';')[0].trim()];
+    return ext ? new AttachmentBuilder(Buffer.from(res.data), { name: `avatar.${ext}` }) : null;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * O corpo do perfil. Separado do execute para dar para testar sem Discord.
  *
  * Linha com dado que o servidor não manda some inteira, em vez de sair zerada:
  * tempo de jogo e notas faltam no Relax do Gatari, e "0 h" ali seria mentira.
  */
-function describe(user, bestPlay, mode, s) {
+function describe(user, bestPlay, mode, s, { thumbnail = user.avatar_url } = {}) {
   const stats = user.statistics ?? {};
   const num   = (n) => Number(n ?? 0).toLocaleString(s.locale);
 
@@ -64,9 +90,9 @@ function describe(user, bestPlay, mode, s) {
       : '';
     lines.push(
       // Nome de mapa é texto de terceiro em posição de link (ver markdown.js).
-      `▸ **${s.profile_top_play}:** [${mdLink(mapTitle(bestPlay))}](${mapUrl})${mods === '+NM' ? '' : ` **${mods}**`}`,
-      `\u2003 ${code(`${ppLegivel(bestPlay.pp, s.locale)}pp`)} • ${dec2(bestPlay.accuracy * 100, s.locale)}% • ` +
-        `${emojis.rankLabel(bestPlay.rank)}${combo}`,
+      `▸ **${s.profile_top_play}:** [${mdLink(mapTitle(bestPlay))}](${mapUrl})`,
+      `${code(`${ppLegivel(bestPlay.pp, s.locale)}pp`)} • ${dec2(bestPlay.accuracy * 100, s.locale)}% • ` +
+        `${emojis.rankLabel(bestPlay.rank)}${combo}${mods === '+NM' ? '' : ` • **${mods}**`}`,
     );
   } else {
     lines.push(`▸ **${s.profile_top_play}:** ${s.profile_no_play}`);
@@ -83,7 +109,7 @@ function describe(user, bestPlay, mode, s) {
 
   return new EmbedBuilder()
     .setAuthor(author(user, mode, s))
-    .setThumbnail(user.avatar_url)
+    .setThumbnail(thumbnail)
     .setColor(user.is_online ? 0x99ff99 : 0x2b4963)
     .setDescription(lines.join('\n'))
     .setFooter({ text: s.profile_footer(osu.getModeLabel(mode)) });
@@ -131,10 +157,15 @@ module.exports = {
       );
       if (!user) return interaction.editReply(s.player_not_found);
 
-      const bestPlays = await osu.enrichScores(rawBest, mode);
-      const embed     = describe(user, bestPlays[0] || null, mode, s);
+      const [bestPlays, avatar] = await Promise.all([
+        osu.enrichScores(rawBest, mode),
+        user._private ? avatarAttachment(user.avatar_url) : null,
+      ]);
+      const embed = describe(user, bestPlays[0] || null, mode, s, avatar
+        ? { thumbnail: `attachment://${avatar.name}` }
+        : {});
 
-      await interaction.editReply({ embeds: [embed] });
+      await interaction.editReply({ embeds: [embed], files: avatar ? [avatar] : [] });
     } catch (error) {
       logError('profile', error);
       // O adaptador oficial já devolve null em 404 (ver osu/officialApi.js), então

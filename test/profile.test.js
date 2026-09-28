@@ -42,8 +42,8 @@ test('o perfil completo mostra tudo o que as referências mostram', () => {
   assert.match(e.description, /\*\*Acc:\*\* `97,23%` • \*\*Level:\*\* `100,07`/);
   assert.match(e.description, /\*\*Playcount:\*\* `37\.587` \(`636 h`\)/);
   assert.match(e.description, /\*\*SS\+\*\* `5` \*\*SS\*\* `11` \*\*S\+\*\* `17` \*\*S\*\* `65` \*\*A\*\* `379`/);
-  assert.match(e.description, /\[Artist - Song ［Insane］\]\(https:\/\/osu\.ppy\.sh\/beatmapsets\/5#osu\/10\) \*\*\+HDDT\*\*/);
-  assert.match(e.description, /`412,30pp` • 99,10% • \*\*S\*\* • 1\.500x/);
+  assert.match(e.description, /\[Artist - Song ［Insane］\]\(https:\/\/osu\.ppy\.sh\/beatmapsets\/5#osu\/10\)\n`412/);
+  assert.match(e.description, /`412,30pp` • 99,10% • \*\*S\*\* • 1\.500x • \*\*\+HDDT\*\*$/m);
   assert.match(e.description, /🔴 Visto <t:\d+:R> • Entrou em <t:1667317034:D> \(<t:1667317034:R>\)/);
 });
 
@@ -64,4 +64,10 @@ test('play sem mods não leva o +NM, e online troca o "visto"', () => {
   const e = describe(jogador({}, { is_online: true }), { ...play, mods: [] }, 'official', s).toJSON();
   assert.doesNotMatch(e.description, /\+NM/);
   assert.match(e.description, /🟢 Online agora • Entrou/);
+});
+
+test('o avatar anexado entra no lugar do link', () => {
+  const e = describe(jogador(), play, 'daycore', s, { thumbnail: 'attachment://avatar.png' }).toJSON();
+  assert.equal(e.thumbnail.url, 'attachment://avatar.png');
+  assert.equal(describe(jogador(), play, 'official', s).toJSON().thumbnail.url, 'https://a.ppy.sh/2');
 });

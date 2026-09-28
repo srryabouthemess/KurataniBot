@@ -296,8 +296,10 @@ function author(user, mode, s) {
     ? `#${stats.global_rank.toLocaleString(s.locale)}`
     : s.profile_unranked;
 
-  // O rank regional é privado em conta restrita; o país sozinho continua valendo.
-  const regional = (!user._private && stats.country_rank && pais)
+  // Sem rank no país (conta sem posição), o país sozinho continua valendo. Não
+  // depende de `_private`: essa marca é de todo jogador de servidor privado, e
+  // escondia o BR#1 no Daycore mesmo com o bancho.py mandando a posição.
+  const regional = (stats.country_rank && pais)
     ? ` ${pais}#${stats.country_rank.toLocaleString(s.locale)}`
     : (pais ? ` ${pais}` : '');
 

@@ -277,10 +277,11 @@ test('conta sem rank não vira "#null"', async () => {
   assert.equal(autor.name, `pudim2: 0,00pp (${s.profile_unranked} BR)`);
 });
 
-test('rank regional escondido some, e o país fica', async () => {
-  // Conta restrita: o country_rank existe na resposta, mas não é para exibir.
+test('servidor privado também mostra o rank no país', async () => {
+  // Todo jogador de servidor privado vem com `_private`; antes isso escondia a
+  // posição no país que o servidor manda.
   setup();
   const autor = playEmbed.author(jogador({ _private: true }), 'official', s);
 
-  assert.equal(autor.name, 'pudim2: 4.821,30pp (#12 BR)');
+  assert.equal(autor.name, 'pudim2: 4.821,30pp (#12 BR#3)');
 });
