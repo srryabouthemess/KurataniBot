@@ -37,7 +37,7 @@ const path = require('path');
 
 const { DATA_DIR } = require('../paths');
 
-const VERSAO_ATUAL = 7;
+const VERSAO_ATUAL = 8;
 
 /** A versão mais antiga que as migrações abaixo sabem levar até a atual. */
 const VERSAO_MINIMA = 1;
@@ -295,6 +295,27 @@ function descartarCacheDoAkatsukiPy(db) {
   }
 }
 
+// ─── 7 → 8: o link do modelo antigo sai da tabela users ──────────────────────
+
+/**
+ * Zera `users.osu_user`, `osu_server` e `osu_id`.
+ *
+ * É onde o modelo antigo guardava o único link de cada um. A migração para
+ * `user_links` copiou os valores e deixou a origem como estava, e desde então
+ * nada lê nem grava essas colunas — então o `/link remove` não as alcançava, e
+ * o nick de quem linkou naquela época ficava guardado sem motivo nenhum.
+ */
+function zerarLinkAntigoDeUsers(db) {
+  const zeradas = db.prepare(`
+    UPDATE users SET osu_user = NULL, osu_server = NULL, osu_id = NULL
+    WHERE osu_user IS NOT NULL OR osu_server IS NOT NULL OR osu_id IS NOT NULL
+  `).run().changes;
+
+  if (zeradas > 0) {
+    console.log(`[db] Link do modelo antigo apagado de ${zeradas} usuário(s); os links valem só em user_links.`);
+  }
+}
+
 // ─── Execução ─────────────────────────────────────────────────────────────────
 
 function run(db) {
@@ -323,6 +344,10 @@ function run(db) {
 
   if (versao < 7) {
     descartarCacheDoAkatsukiPy(db);
+  }
+
+  if (versao < 8) {
+    zerarLinkAntigoDeUsers(db);
   }
 
   // Interpolado porque PRAGMA não aceita parâmetro; o valor é uma constante do

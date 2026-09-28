@@ -137,6 +137,30 @@ test('6 → 7 descarta o cache do akatsuki-pp-py e mantém o dos builds', t => {
   assert.equal(db.getCachedFCpp({ ...fc, engine: 'daycore_rx@1.1.2-591de0d' }), 310);
 });
 
+test('7 → 8 apaga o link antigo de users e mantém o resto', t => {
+  // O modelo antigo guardava o link em users(osu_user, osu_server, osu_id); a
+  // migração para user_links copiou e deixou a origem, que ninguém mais lê.
+  const { dbPath, load } = dbWorkspace(t);
+
+  const primeiro = load();
+  primeiro.setLink('1', 'official', 'fulano', 123);
+  primeiro.close();
+
+  comHandle(dbPath, h => {
+    h.exec("UPDATE users SET osu_user = 'fulano', osu_server = 'official', osu_id = 123, lang = 'pt' WHERE discord_id = '1'");
+    h.exec('PRAGMA user_version = 7');
+  });
+
+  const db = load();
+  const row = comHandle(dbPath, h => h.prepare("SELECT osu_user, osu_server, osu_id, lang, preferred_server FROM users WHERE discord_id = '1'").get());
+  assert.equal(row.osu_user, null);
+  assert.equal(row.osu_server, null);
+  assert.equal(row.osu_id, null);
+  assert.equal(row.lang, 'pt');
+  assert.equal(row.preferred_server, 'official');
+  assert.equal(db.getLink('1', 'official').osu_user, 'fulano', 'o link em user_links deveria sobreviver');
+});
+
 /** Carrega esperando a recusa, e fecha o handle que a conexão já abriu. */
 function recusa(load) {
   let erro = null;
