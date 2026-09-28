@@ -29,6 +29,7 @@ const axios = require('axios');
 const servers = require('../servers');
 const rateLimiter = require('../rateLimiter');
 const { decodeMods } = require('../mods');
+const { gradeCounts } = require('./userStats');
 const { idSegment, urlSegment } = require('../lib/urlSafe');
 const { withRetry } = require('../lib/retry');
 
@@ -88,9 +89,14 @@ function normalizeUser(info, stats, mode) {
       country_rank: Number(campo('country_rank')) || null,
       pp: parseFloat(campo('pp') ?? 0),
       hit_accuracy: parseFloat(campo('avg_accuracy') ?? 0),
-      level: { current: Math.floor(st.level ?? 1) || 1 },
+      level: { current: Math.floor(st.level ?? 1) || 1, progress: Number(st.level_progress) || 0 },
       maximum_combo: st.max_combo ?? 0,
       play_count: st.playcount ?? 0,
+      // Tempo de jogo e notas não têm versão `_rx`/`_ap`: a API só manda os do
+      // vanilla. No Relax, mostrar esses seria contar a história de outro
+      // leaderboard — melhor não mostrar.
+      play_time: sx ? null : (st.playtime ?? null),
+      grade_counts: sx ? null : gradeCounts(st),
     },
     _private: true,
   };

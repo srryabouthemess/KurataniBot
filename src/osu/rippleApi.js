@@ -29,6 +29,7 @@ const axios = require('axios');
 const servers = require('../servers');
 const rateLimiter = require('../rateLimiter');
 const { decodeMods } = require('../mods');
+const { levelFromFloat, gradeCounts } = require('./userStats');
 const { idSegment, urlSegment } = require('../lib/urlSafe');
 const { withRetry } = require('../lib/retry');
 
@@ -89,9 +90,11 @@ function normalizeUser(data, mode) {
       country_rank: st.country_leaderboard_rank ?? null,
       pp: parseFloat(st.pp ?? 0),
       hit_accuracy: parseFloat(st.accuracy ?? 0),
-      level: { current: Math.floor(st.level ?? 1) || 1 },
+      level: levelFromFloat(st.level),
       maximum_combo: st.max_combo ?? 0,
       play_count: st.playcount ?? 0,
+      play_time: st.playtime ?? null,
+      grade_counts: gradeCounts(st.grades),
     },
     _private: true,
   };

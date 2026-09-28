@@ -8,8 +8,10 @@
 
 const servers = require('../../servers');
 const { decodeMods } = require('../../mods');
+const { levelFromScore, gradeCounts } = require('../userStats');
 
 // ─── Normalização: usuário ────────────────────────────────────────────────────
+
 function normalizeUserPrivate(playerData, statsData, mode, globalRank = null, countryRank = null) {
   if (!playerData) return null;
 
@@ -30,9 +32,11 @@ function normalizeUserPrivate(playerData, statsData, mode, globalRank = null, co
       country_rank:  countryRank,
       pp: parseFloat(statsData?.pp ?? 0),
       hit_accuracy: parseFloat(statsData?.acc ?? statsData?.accuracy ?? 0),
-      level: { current: 1 },
+      level: levelFromScore(statsData?.tscore),
       maximum_combo: statsData?.max_combo ?? 0,
       play_count: statsData?.plays ?? statsData?.play_count ?? 0,
+      play_time: statsData?.playtime ?? null,
+      grade_counts: gradeCounts(statsData),
     },
     _private: true,
   };
