@@ -111,6 +111,11 @@ async function paginate(interaction, { id, totalPages, buildEmbed, strings, onPa
 
   const collector = message.createMessageComponentCollector({ idle: IDLE_MS });
 
+  // No modo texto, editar a mensagem do comando roda ele de novo na MESMA
+  // resposta (ver prefixCommands.js). Os botões passam a ser da execução nova,
+  // e este coletor precisa parar — senão os dois responderiam a cada clique.
+  interaction.onSuperseded?.(() => collector.stop('superseded'));
+
   // Cliques seguidos rodam handlers concorrentes: o coletor não espera um
   // terminar para entregar o próximo. Sem saber quem é o mais recente, um
   // handler antigo que demora podia sobrescrever a tela com uma página velha,
@@ -202,7 +207,9 @@ async function paginate(interaction, { id, totalPages, buildEmbed, strings, onPa
     }
   });
 
-  collector.on('end', () => {
+  collector.on('end', (_coletados, motivo) => {
+    // Superado, os botões na tela já são os da execução nova.
+    if (motivo === 'superseded') return;
     interaction.editReply({ components: [] }).catch(() => {});
   });
 

@@ -133,8 +133,8 @@ module.exports = ({ ADMIN }) => ({
 
   recent_none:             (name) => `Недавних плеев для **${name}** не найдено.`,
   recent_error:            'Ошибка при получении последнего плея. Проверьте, существует ли игрок.',
-  recent_footer:           (page, total, label, status, mapper) =>
-    `${status ? `${status} • ` : ''}${mapper ? `карта от ${mapper} • ` : ''}Плей ${page}/${total} • ${label}`,
+  recent_footer:           (page, total, label, status, mapper, tries) =>
+    `${tries ? `Попытка #${tries} • ` : ''}${status ? `${status} • ` : ''}${mapper ? `карта от ${mapper} • ` : ''}Плей ${page}/${total} • ${label}`,
 
   score_no_map:            '❌ Укажите карту (ID или ссылку) — недавних карт в этом канале не нашлось.',
   score_none:              (name, map, label) => `У **${name}** нет скоров на **${map}** в ${label}.`,
@@ -170,6 +170,9 @@ module.exports = ({ ADMIN }) => ({
   link_default_set_modo:   (label, modo) => `✅ Сервер по умолчанию: **${label}**, режим **${modo}**.`,
   link_modo_note:          (modo) => `Текущий режим: **${modo}**. Изменить можно через \`/link default\`.`,
   link_default_missing:    (label) => `❌ У вас нет привязки на **${label}**. Сначала используйте \`/link set\` там.`,
+  no_link_for_mention:     (who, label) =>
+    `❌ У ${who} нет привязки на **${label}**. Укажите сервер, где этот игрок привязал аккаунт, или имя игрока.`,
+
   no_link_for_server:      (label) =>
     `❌ У вас нет привязки на **${label}**. Используйте \`/link set\`, чтобы привязать аккаунт этого сервера, ` +
     `или укажите имя игрока в самой команде.`,

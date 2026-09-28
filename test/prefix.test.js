@@ -10,6 +10,7 @@ const { MessageFlags } = require('discord.js');
 const { fakeMessage, firstReply, drain } = require('./helpers');
 
 const prefixCommands = require('../src/prefixCommands');
+const cooldowns = require('../src/cooldowns');
 const { loadCommands } = require('../src/bot/loadCommands');
 
 const NAMES = [
@@ -54,7 +55,13 @@ commands.set('fixture', {
   execute: async context => { captured = context; },
 });
 
-const client = { commands, on(_event, handler) { this.handler = handler; } };
+const client = {
+  commands,
+  on(event, handler) {
+    if (event === 'messageCreate') this.handler = handler;
+    if (event === 'messageUpdate') this.onEdit = handler;
+  },
+};
 prefixCommands.register(client);
 
 /** Manda uma mensagem pelo dispatcher e devolve o que aconteceu. */
@@ -374,4 +381,150 @@ test('adaptador de resposta', async t => {
     // Ephemeral não existe em mensagem comum: mandar a flag seria erro da API.
     assert.equal(sent[0][1].flags, undefined);
   });
+});
+
+// ─── Mensagem editada ────────────────────────────────────────────────────────
+
+/**
+ * Manda uma mensagem, deixa a execução responder, e devolve como editá-la
+ * depois — o `messageUpdate` do Discord traz a mesma mensagem, já com o texto
+ * novo, e uma cópia de como ela era.
+ */
+async function enviaEResponde(content, { resposta = 'primeira', idade = 0 } = {}) {
+  const sent = [];
+  const message = fakeMessage(content, { sent });
+  message.id = String(Math.floor(Math.random() * 1e15));
+  message.createdTimestamp = Date.now() - idade;
+
+  captured = null;
+  client.handler(message);
+  await drain();
+  const primeira = captured;
+  if (resposta) await primeira.reply(resposta);
+
+  async function edita(novo) {
+    const antes = { ...message };
+    message.content = novo;
+    captured = null;
+    // Mesmo autor, mesmo comando, milissegundos depois: o cooldown recusaria.
+    // Ele continua valendo para edições de verdade — o que se testa aqui é o
+    // que acontece depois dele.
+    const original = cooldowns.check;
+    cooldowns.check = () => 0;
+    try {
+      client.onEdit(antes, message);
+      await drain();
+    } finally {
+      cooldowns.check = original;
+    }
+    return captured;
+  }
+
+  return { message, sent, primeira, edita };
+}
+
+test('mensagem editada roda o comando de novo', async t => {
+  await t.test('com os argumentos novos, reescrevendo a mesma resposta', async () => {
+    const { sent, edita } = await enviaEResponde('k!rs knci');
+    const segunda = await edita('k!rs nick');
+
+    assert.equal(segunda.options.getString('player'), 'nick');
+
+    await segunda.deferReply();
+    await segunda.editReply({ embeds: ['E'] });
+
+    assert.deepEqual(sent.map(([tipo]) => tipo), ['reply', 'edit'], 'nada de mensagem nova');
+    // A primeira escrita troca TUDO: sem isto o texto e os botões da resposta
+    // antiga ficariam embaixo do embed novo.
+    const [, payload] = sent[1];
+    assert.equal(payload.content, null);
+    assert.deepEqual(payload.components, []);
+    assert.deepEqual(payload.embeds, ['E']);
+  });
+
+  await t.test('as escritas seguintes voltam a ser edições parciais', async () => {
+    const { sent, edita } = await enviaEResponde('k!rs knci');
+    const segunda = await edita('k!rs nick');
+
+    await segunda.editReply({ embeds: ['E'] });
+    await segunda.editReply({ components: [] });
+
+    assert.deepEqual(sent[2], ['edit', { components: [] }]);
+  });
+
+  await t.test('a execução antiga para de escrever', async () => {
+    const { sent, primeira, edita } = await enviaEResponde('k!rs knci');
+    let largouOsBotoes = false;
+    primeira.onSuperseded(() => { largouOsBotoes = true; });
+
+    await edita('k!rs nick');
+    const antes = sent.length;
+
+    // O resultado da busca antiga chegando atrasado não pode sobrescrever.
+    await primeira.editReply({ embeds: ['VELHO'] });
+    await primeira.followUp('aviso velho');
+
+    assert.equal(sent.length, antes);
+    assert.equal(primeira.superseded, true);
+    assert.equal(largouOsBotoes, true);
+  });
+
+  await t.test('comando que ainda não tinha respondido: a nova execução responde', async () => {
+    const { sent, edita } = await enviaEResponde('k!rs knci', { resposta: null });
+    const segunda = await edita('k!rs nick');
+
+    await segunda.reply('nova');
+    assert.deepEqual(sent.map(([tipo]) => tipo), ['reply']);
+  });
+
+  await t.test('não era comando e passou a ser: responde normalmente', async () => {
+    const { sent, edita } = await enviaEResponde('k!sr nick', { resposta: null });
+    const segunda = await edita('k!rs nick');
+
+    assert.equal(segunda.options.getString('player'), 'nick');
+    await segunda.reply('nova');
+    assert.equal(sent[0][0], 'reply');
+  });
+
+  await t.test('resposta antiga apagada: manda outra', async () => {
+    const { message, sent, edita } = await enviaEResponde('k!rs knci');
+    const segunda = await edita('k!rs nick');
+    // A resposta que o fakeMessage devolve falha no edit a partir daqui.
+    segunda.replyMessage.edit = async () => { throw new Error('Unknown Message'); };
+
+    await segunda.editReply({ embeds: ['E'] });
+    assert.deepEqual(sent.map(([tipo]) => tipo), ['reply', 'reply']);
+    assert.ok(message);
+  });
+});
+
+test('edições que não rodam o comando', async t => {
+  await t.test('só a prévia do link mudou, o texto não', async () => {
+    const { primeira, edita } = await enviaEResponde('k!rs nick');
+    assert.equal(await edita('k!rs nick'), null);
+    assert.equal(primeira.superseded, false);
+  });
+
+  await t.test('editada depois da janela', async () => {
+    const { edita } = await enviaEResponde('k!rs knci', { idade: prefixCommands.EDIT_WINDOW_MS + 1000 });
+    assert.equal(await edita('k!rs nick'), null);
+  });
+
+  await t.test('deixou de ser comando: a resposta fica como está', async () => {
+    const { sent, primeira, edita } = await enviaEResponde('k!rs knci');
+    assert.equal(await edita('deixa pra lá'), null);
+    assert.equal(primeira.superseded, false);
+    assert.equal(sent.length, 1);
+  });
+
+  await t.test('editada para o prefixo sozinho não manda o convite', async () => {
+    const { sent, edita } = await enviaEResponde('k!rs knci');
+    await edita('k!');
+    assert.equal(sent.length, 1);
+  });
+});
+
+test('@menção chega inteira ao comando', async () => {
+  const { context } = await run('k!rs <@200000000000000002>');
+  assert.equal(context.options.getString('player'), '<@200000000000000002>');
 });

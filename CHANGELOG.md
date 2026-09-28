@@ -2,6 +2,43 @@
 
 ---
 
+# Sessão de 2026-09-27 (menção, link oficial, edição e Try #N)
+
+## ✨ Novidades
+
+- **`@fulano` no lugar do nick.** [`userLink.js`](src/userLink.js), [`compare.js`](src/commands/osu/compare.js)
+  - `k!rs @fulano`, `k!osu @fulano`, `/top player:@fulano`: o jogador é a
+    conta que o fulano vinculou no `/link`. Vale em todo comando que passa pelo
+    `resolvePlayer`, e nos dois lados do `/compare`.
+  - Sem `server:` no comando, valem o servidor e o modo preferidos DO FULANO;
+    um `server:`/`modo:` explícito continua ganhando. Sem link ali, o erro diz
+    quem e em qual servidor (`no_link_for_mention`), sem notificar ninguém.
+- **Mensagem editada roda o comando de novo.** [`prefixCommands.js`](src/prefixCommands.js), [`MessageCommand.js`](src/prefix/MessageCommand.js), [`pagination.js`](src/pagination.js)
+  - `k!rs knci` corrigido para `k!rs nick` reescreve a resposta que já
+    existia, em vez de mandar outra. Até 3 minutos depois do envio.
+  - A execução antiga para de escrever (resultado atrasado, "expirou",
+    follow-up) e os botões dela passam para a nova. Resposta antiga apagada:
+    sai uma nova. Prévia de link aparecendo (texto igual) não conta.
+  - O cooldown continua valendo para a edição.
+- **Try #N no rodapé do `/rs`.** [`recentMerge.js`](src/recentMerge.js)
+  - Quantas plays seguidas, até a exibida, foram no mesmo mapa (VN e RX
+    separados). Quando a sequência encosta no fim das 50 buscadas, sai `50+`.
+
+## 🔧 Mudanças
+
+- **Link do mapa sempre no osu.ppy.sh.** [`osuClient.js`](src/osuClient.js)
+  - Em todo servidor, no `getMapUrl`. A exceção é o mapa custom do Daycore
+    (id a partir de 100.000.000, o `CUSTOM_ID_BASE`), que no oficial daria 404.
+
+## ✅ Conferido
+
+- 868 testes e lint. Os testes novos de link, Try, menção e paginação falham
+  sem a mudança.
+- `npm run smoke:commands`: 84 comandos, 0 problemas. `/rs` com jogadores
+  reais do Daycore e do Bancho: link oficial e `Try #N` no rodapé.
+
+---
+
 # Sessão de 2026-09-27 (akatsuki-pp no commit de cada servidor)
 
 O Relax e o vanilla do Akatsuki, e o Relax do Daycore, passam a calcular no

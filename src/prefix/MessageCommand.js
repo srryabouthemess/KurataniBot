@@ -27,6 +27,14 @@ function toMessagePayload(payload) {
   return data;
 }
 
+/**
+ * Ao reaproveitar a resposta de um comando anterior (a mensagem foi editada,
+ * ver prefixCommands.js), a primeira escrita SUBSTITUI tudo o que havia nela.
+ * Sem isto, um `edit` só com embed deixaria para trás o texto de erro da
+ * resposta antiga, e os botões dela.
+ */
+const EM_BRANCO = { content: null, embeds: [], components: [], attachments: [] };
+
 /** Espelha `interaction.options`: ausente devolve null, como no discord.js. */
 function buildOptionAccessors({ values, subcommand }) {
   const get = name => (values.has(name) ? values.get(name) : null);
@@ -61,13 +69,50 @@ function buildOptionAccessors({ values, subcommand }) {
  */
 class MessageCommand {
   #replyMessage = null;
+  // A resposta veio de um comando anterior e ainda não foi reescrita.
+  #herdada = false;
+  #superada = false;
+  #aoSerSuperada = [];
 
-  constructor(message, commandName, parsed) {
+  /**
+   * @param {object} [opts]
+   * @param {object|null} [opts.previousReply] resposta de uma execução anterior
+   *   do mesmo comando, para ser editada em vez de mandar outra mensagem
+   */
+  constructor(message, commandName, parsed, { previousReply = null } = {}) {
     this.message     = message;
     this.commandName = commandName;
     this.deferred    = false;
     this.replied     = false;
     this.options     = buildOptionAccessors(parsed);
+    this.#replyMessage = previousReply;
+    this.#herdada      = previousReply !== null;
+  }
+
+  /** A mensagem com que o bot respondeu, quando já respondeu. */
+  get replyMessage() { return this.#replyMessage; }
+
+  /**
+   * A mensagem do comando foi editada e uma execução nova assumiu a resposta.
+   *
+   * A partir daqui esta execução não escreve mais nada — nem o resultado que
+   * ainda estava buscando, nem o "expirou" de um coletor — e quem registrou um
+   * `onSuperseded` (a paginação) larga os botões para a execução nova.
+   */
+  supersede() {
+    if (this.#superada) return;
+    this.#superada = true;
+    for (const fn of this.#aoSerSuperada.splice(0)) {
+      try { fn(); } catch { /* quem registrou cuida do próprio erro */ }
+    }
+  }
+
+  get superseded() { return this.#superada; }
+
+  /** Chamado quando uma execução nova assume a resposta (ver `supersede`). */
+  onSuperseded(fn) {
+    if (this.#superada) fn();
+    else this.#aoSerSuperada.push(fn);
   }
 
   get client()            { return this.message.client; }
@@ -100,13 +145,28 @@ class MessageCommand {
   }
 
   async reply(payload) {
+    if (this.#superada) return this.#replyMessage;
+
+    if (this.#herdada) {
+      this.#herdada = false;
+      const reescrita = await this.#replyMessage
+        .edit({ ...EM_BRANCO, ...toMessagePayload(payload) })
+        .catch(() => null);
+      // Apagaram a resposta antiga: responde de novo, como se fosse a primeira.
+      if (reescrita) {
+        this.replied = true;
+        return this.#replyMessage;
+      }
+    }
+
     this.#replyMessage = await this.message.reply(toMessagePayload(payload));
     this.replied = true;
     return this.#replyMessage;
   }
 
   async editReply(payload) {
-    if (!this.#replyMessage) return this.reply(payload);
+    if (this.#superada) return this.#replyMessage;
+    if (!this.#replyMessage || this.#herdada) return this.reply(payload);
     // Como no `editReply` de interação, campos não informados ficam como
     // estão — é o que faz `editReply({ components: [] })` limpar os botões
     // sem apagar o embed.
@@ -114,6 +174,7 @@ class MessageCommand {
   }
 
   async followUp(payload) {
+    if (this.#superada) return null;
     return this.message.channel.send(toMessagePayload(payload));
   }
 
@@ -122,6 +183,7 @@ class MessageCommand {
   }
 
   async deleteReply() {
+    if (this.#superada) return;
     await this.#replyMessage?.delete().catch(() => {});
     this.#replyMessage = null;
   }

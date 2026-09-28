@@ -193,6 +193,15 @@ test('status e mapper saem para o rodapé, que é quem os traduz', async () => {
   assert.match(s.recent_footer(2, 50, 'Daycore', bloco.status, bloco.creator), /Graveyard • mapa de dectopia/);
 });
 
+test('o rodapé do /rs abre com a tentativa, quando há uma', () => {
+  assert.equal(
+    s.recent_footer(1, 50, 'Daycore', 'Ranked', 'dectopia', '53'),
+    'Try #53 • Ranked • mapa de dectopia • Play 1/50 • Daycore',
+  );
+  assert.equal(s.recent_footer(1, 50, 'Daycore', 'Ranked', null, '50+'), 'Try #50+ • Ranked • Play 1/50 • Daycore');
+  assert.equal(s.recent_footer(1, 50, 'Daycore', null, null, null), 'Play 1/50 • Daycore');
+});
+
 // ─── Listas ───────────────────────────────────────────────────────────────────
 
 test('item de lista com link põe o mapa na primeira linha e a grade na segunda', async () => {

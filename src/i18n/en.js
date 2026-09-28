@@ -133,8 +133,8 @@ module.exports = ({ ADMIN }) => ({
 
   recent_none:             (name) => `No recent plays found for **${name}**.`,
   recent_error:            'Error fetching recent play. Check if the player exists.',
-  recent_footer:           (page, total, label, status, mapper) =>
-    `${status ? `${status} • ` : ''}${mapper ? `mapset by ${mapper} • ` : ''}Play ${page}/${total} • ${label}`,
+  recent_footer:           (page, total, label, status, mapper, tries) =>
+    `${tries ? `Try #${tries} • ` : ''}${status ? `${status} • ` : ''}${mapper ? `mapset by ${mapper} • ` : ''}Play ${page}/${total} • ${label}`,
 
   score_no_map:            '❌ Provide a map (ID or link) — I found no recent map in this channel.',
   score_none:              (name, map, label) => `**${name}** has no scores on **${map}** in ${label}.`,
@@ -170,6 +170,9 @@ module.exports = ({ ADMIN }) => ({
   link_default_set_modo:   (label, modo) => `✅ Default server set to **${label}**, mode **${modo}**.`,
   link_modo_note:          (modo) => `Mode in use: **${modo}**. Change it anytime with \`/link default\`.`,
   link_default_missing:    (label) => `❌ You have no link on **${label}**. Use \`/link set\` on that server first.`,
+  no_link_for_mention:     (who, label) =>
+    `❌ ${who} has no link on **${label}**. Pick the server where they linked their account, or provide the player name.`,
+
   no_link_for_server:      (label) =>
     `❌ You have no link on **${label}**. Use \`/link set\` to link your account on that server, ` +
     `or provide a player name in the command.`,

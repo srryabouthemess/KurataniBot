@@ -144,8 +144,8 @@ module.exports = ({ ADMIN }) => ({
   recent_error:            'Erro ao buscar a play recente. Verifique se o jogador existe.',
   // `status` é o do MAPA (ranked, loved, graveyard...) e `mapper` é quem o fez.
   // Os dois podem faltar: só a API oficial manda esses campos, o bancho.py não.
-  recent_footer:           (page, total, label, status, mapper) =>
-    `${status ? `${status} • ` : ''}${mapper ? `mapa de ${mapper} • ` : ''}Play ${page}/${total} • ${label}`,
+  recent_footer:           (page, total, label, status, mapper, tries) =>
+    `${tries ? `Try #${tries} • ` : ''}${status ? `${status} • ` : ''}${mapper ? `mapa de ${mapper} • ` : ''}Play ${page}/${total} • ${label}`,
 
   // O /score reaproveita simulate_invalid_map e simulate_map_not_found: a
   // orientação sobre ID/link do mapa é a mesma dos dois comandos.
@@ -183,6 +183,9 @@ module.exports = ({ ADMIN }) => ({
   link_default_set_modo:   (label, modo) => `✅ Servidor padrão definido para **${label}**, modo **${modo}**.`,
   link_modo_note:          (modo) => `Modo em uso: **${modo}**. Troque quando quiser com \`/link default\`.`,
   link_default_missing:    (label) => `❌ Você não tem link no **${label}**. Use \`/link set\` nesse servidor primeiro.`,
+  no_link_for_mention:     (who, label) =>
+    `❌ ${who} não tem link no **${label}**. Informe o servidor em que essa pessoa vinculou a conta, ou o nome do jogador.`,
+
   no_link_for_server:      (label) =>
     `❌ Você não tem link no **${label}**. Use \`/link set\` para vincular sua conta desse servidor, ` +
     `ou informe o nome do jogador no próprio comando.`,

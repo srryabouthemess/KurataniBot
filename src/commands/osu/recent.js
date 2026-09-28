@@ -48,8 +48,9 @@ module.exports = {
     const { mode } = resolved;
     // Sem `modo:` no comando, cai na preferência salva por `/link default`
     // (ver db/users.js) — assim quem só digita `/rs` continua vendo o que
-    // escolheu, em vez de precisar repetir a opção toda vez.
-    const modoOption = interaction.options.getString('modo') ?? getPreferredModo(interaction.user.id);
+    // escolheu, em vez de precisar repetir a opção toda vez. Com `@fulano`, é
+    // a preferência do fulano (ver resolvePlayer).
+    const modoOption = interaction.options.getString('modo') ?? getPreferredModo(resolved.ownerId);
     const pair = recentMerge.pairFor(mode);
     const keys = recentMerge.keysToFetch(pair, modoOption);
     await interaction.deferReply();
@@ -102,6 +103,15 @@ module.exports = {
         return perfis.get(key);
       };
 
+      // "Try #N": em que tentativa seguida daquele mapa a play está. Com a
+      // sequência encostando no fim das FETCH_LIMIT buscadas, sai "50+" — o
+      // número de verdade pode ser maior e não dá para afirmar qual.
+      const tentativa = (page) => {
+        const tries = recentMerge.triesAt(recents, page, FETCH_LIMIT);
+        if (!tries) return null;
+        return tries.partial ? `${tries.count}+` : String(tries.count);
+      };
+
       async function buildEmbed(page) {
         // Enriquece só a play exibida agora, não as 50 buscadas de uma vez —
         // evita rajada de requisições/rate limit na API do osu!
@@ -143,6 +153,7 @@ module.exports = {
               osu.getModeLabel(playMode),
               bloco.status,
               bloco.creator,
+              tentativa(page),
             ),
           });
       }

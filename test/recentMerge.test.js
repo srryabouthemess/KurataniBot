@@ -180,3 +180,48 @@ test('fetchEach', async t => {
     }
   });
 });
+
+// ─── triesAt ────────────────────────────────────────────────────────────────
+
+test('triesAt', async t => {
+  const play = (mapa, mode = 'daycore') => ({ beatmap: { id: mapa }, _mode: mode });
+
+  await t.test('conta as plays seguidas no mesmo mapa, da exibida para trás', () => {
+    // Mais recente primeiro: as três primeiras são o mesmo mapa.
+    const lista = [play(1), play(1), play(1), play(2), play(1)];
+    assert.deepEqual(recentMerge.triesAt(lista, 0, 50), { count: 3, partial: false });
+    assert.deepEqual(recentMerge.triesAt(lista, 1, 50), { count: 2, partial: false });
+    assert.deepEqual(recentMerge.triesAt(lista, 3, 50), { count: 1, partial: false });
+    // O mapa 1 de novo no fim não emenda com a sequência do começo.
+    assert.deepEqual(recentMerge.triesAt(lista, 4, 50), { count: 1, partial: false });
+  });
+
+  await t.test('id em string e em número é o mesmo mapa', () => {
+    const lista = [play(1), play('1')];
+    assert.equal(recentMerge.triesAt(lista, 0, 50).count, 2);
+  });
+
+  await t.test('VN e RX não se somam', () => {
+    const lista = [play(1, 'daycore'), play(1, 'daycore_rx'), play(1, 'daycore')];
+    assert.equal(recentMerge.triesAt(lista, 0, 50).count, 1);
+  });
+
+  await t.test('sequência que encosta no fim da lista cheia é parcial', () => {
+    const lista = [play(2), play(1), play(1), play(1)];
+    assert.deepEqual(recentMerge.triesAt(lista, 1, 4), { count: 3, partial: true });
+    // Lista que não encheu acabou de verdade: o número é exato.
+    assert.deepEqual(recentMerge.triesAt(lista, 1, 50), { count: 3, partial: false });
+  });
+
+  await t.test('play crua do Shiina (map_id solto) também conta', () => {
+    // O /recent do Daycore vem no formato enxuto até a página ser enriquecida.
+    const crua = id => ({ map_id: id, map_md5: `md5-${id}`, _mode: 'daycore' });
+    const lista = [crua(4028887), crua(4028887), crua(1)];
+    assert.equal(recentMerge.triesAt(lista, 0, 50).count, 2);
+  });
+
+  await t.test('play sem mapa não tem contagem', () => {
+    assert.equal(recentMerge.triesAt([{ beatmap: {} }], 0, 50), null);
+    assert.equal(recentMerge.triesAt([], 0, 50), null);
+  });
+});

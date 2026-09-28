@@ -16,6 +16,8 @@ const assert = require('node:assert');
 let servidorSalvo = null;
 let modoSalvo     = null;
 let links         = {};
+// Links de quem foi mencionado (`<@id>`), por id do Discord.
+let linksPorId    = {};
 
 // Trocado ANTES de carregar o userLink e o comando: os dois resolvem o db no
 // require do topo (mesmo padrão de preferredModo.test.js).
@@ -26,7 +28,7 @@ let links         = {};
     filename: resolvido,
     loaded: true,
     exports: {
-      getLink:            (_id, chave) => links[chave] ?? null,
+      getLink:            (id, chave) => (linksPorId[id] ?? links)[chave] ?? null,
       getPreferredServer: () => servidorSalvo,
       getPreferredModo:   () => modoSalvo,
       getUserLang:        () => 'en',
@@ -137,10 +139,11 @@ const PERFIS = {
 };
 
 /** Roda o /compare de verdade e devolve o que ele respondeu. */
-async function roda(opcoes, { servidor = null, modo = null, comLinks = {} } = {}) {
+async function roda(opcoes, { servidor = null, modo = null, comLinks = {}, mencionados = {} } = {}) {
   servidorSalvo = servidor;
   modoSalvo     = modo;
   links         = comLinks;
+  linksPorId    = mencionados;
 
   const pedidos = [];
   const original = osu.getUser;
@@ -242,4 +245,28 @@ test('a tabela continua dentro do orçamento de largura do celular', async () =>
   for (const linha of tabela.trim().split('\n')) {
     assert.ok(linha.length <= 26, `linha de ${linha.length} colunas: ${linha}`);
   }
+});
+
+test('@menção no segundo lado busca o link do mencionado no servidor herdado', async () => {
+  const FULANO = '200000000000000002';
+  const { pedidos } = await roda(
+    { user1: 'kuratani', user2: `<@${FULANO}>`, server: 'akatsuki' },
+    { mencionados: { [FULANO]: { akatsuki: { osu_id: 77, osu_user: 'fulano' } } } },
+  );
+
+  assert.deepEqual(pedidos, [
+    { nome: 'kuratani', chave: 'akatsuki' },
+    { nome: '77',       chave: 'akatsuki' },
+  ]);
+});
+
+test('@menção sem link naquele servidor responde nomeando quem e onde', async () => {
+  const FULANO = '200000000000000002';
+  const { resposta, pedidos } = await roda(
+    { user1: `<@${FULANO}>`, user2: 'ckz', server: 'akatsuki' },
+    { mencionados: { [FULANO]: {} } },
+  );
+
+  assert.equal(pedidos.length, 0);
+  assert.match(resposta.content, new RegExp(`<@${FULANO}>.*Akatsuki`));
 });

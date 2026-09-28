@@ -78,6 +78,37 @@ function allowedByPermissions(spec, message) {
   return message.member?.permissions?.has(needed) ?? false;
 }
 
+// ─── Mensagem editada ─────────────────────────────────────────────────────────
+// Errou o nick (`k!rs knci`) e corrigiu (`k!rs nick`): o comando roda de novo e
+// a resposta que já existe é reescrita, em vez de sair uma segunda mensagem.
+
+/** Até quanto tempo depois de enviada uma edição ainda reroda o comando. */
+const EDIT_WINDOW_MS = 3 * 60 * 1000;
+
+/** id da mensagem do comando → a execução que responde a ela. */
+const execucoes = new Map();
+
+function lembrar(messageId, context) {
+  execucoes.set(messageId, context);
+  // A resposta só é reaproveitada dentro da janela; passado isso, esquecer é
+  // o que impede o mapa de crescer para sempre.
+  setTimeout(() => {
+    if (execucoes.get(messageId) === context) execucoes.delete(messageId);
+  }, EDIT_WINDOW_MS).unref?.();
+}
+
+/**
+ * A edição merece rodar o comando de novo?
+ *
+ * O Discord também manda `messageUpdate` quando só a prévia de um link
+ * aparece, sem o texto mudar — esse caso não pode virar outra execução.
+ */
+function edicaoValida(oldMessage, newMessage) {
+  if (newMessage.author?.bot || newMessage.webhookId) return false;
+  if (oldMessage.content === newMessage.content) return false;
+  return Date.now() - newMessage.createdTimestamp <= EDIT_WINDOW_MS;
+}
+
 // ─── Despacho ─────────────────────────────────────────────────────────────────
 
 /**
@@ -125,18 +156,32 @@ async function welcome(message) {
   await context.reply(t(context).prefix_welcome(PREFIX)).catch(() => {});
 }
 
-async function handleMessage(client, specs, message) {
+/**
+ * @param {boolean} [editada] a mensagem foi editada — reaproveita a resposta
+ *   da execução anterior, quando houver uma
+ */
+async function handleMessage(client, specs, message, editada = false) {
   if (message.author.bot || message.webhookId) return;
 
   const resolved = resolveCommand(client, specs, message.content);
   if (!resolved) {
-    if (isBarePrefix(message.content)) await welcome(message);
+    // Editar para o prefixo sozinho não é tatear o bot: é apagar o comando.
+    if (!editada && isBarePrefix(message.content)) await welcome(message);
     return;
   }
 
   const { command, spec, args, name } = resolved;
 
-  const context = new MessageCommand(message, name, { values: new Map(), subcommand: null });
+  // Quem ainda estava rodando para a versão antiga da mensagem para de escrever
+  // (ver MessageCommand.supersede), e a resposta dele passa para esta execução.
+  const anterior = editada ? execucoes.get(message.id) : null;
+  anterior?.supersede();
+
+  const context = new MessageCommand(
+    message, name, { values: new Map(), subcommand: null },
+    { previousReply: anterior?.replyMessage ?? null },
+  );
+  lembrar(message.id, context);
   const s = t(context);
   const refuse = reason => context.reply(reason).catch(() => {});
 
@@ -181,7 +226,12 @@ function register(client) {
     handleMessage(client, specs, message).catch(error => logError('prefix', error));
   });
 
+  client.on('messageUpdate', (oldMessage, newMessage) => {
+    if (!edicaoValida(oldMessage, newMessage)) return;
+    handleMessage(client, specs, newMessage, true).catch(error => logError('prefix:edit', error));
+  });
+
   console.log(`[prefix] Modo texto ativo com "${PREFIX}" em ${specs.size} comandos.`);
 }
 
-module.exports = { register, INTENTS, PREFIX, ENABLED };
+module.exports = { register, INTENTS, PREFIX, ENABLED, EDIT_WINDOW_MS };

@@ -20,6 +20,9 @@
  *   1. Nome passado na opção `player` do comando
  *   2. Link do usuário para o servidor resolvido acima
  *   3. Erro — o usuário não tem link para aquele servidor especificamente
+ *
+ * Uma menção (`k!rs @fulano`) no `player` troca o "usuário" acima: servidor,
+ * modo e link passam a ser os do fulano, e não os de quem digitou.
  */
 
 const { getLink, getPreferredServer, getPreferredModo } = require('./db');
@@ -54,16 +57,31 @@ const osu = require('./osuClient');
  *   comando não tem uma (o `/wipe` tem um `mode` que é ruleset, não isto)
  * @param {string|null} padrao chave usada quando não há opção nem preferência
  */
-function resolveServer(interaction, serverOptionName = 'server', modoOptionName = 'modo', padrao = null) {
+function resolveServer(interaction, serverOptionName = 'server', modoOptionName = 'modo', padrao = null, dono = interaction.user.id) {
   const escolhido = interaction.options.getString(serverOptionName);
   const modoDoComando = modoOptionName ? interaction.options.getString(modoOptionName) : null;
 
   const base = escolhido
-    || getPreferredServer(interaction.user.id)
+    || getPreferredServer(dono)
     || padrao
     || osu.DEFAULT_MODE;
 
-  return modo.apply(base, modoDoComando ?? getPreferredModo(interaction.user.id));
+  return modo.apply(base, modoDoComando ?? getPreferredModo(dono));
+}
+
+/**
+ * O id do Discord quando o texto é uma menção de usuário (`<@id>`, ou `<@!id>`
+ * do cliente antigo), e null em qualquer outro caso.
+ *
+ * Só a menção INTEIRA conta: um nick de osu! não tem `<` nem `@`, então não há
+ * nome de jogador que caia aqui por engano. Menção de cargo (`<@&id>`) fica de
+ * fora — cargo não tem link.
+ *
+ * Serve ao slash e ao prefixo do mesmo jeito: numa opção de texto do slash, o
+ * Discord também grava a menção escolhida como `<@id>`.
+ */
+function mentionedId(raw) {
+  return String(raw ?? '').trim().match(/^<@!?(\d{17,20})>$/)?.[1] ?? null;
 }
 
 /**
@@ -113,16 +131,22 @@ function resolveSecondServer(interaction, primeiro, serverOptionName = 'server2'
  */
 function resolvePlayer(interaction, playerOptionName = 'player', serverOptionName = 'server', modoOptionName = 'modo') {
   const manualPlayer = interaction.options.getString(playerOptionName);
-  const mode = resolveServer(interaction, serverOptionName, modoOptionName);
+  const mencionado = mentionedId(manualPlayer);
+  // De quem são o link e as preferências. O comando que ainda consulta uma
+  // preferência por conta própria (o `modo` do /recent) pergunta por este id.
+  const ownerId = mencionado ?? interaction.user.id;
+  const mode = resolveServer(interaction, serverOptionName, modoOptionName, null, ownerId);
 
-  if (manualPlayer) {
-    return { username: manualPlayer, displayName: manualPlayer, mode, fromLink: false };
+  if (manualPlayer && !mencionado) {
+    return { username: manualPlayer, displayName: manualPlayer, mode, fromLink: false, ownerId };
   }
 
-  const link = getLink(interaction.user.id, mode);
+  const link = getLink(ownerId, mode);
   if (!link) {
     const s = t(interaction);
-    return { error: s.no_link_for_server(osu.getModeLabel(mode)) };
+    const label = osu.getModeLabel(mode);
+    // O allowedMentions do client (index.js) impede a menção de notificar.
+    return { error: mencionado ? s.no_link_for_mention(`<@${mencionado}>`, label) : s.no_link_for_server(label) };
   }
 
   // Prefere o ID numérico quando disponível: sobrevive a troca de nick e, no
@@ -132,6 +156,7 @@ function resolvePlayer(interaction, playerOptionName = 'player', serverOptionNam
     displayName: link.osu_user,
     mode,
     fromLink: true,
+    ownerId,
   };
 }
 
@@ -184,4 +209,4 @@ async function fetchPlayer({ username, mode }, buscarScores) {
   return { user: perfil.value, scores: scores.value };
 }
 
-module.exports = { resolveServer, resolveSecondServer, resolvePlayer, fetchPlayer };
+module.exports = { resolveServer, resolveSecondServer, resolvePlayer, fetchPlayer, mentionedId };

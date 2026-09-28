@@ -116,4 +116,41 @@ async function fetchEach(keys, fetchOne) {
   return ok;
 }
 
-module.exports = { pairFor, keysToFetch, mergeRecent, fetchEach };
+/**
+ * O mapa de uma play CRUA, como string (id em número ou texto é o mesmo mapa).
+ *
+ * A lista do /recent só é enriquecida página a página, então aqui a play ainda
+ * vem no formato do servidor: normalizada com `beatmap.id` (oficial, Ripple,
+ * Gatari) ou no formato enxuto do Shiina, com `map_id` e `map_md5` soltos.
+ */
+function mapaDaPlay(play) {
+  const id = play?.beatmap?.id ?? play?.map_id ?? play?.map_md5;
+  return id === undefined || id === null ? null : String(id);
+}
+
+/**
+ * Em que tentativa daquele mapa a play está — o "Try #N" do rodapé do /rs.
+ *
+ * São as plays SEGUIDAS no mesmo mapa, da exibida para trás no tempo (a lista
+ * vem da mais recente para a mais antiga). Voltar ao mapa depois de jogar outro
+ * recomeça a conta, e VN e RX contam separado: são leaderboards diferentes.
+ *
+ * A lista só tem as últimas `limit` plays. Quando a sequência encosta no fim de
+ * uma lista cheia, o número real pode ser maior — `partial` avisa isso.
+ *
+ * @returns {{count: number, partial: boolean}|null} null sem mapa para contar
+ */
+function triesAt(list, index, limit) {
+  const alvo = list[index];
+  const mapa = mapaDaPlay(alvo);
+  if (mapa === null) return null;
+
+  const mesmoMapa = play => mapaDaPlay(play) === mapa && play._mode === alvo._mode;
+
+  let fim = index;
+  while (fim < list.length && mesmoMapa(list[fim])) fim++;
+
+  return { count: fim - index, partial: fim === list.length && list.length >= limit };
+}
+
+module.exports = { pairFor, keysToFetch, mergeRecent, fetchEach, triesAt };

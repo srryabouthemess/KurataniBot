@@ -477,7 +477,33 @@ const enrichScores = (scores, mode = DEFAULT_MODE) => {
 };
 
 const getUserUrl = (userId, mode = DEFAULT_MODE) => apiFor(mode).userUrl(userId, mode);
-const getMapUrl  = (mapId, setId, mode = DEFAULT_MODE) => apiFor(mode).mapUrl(mapId, setId, mode);
+/**
+ * Onde começam os ids de mapa custom do Daycore (`CUSTOM_ID_BASE` do
+ * custom-maps). Abaixo disso o id é de um mapa que existe no osu! oficial.
+ */
+const CUSTOM_MAP_ID_BASE = 100_000_000;
+
+const isCustomMapId = (id) => Number(id) >= CUSTOM_MAP_ID_BASE;
+
+/**
+ * O link do mapa sempre aponta para o osu.ppy.sh, seja qual for o servidor
+ * da play: a página oficial tem leaderboard, download e discussão, e a do
+ * servidor privado nem sempre tem.
+ *
+ * A exceção é o mapa custom, que o oficial não conhece. Lá ele daria 404,
+ * então o link continua no servidor de onde a play veio.
+ */
+const getMapUrl = (mapId, setId, mode = DEFAULT_MODE) => {
+  const numerico = (v) => /^\d+$/.test(String(v ?? ''));
+  // Sem id que preste não há como saber se o mapa é custom: fica o link de
+  // sempre, do servidor da play.
+  if (!numerico(mapId) || isCustomMapId(mapId)) return apiFor(mode).mapUrl(mapId, setId, mode);
+
+  const oficial = servers.get('official').webUrl;
+  return numerico(setId)
+    ? `${oficial}/beatmapsets/${setId}#osu/${mapId}`
+    : `${oficial}/b/${mapId}`;
+};
 const getModeLabel = (mode = DEFAULT_MODE) => servers.label(mode);
 
 module.exports = {

@@ -123,3 +123,33 @@ test('clique de outra pessoa é recusado e não navega', async () => {
   assert.match(intruso.efemero?.content ?? '', /não é sua/);
   assert.equal(h.naTela(), 0, 'a página não pode ter mudado');
 });
+
+test('comando superado (mensagem editada) larga os botões sem apagá-los', async () => {
+  // No modo texto, editar o comando roda ele de novo NA MESMA resposta. Os
+  // botões na tela passam a ser da execução nova: o coletor antigo tem que
+  // parar, e sem o `editReply({ components: [] })` do fim normal — que
+  // apagaria justamente os botões novos.
+  const collector = new EventEmitter();
+  collector.stop = (motivo) => collector.emit('end', new Map(), motivo);
+
+  let superar = null;
+  const edits = [];
+  const message = { createMessageComponentCollector: () => collector };
+  const interaction = {
+    user: { id: 'dono' },
+    editReply: async payload => { edits.push(payload); return message; },
+    onSuperseded: fn => { superar = fn; },
+  };
+
+  await paginate(interaction, { id: 't', totalPages: 3, buildEmbed: async page => ({ page }), strings: {} });
+  assert.equal(typeof superar, 'function', 'a paginação precisa se inscrever');
+
+  let parou = null;
+  collector.on('end', (_c, motivo) => { parou = motivo; });
+  const antes = edits.length;
+  superar();
+  await sleep(5);
+
+  assert.equal(parou, 'superseded');
+  assert.equal(edits.length, antes, 'nada de limpar os botões da execução nova');
+});

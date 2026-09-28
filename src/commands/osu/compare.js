@@ -3,7 +3,7 @@ const osu = require('../../osuClient');
 const servers = require('../../servers');
 const modo = require('../../modo');
 const { getLink } = require('../../db');
-const { resolveServer, resolveSecondServer } = require('../../userLink');
+const { resolveServer, resolveSecondServer, mentionedId } = require('../../userLink');
 const { md } = require('../../markdown');
 const { t } = require('../../i18n');
 const { logError } = require('../../lib/logger');
@@ -88,22 +88,39 @@ module.exports = {
     const s        = t(interaction);
     const manualU1 = interaction.options.getString('user1');
     const manualU2 = interaction.options.getString('user2');
+    // `@fulano` num dos lados é a conta que o fulano vinculou (ver
+    // userLink.mentionedId). No primeiro lado ele também empresta as
+    // preferências, como no resolvePlayer; o segundo lado herda o servidor do
+    // primeiro, como sempre, e só procura o link do mencionado nele.
+    const alvo1    = mentionedId(manualU1);
+    const alvo2    = mentionedId(manualU2);
     // Mesma resolução do resolvePlayer (opção > preferido > padrão, com o
     // `modo:` aplicado por cima), sem exigir link dos jogadores comparados.
-    const mode     = resolveServer(interaction);
+    const mode     = resolveServer(interaction, 'server', 'modo', null, alvo1 ?? interaction.user.id);
     const mode2    = resolveSecondServer(interaction, mode);
     const cruzada  = mode2 !== mode;
-    const link     = getLink(interaction.user.id, mode);
+    const link     = getLink(alvo1 ?? interaction.user.id, mode);
+    const nomeDo   = l => (l ? (l.osu_id ?? l.osu_user) : null);
+
+    const semLinkMencionado = (alvo, chave) => interaction.reply({
+      content: s.no_link_for_mention(`<@${alvo}>`, osu.getModeLabel(chave)),
+      flags: MessageFlags.Ephemeral,
+    });
+    if (alvo1 && !link) return semLinkMencionado(alvo1, mode);
 
     // Prefere o ID numérico: sobrevive a troca de nick no osu!.
-    let u1Name = manualU1 ?? (link ? (link.osu_id ?? link.osu_user) : null);
+    let u1Name = (alvo1 ? null : manualU1) ?? nomeDo(link);
     // Sem `user2` numa comparação cruzada, o segundo lado é a conta do autor no
     // OUTRO servidor: `k!compare -bancho -akatsuki` compara a pessoa com ela
     // mesma nos dois, que é o caso mais direto de um comando cruzado e não pede
     // nick nenhum. No mesmo servidor isso não existe — compararia o autor com o
     // autor —, e ali continua valendo o pedido de sempre.
-    const link2 = cruzada && !manualU2 ? getLink(interaction.user.id, mode2) : null;
-    let u2Name = manualU2 ?? (link2 ? (link2.osu_id ?? link2.osu_user) : null);
+    const link2 = alvo2
+      ? getLink(alvo2, mode2)
+      : (cruzada && !manualU2 ? getLink(alvo1 ?? interaction.user.id, mode2) : null);
+    if (alvo2 && !link2) return semLinkMencionado(alvo2, mode2);
+
+    let u2Name = (alvo2 ? null : manualU2) ?? nomeDo(link2);
 
     if (!u1Name) {
       return interaction.reply({ content: s.compare_need_user1, flags: MessageFlags.Ephemeral });
