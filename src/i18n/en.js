@@ -88,6 +88,7 @@ module.exports = ({ ADMIN }) => ({
   profile_last_seen:       (ts) => `🔴 Last seen ${ts}`,
   profile_joined:          (date, ago) => `Joined ${date} (${ago})`,
   profile_footer:          (label) => `osu! Stats • ${label}`,
+  profile_refresh_error:   "⚠️ Couldn't refresh the profile — showing the last data fetched.",
 
   topplays_none:           'No plays found.',
   // `recorte` ("12/100 plays") só chega quando um filtro tirou alguma play, e
@@ -98,6 +99,7 @@ module.exports = ({ ADMIN }) => ({
   topplays_none_match:     'No plays match these filters.',
   topplays_bad_mods:       (input) => `❌ \`${input}\` has no mods I recognize. Use acronyms like \`HDDT\`, or \`NM\` for no mods.`,
   topplays_error:          'Error fetching top plays.',
+  topplays_refresh_error:  "⚠️ Couldn't refresh the top plays — showing the last data fetched.",
   pagination_not_yours:    "❌ Only the person who ran the command can navigate the pages.",
   pagination_refresh_error: "⚠️ Couldn't refresh this play — showing the last data fetched.",
 

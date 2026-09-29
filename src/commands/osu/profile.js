@@ -11,6 +11,7 @@ const { author, mapTitle, ppLegivel } = require('../../embeds/play');
 const { t } = require('../../i18n');
 const { logError } = require('../../lib/logger');
 const { safeEditReply } = require('../../replies');
+const { withRefreshButton } = require('../../refreshButton');
 
 const unix = (dateString) => {
   const ms = new Date(dateString ?? NaN).getTime();
@@ -115,6 +116,49 @@ function describe(user, bestPlay, mode, s, { thumbnail = user.avatar_url } = {})
     .setFooter({ text: s.profile_footer(osu.getModeLabel(mode)) });
 }
 
+/**
+ * Busca tudo e monta o embed. Serve ao carregamento inicial e ao 🔄, que refaz
+ * exatamente o mesmo caminho — a diferença é só o `fresh`, que pula os caches de
+ * perfil e de top play (ver osuClient.getUser).
+ *
+ * @param {{username: string|number, mode: string}} resolved
+ * @param {object} s i18n
+ * @param {object} [opts]
+ * @param {boolean} [opts.fresh]
+ * @param {string|null} [opts.anexado] nome do avatar que JÁ está anexado à
+ *   mensagem, para o refresh não perdê-lo quando o download novo falha
+ * @returns {Promise<{embed: EmbedBuilder, avatar: AttachmentBuilder|null,
+ *   mantemAnexo: boolean}|null>} null quando o jogador não existe
+ */
+async function montarPerfil(resolved, s, { fresh = false, anexado = null } = {}) {
+  const { mode } = resolved;
+
+  // A top play sai junto do perfil quando o link já deu o id (ver userLink):
+  // só o enriquecimento dela é que precisa esperar, porque parte do score.
+  const { user, scores: rawBest } = await fetchPlayer(
+    resolved,
+    id => osu.getBestScores(id, 1, mode, { fresh }),
+    { fresh },
+  );
+  if (!user) return null;
+
+  const [bestPlays, avatar] = await Promise.all([
+    osu.enrichScores(rawBest, mode),
+    user._private ? avatarAttachment(user.avatar_url) : null,
+  ]);
+
+  // O download novo falhou, mas a mensagem já carrega um avatar: a thumbnail
+  // continua apontando para ele, em vez de voltar ao link que não renderiza.
+  const mantemAnexo = !avatar && !!user._private && !!anexado;
+  const nome = avatar?.name ?? (mantemAnexo ? anexado : null);
+
+  const embed = describe(user, bestPlays[0] || null, mode, s, nome
+    ? { thumbnail: `attachment://${nome}` }
+    : {});
+
+  return { embed, avatar, mantemAnexo };
+}
+
 module.exports = {
   data: modo.addOption(new SlashCommandBuilder()
     .setName('profile')
@@ -145,27 +189,41 @@ module.exports = {
       return interaction.reply({ content: resolved.error, flags: MessageFlags.Ephemeral });
     }
 
-    const { mode } = resolved;
     await interaction.deferReply();
 
     try {
-      // A top play sai junto do perfil quando o link já deu o id (ver userLink):
-      // só o enriquecimento dela é que precisa esperar, porque parte do score.
-      const { user, scores: rawBest } = await fetchPlayer(
-        resolved,
-        id => osu.getBestScores(id, 1, mode),
+      const perfil = await montarPerfil(resolved, s);
+      if (!perfil) return interaction.editReply(s.player_not_found);
+
+      // O avatar anexado, e não o link, quando o servidor é privado (ver
+      // avatarAttachment). É o nome do arquivo que vai para o refresh.
+      let anexado = perfil.avatar?.name ?? null;
+
+      await withRefreshButton(
+        interaction,
+        { embeds: [perfil.embed], files: perfil.avatar ? [perfil.avatar] : [] },
+        {
+          id: 'profile',
+          strings: s,
+          errorMessage: s.profile_refresh_error,
+          async refresh() {
+            const novo = await montarPerfil(resolved, s, { fresh: true, anexado });
+            if (!novo) throw new Error('profile refresh: jogador não encontrado');
+
+            if (novo.avatar) anexado = novo.avatar.name;
+            else if (!novo.mantemAnexo) anexado = null;
+
+            // O edit SUBSTITUI os anexos (`attachments: []`) em vez de somar: sem
+            // isso o avatar novo entraria ao lado do antigo, com o mesmo nome, e a
+            // mensagem ficaria com dois. Só quando o download falhou e o anexo
+            // velho continua valendo é que o campo é omitido — e o Discord mantém
+            // o que já está lá.
+            return novo.mantemAnexo
+              ? { embeds: [novo.embed] }
+              : { embeds: [novo.embed], files: novo.avatar ? [novo.avatar] : [], attachments: [] };
+          },
+        },
       );
-      if (!user) return interaction.editReply(s.player_not_found);
-
-      const [bestPlays, avatar] = await Promise.all([
-        osu.enrichScores(rawBest, mode),
-        user._private ? avatarAttachment(user.avatar_url) : null,
-      ]);
-      const embed = describe(user, bestPlays[0] || null, mode, s, avatar
-        ? { thumbnail: `attachment://${avatar.name}` }
-        : {});
-
-      await interaction.editReply({ embeds: [embed], files: avatar ? [avatar] : [] });
     } catch (error) {
       logError('profile', error);
       // O adaptador oficial já devolve null em 404 (ver osu/officialApi.js), então

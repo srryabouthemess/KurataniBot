@@ -92,6 +92,7 @@ module.exports = ({ ADMIN }) => ({
   profile_last_seen:       (ts) => `🔴 Visto ${ts}`,
   profile_joined:          (date, ago) => `Entrou em ${date} (${ago})`,
   profile_footer:          (label) => `osu! Stats • ${label}`,
+  profile_refresh_error:   '⚠️ Não deu para atualizar o perfil — mostrando os últimos dados buscados.',
 
   topplays_none:           'Nenhuma play encontrada.',
   // `osu` sozinho, sem a palavra "Modo": o bot só atende osu!standard (o
@@ -106,6 +107,7 @@ module.exports = ({ ADMIN }) => ({
   topplays_none_match:     'Nenhuma play passa por esses filtros.',
   topplays_bad_mods:       (input) => `❌ Não reconheci nenhum mod em \`${input}\`. Use os acrônimos (\`HDDT\`), ou \`NM\` para plays sem mod.`,
   topplays_error:          'Erro ao buscar as top plays.',
+  topplays_refresh_error:  '⚠️ Não deu para atualizar o top — mostrando os últimos dados buscados.',
   pagination_not_yours:    '❌ Apenas quem usou o comando pode navegar entre as páginas.',
   pagination_refresh_error: '⚠️ Não deu para atualizar essa play — mostrando os últimos dados buscados.',
 

@@ -111,7 +111,7 @@ test('só a camada do Discord importa discord.js', () => {
   // são eles que os testes exercitam sem montar interação.
   const PODE = [
     'index.js', 'bot/', 'commands/', 'prefix/', 'prefixCommands.js',
-    'pagination.js', 'subcommands.js', 'announce.js',
+    'pagination.js', 'refreshButton.js', 'subcommands.js', 'announce.js',
   ];
   const violacoes = arestas((de, para) =>
     para === 'pkg:discord.js' && (!dentro(de, ...PODE) || PECA_PURA.test(de)));

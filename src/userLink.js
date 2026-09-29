@@ -187,18 +187,21 @@ function resolvePlayer(interaction, playerOptionName = 'player', serverOptionNam
  *
  * @param {{username: string|number, mode: string}} resolved o que o resolvePlayer devolveu
  * @param {(osuId: number) => Promise<Array>} buscarScores recebe o id já resolvido
+ * @param {object}  [opts]
+ * @param {boolean} [opts.fresh] busca o perfil sem passar pelo cache (botão 🔄).
+ *   Os scores são responsabilidade de `buscarScores`, que sabe qual chamada faz.
  * @returns {Promise<{user: object|null, scores: Array}>}
  */
-async function fetchPlayer({ username, mode }, buscarScores) {
+async function fetchPlayer({ username, mode }, buscarScores, { fresh = false } = {}) {
   const idConhecido = /^\d+$/.test(String(username)) ? Number(username) : null;
 
   if (idConhecido === null) {
-    const user = await osu.getUser(username, mode);
+    const user = await osu.getUser(username, mode, { fresh });
     return { user, scores: user ? await buscarScores(user.id) : [] };
   }
 
   const [perfil, scores] = await Promise.allSettled([
-    osu.getUser(idConhecido, mode),
+    osu.getUser(idConhecido, mode, { fresh }),
     buscarScores(idConhecido),
   ]);
 

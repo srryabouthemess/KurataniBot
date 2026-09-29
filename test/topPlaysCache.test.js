@@ -108,3 +108,47 @@ test('as plays recentes continuam SEM cache', async () => {
 
   assert.equal(chamadas.recent.length, 2, 'as plays recentes passaram a vir de cache');
 });
+
+test('`fresh` pula a leitura do cache e renova o que está guardado', async () => {
+  // O botão 🔄 do /topplays e do /profile: sem isto ele devolveria a lista de
+  // até um minuto atrás, que é justamente a que a pessoa quer ver trocada.
+  const original = stubs['../src/osu/officialApi'].bestScores;
+  let versao = 1;
+  stubs['../src/osu/officialApi'].bestScores = async (userId, limit) => {
+    chamadas.best.push(`${userId}:${limit}`);
+    return [{ pp: 1000 * versao }];
+  };
+
+  try {
+    const velha = await osu.getBestScores(108, 100, 'official');
+    versao = 2;
+    assert.equal((await osu.getBestScores(108, 100, 'official'))[0].pp, 1000, 'sem fresh, o cache vale');
+
+    const nova = await osu.getBestScores(108, 100, 'official', { fresh: true });
+    assert.equal(nova[0].pp, 2000);
+    assert.notEqual(nova, velha);
+    assert.equal(chamadas.best.length, 2);
+
+    // A resposta nova é gravada: o comando seguinte já a encontra.
+    assert.equal((await osu.getBestScores(108, 100, 'official'))[0].pp, 2000);
+    assert.equal(chamadas.best.length, 2);
+  } finally {
+    stubs['../src/osu/officialApi'].bestScores = original;
+  }
+});
+
+test('`fresh` que falha não apaga a lista guardada', async () => {
+  await osu.getBestScores(109, 100, 'official');
+  const original = stubs['../src/osu/officialApi'].bestScores;
+  stubs['../src/osu/officialApi'].bestScores = async () => { throw new Error('500 na API'); };
+
+  try {
+    await assert.rejects(() => osu.getBestScores(109, 100, 'official', { fresh: true }), /500 na API/);
+  } finally {
+    stubs['../src/osu/officialApi'].bestScores = original;
+  }
+
+  chamadas.best.length = 0;
+  assert.equal((await osu.getBestScores(109, 100, 'official')).length, 100);
+  assert.equal(chamadas.best.length, 0, 'o cache antigo continua servindo');
+});

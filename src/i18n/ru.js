@@ -88,6 +88,7 @@ module.exports = ({ ADMIN }) => ({
   profile_last_seen:       (ts) => `🔴 Был(а) в сети ${ts}`,
   profile_joined:          (date, ago) => `Регистрация: ${date} (${ago})`,
   profile_footer:          (label) => `osu! Stats • ${label}`,
+  profile_refresh_error:   '⚠️ Не удалось обновить профиль — показаны последние загруженные данные.',
 
   topplays_none:           'Плеев не найдено.',
   // `recorte` ("12/100 plays") приходит только когда фильтр что-то отсёк, и
@@ -98,6 +99,7 @@ module.exports = ({ ADMIN }) => ({
   topplays_none_match:     'Нет плеев, подходящих под эти фильтры.',
   topplays_bad_mods:       (input) => `❌ В \`${input}\` не распознан ни один мод. Используйте акронимы (\`HDDT\`) или \`NM\` для плеев без модов.`,
   topplays_error:          'Ошибка при получении топ плеев.',
+  topplays_refresh_error:  '⚠️ Не удалось обновить топ плеев — показаны последние загруженные данные.',
   pagination_not_yours:    '❌ Только автор команды может переключать страницы.',
   pagination_refresh_error: '⚠️ Не удалось обновить этот плей — показаны последние загруженные данные.',
 

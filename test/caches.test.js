@@ -40,6 +40,34 @@ test('consultar por nome e por ID gasta uma chamada só', async () => {
   }
 });
 
+test('`fresh` busca o perfil de novo e renova as duas chaves do cache', async () => {
+  // O botão 🔄 do /profile e do /topplays: sem isto o pp mostrado seria o de
+  // até um minuto atrás.
+  let versao = 1;
+  let chamadas = 0;
+  const original = officialApi.fetchUser;
+  officialApi.fetchUser = async () => {
+    chamadas++;
+    return { id: 555001, username: 'Farmer', pp: 1000 * versao };
+  };
+
+  try {
+    await osu.getUser('Farmer', 'official');
+    versao = 2;
+    assert.equal((await osu.getUser('Farmer', 'official')).pp, 1000, 'sem fresh, o cache vale');
+
+    assert.equal((await osu.getUser(555001, 'official', { fresh: true })).pp, 2000);
+    assert.equal(chamadas, 2);
+
+    // Nome e ID foram renovados juntos.
+    assert.equal((await osu.getUser('Farmer', 'official')).pp, 2000);
+    assert.equal((await osu.getUser(555001, 'official')).pp, 2000);
+    assert.equal(chamadas, 2);
+  } finally {
+    officialApi.fetchUser = original;
+  }
+});
+
 // ─── Cache negativo: mapa que a API oficial não conhece ───────────────────────
 
 /** Faz o officialGet falhar com o status pedido, contando as chamadas. */

@@ -37,6 +37,22 @@ const sortChoices = () => topFilter.SORTS.map(value => ({
   },
 }));
 
+/**
+ * A lista já ordenada e filtrada, e o que se deriva dela. Vale para a busca
+ * inicial e para a do refresh, que precisam chegar ao mesmo resultado.
+ */
+function organizar(todas, opcoes) {
+  const plays = topFilter.arrange(todas, opcoes);
+
+  return {
+    plays,
+    // Quantas de quantas, só quando o filtro tirou alguma: sem filtro o número
+    // repetiria o que a contagem de páginas já diz.
+    recorte:    plays.length < todas.length ? `${plays.length}/${todas.length} plays` : null,
+    totalPages: Math.ceil(plays.length / PAGE_SIZE),
+  };
+}
+
 module.exports = {
   data: modo.addOption(new SlashCommandBuilder()
     .setName('topplays')
@@ -129,23 +145,22 @@ module.exports = {
 
     try {
       // Perfil e plays na mesma viagem quando o link já deu o id (ver userLink).
-      const { user, scores: todas } = await fetchPlayer(
+      const inicial = await fetchPlayer(
         resolved,
         id => osu.getBestScores(id, FETCH_LIMIT, mode),
       );
-      if (!user) return interaction.editReply(s.player_not_found);
-      if (todas.length === 0) return interaction.editReply(s.topplays_none);
+      if (!inicial.user) return interaction.editReply(s.player_not_found);
+      if (inicial.scores.length === 0) return interaction.editReply(s.topplays_none);
 
       // Ordenar e filtrar acontece ANTES de qualquer enriquecimento: o custo por
       // score é da página exibida, não das cem buscadas (ver topFilter.js).
-      const plays = topFilter.arrange(todas, { sort, mods: filtro, reverse });
-      if (plays.length === 0) return interaction.editReply(s.topplays_none_match);
+      const inicialOrdenado = organizar(inicial.scores, { sort, mods: filtro, reverse });
+      if (inicialOrdenado.plays.length === 0) return interaction.editReply(s.topplays_none_match);
 
-      // Quantas de quantas, só quando o filtro tirou alguma: sem filtro o número
-      // repetiria o que a contagem de páginas já diz.
-      const recorte = plays.length < todas.length ? `${plays.length}/${todas.length} plays` : null;
-
-      const totalPages = Math.ceil(plays.length / PAGE_SIZE);
+      // Estado que o buildEmbed lê, e que o refresh troca por inteiro: uma play
+      // nova muda a ordem, as posições, o recorte e até o número de páginas.
+      let { user } = inicial;
+      let { plays, recorte, totalPages } = inicialOrdenado;
 
       // Mapa do topo de cada página, para o /score sem argumento (mapContext).
       // Fica fora do buildEmbed porque o embed é memoizado — voltar para uma
@@ -185,6 +200,37 @@ module.exports = {
           .setFooter({ text: s.topplays_footer(page + 1, totalPages, osu.getModeLabel(mode), recorte) });
       }
 
+      /**
+       * Refaz a busca da lista INTEIRA, sem cache, e reaplica os mesmos
+       * sort/mods/reverse. O perfil vem junto: a linha do autor traz o pp e o
+       * rank, que mudaram com a play nova.
+       *
+       * Busca pelo id que já se conhece, o que também poupa a consulta por nome.
+       * O estado só é trocado no fim — falha ou lista vazia lançam antes, e aí a
+       * tela continua mostrando o último top que deu certo.
+       */
+      async function refreshTop() {
+        const novo = await fetchPlayer(
+          { username: user.id, mode },
+          id => osu.getBestScores(id, FETCH_LIMIT, mode, { fresh: true }),
+          { fresh: true },
+        );
+        if (!novo.user || novo.scores.length === 0) {
+          throw new Error('topplays refresh: a busca nova não trouxe plays');
+        }
+
+        const arranjo = organizar(novo.scores, { sort, mods: filtro, reverse });
+        if (arranjo.plays.length === 0) {
+          throw new Error('topplays refresh: nenhuma play nova passa pelo filtro');
+        }
+
+        user = novo.user;
+        ({ plays, recorte, totalPages } = arranjo);
+        pageMapId.clear();
+
+        return { totalPages };
+      }
+
       // O embed da página é memoizado pelo paginate(): sem isso, voltar para
       // uma página já vista refazia tudo do zero — enriquecimento dos scores,
       // estrelas e PP de FC das mesmas 5 plays. Navegar 1→2→1 custava o triplo.
@@ -193,6 +239,8 @@ module.exports = {
         totalPages,
         buildEmbed,
         strings: s,
+        onRefresh: refreshTop,
+        refreshError: s.topplays_refresh_error,
         onPage: page => mapContext.remember(interaction, pageMapId.get(page), mode),
         // Adianta a próxima página inteira enquanto a pessoa lê a atual.
         //

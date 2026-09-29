@@ -27,8 +27,8 @@ function buildRow(id, page, totalPages, { onRefresh, refreshing } = {}) {
       .setDisabled(page === 0),
   );
 
-  // Só existe quando o comando passa `onRefresh` — /topplays e /score continuam
-  // com o par de botões de sempre até decidirem pedir o refresh também.
+  // Só existe quando o comando passa `onRefresh` — o /score continua com o par
+  // de botões de sempre até decidir pedir o refresh também.
   if (onRefresh) {
     row.addComponents(
       new ButtonBuilder()
@@ -63,19 +63,40 @@ function buildRow(id, page, totalPages, { onRefresh, refreshing } = {}) {
  * @param {object}   options.strings      i18n já resolvido (para o aviso de dono)
  * @param {(page: number) => void} [options.onPage]   chamado a cada página exibida
  * @param {(page: number) => void} [options.prefetch] aquece a página seguinte
- * @param {(page: number) => Promise<void>} [options.onRefresh]
- *   busca dados novos da play atual e atualiza o estado de onde `buildEmbed`
- *   lê (ex: substitui o item correspondente no array de plays já buscado).
- *   Sem isto o botão 🔄 nem aparece. Erros aqui não derrubam a página: o
- *   embed atual fica como está e a pessoa recebe um aviso discreto.
+ * @param {(page: number) => Promise<void|{totalPages: number}>} [options.onRefresh]
+ *   busca dados novos e atualiza o estado de onde `buildEmbed` lê. Sem isto o
+ *   botão 🔄 nem aparece — e com ele aparece mesmo com uma página só.
+ *
+ *   Devolvendo nada, só a página atual foi renovada (ex: o /rs troca a play
+ *   correspondente no array já buscado) e só ela sai do cache. Devolvendo
+ *   `{ totalPages }`, a lista INTEIRA foi recarregada (ex: o /topplays, onde uma
+ *   play nova muda a ordem, as posições e até o número de páginas): o cache todo
+ *   é descartado e a página atual é presa ao novo limite.
+ *
+ *   Erros aqui não derrubam a página: o embed atual fica como está e a pessoa
+ *   recebe um aviso discreto. Quem lança deve fazê-lo ANTES de mexer no estado.
+ * @param {string} [options.refreshError] aviso do refresh que falhou, quando o
+ *   `strings.pagination_refresh_error` ("essa play") não serve ao comando
  */
-async function paginate(interaction, { id, totalPages, buildEmbed, strings, onPage, prefetch, onRefresh }) {
+async function paginate(interaction, {
+  id, totalPages, buildEmbed, strings, onPage, prefetch, onRefresh, refreshError,
+}) {
   // Memoiza a página montada: voltar para uma anterior não deve refazer o
   // enriquecimento nem o cálculo de PP.
   const cache = new Map();
 
+  // Muda a cada recarga completa (ver `onRefresh`). Um embed que começou a ser
+  // montado antes dela lê o estado antigo, e guardá-lo devolveria à tela, na
+  // próxima visita, exatamente o que o refresh acabou de trocar.
+  let geracao = 0;
+
   async function getEmbed(page) {
-    if (!cache.has(page)) cache.set(page, await buildEmbed(page));
+    if (!cache.has(page)) {
+      const g = geracao;
+      const montado = await buildEmbed(page);
+      if (g !== geracao) return montado;
+      cache.set(page, montado);
+    }
     // Fora do buildEmbed de propósito: uma página já vista não passa por lá de
     // novo, mas ainda precisa atualizar o contexto de mapa do canal.
     onPage?.(page);
@@ -100,13 +121,17 @@ async function paginate(interaction, { id, totalPages, buildEmbed, strings, onPa
   let refreshing = false;
   const row = (p) => buildRow(id, p, totalPages, { onRefresh, refreshing });
 
+  // Com refresh, a linha aparece até numa página só: ◀️ e ▶️ ficam apagados e o
+  // 🔄 é o que sobra para usar. Sem refresh, uma página só continua sem botões.
+  const comBotoes = () => totalPages > 1 || !!onRefresh;
+
   const embed = await getEmbed(page);
   const message = await interaction.editReply({
     embeds: [embed],
-    components: totalPages > 1 ? [row(page)] : [],
+    components: comBotoes() ? [row(page)] : [],
   });
 
-  if (totalPages <= 1) return message;
+  if (!comBotoes()) return message;
   warmNext(page);
 
   const collector = message.createMessageComponentCollector({ idle: IDLE_MS });
@@ -143,12 +168,28 @@ async function paginate(interaction, { id, totalPages, buildEmbed, strings, onPa
 
       let fresh = null;
       let failed = false;
+      let recarregou = false;
       try {
         // O comando atualiza o estado de onde `buildEmbed` lê (ex: substitui
         // a play no array já buscado); a página em cache não pode sobreviver
         // a isso, senão o refresh mostraria o mesmo dado de antes.
-        await onRefresh(page);
-        cache.delete(page);
+        const recarga = await onRefresh(page);
+
+        if (recarga?.totalPages !== undefined) {
+          if (!Number.isInteger(recarga.totalPages) || recarga.totalPages < 1) {
+            throw new Error(`refresh devolveu totalPages inválido: ${recarga.totalPages}`);
+          }
+          // A lista inteira mudou: nenhuma página em cache vale, e a atual pode
+          // nem existir mais (o top encolheu, ou o filtro passou a pegar menos).
+          recarregou = true;
+          geracao++;
+          cache.clear();
+          totalPages = recarga.totalPages;
+          page = Math.min(page, totalPages - 1);
+        } else {
+          cache.delete(page);
+        }
+
         fresh = await getEmbed(page);
       } catch (error) {
         logError('pagination:refresh', error);
@@ -158,13 +199,18 @@ async function paginate(interaction, { id, totalPages, buildEmbed, strings, onPa
       refreshing = false;
       // Quem navegou pra outra página enquanto isto buscava já viu a página
       // certa por outro handler — nada aqui deveria sobrescrever a tela dela.
-      if (meu !== clique) return;
+      // Exceto numa recarga completa: aí o dado na tela, seja de que página for,
+      // é o antigo, e o cursor já foi preso ao limite novo.
+      if (meu !== clique && !recarregou) return;
 
       if (failed) {
         // Embed atual preservado — nada de sobrescrever com dado inválido.
         await interaction.editReply({ components: [row(page)] }).catch(() => {});
         await i
-          .followUp({ content: strings.pagination_refresh_error, flags: MessageFlags.Ephemeral })
+          .followUp({
+            content: refreshError ?? strings.pagination_refresh_error,
+            flags: MessageFlags.Ephemeral,
+          })
           .catch(() => {});
       } else {
         await interaction.editReply({ embeds: [fresh], components: [row(page)] }).catch(() => {});
@@ -185,7 +231,14 @@ async function paginate(interaction, { id, totalPages, buildEmbed, strings, onPa
     await i.deferUpdate().catch(() => {});
 
     try {
-      const next = await getEmbed(page);
+      const g = geracao;
+      let next = await getEmbed(page);
+      // Uma recarga completa terminou enquanto esta página era montada: o que
+      // saiu é do estado antigo, e a página pode ter deixado de existir.
+      if (g !== geracao) {
+        page = Math.min(page, totalPages - 1);
+        next = await getEmbed(page);
+      }
       // Outro clique assumiu enquanto esta página era montada: quem chegou
       // depois é que representa o que a pessoa quer ver agora.
       if (meu !== clique) return;
@@ -199,7 +252,9 @@ async function paginate(interaction, { id, totalPages, buildEmbed, strings, onPa
       logError('pagination', error);
       if (meu !== clique) return;
 
-      page = shown;
+      // Presa ao limite atual: uma recarga completa pode ter encolhido a lista
+      // enquanto esta página falhava.
+      page = Math.min(shown, totalPages - 1);
       // A página em cache não falha de novo; devolve os botões ao estado certo.
       await interaction
         .editReply({ components: [row(page)] })

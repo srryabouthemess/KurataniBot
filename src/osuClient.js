@@ -237,10 +237,16 @@ function _userCacheKey(mode, value) {
 
 // ─── Consulta ─────────────────────────────────────────────────────────────────
 
-async function getUser(username, mode = DEFAULT_MODE) {
+/**
+ * @param {object}  [opts]
+ * @param {boolean} [opts.fresh] ignora o que está guardado e busca de novo — é o
+ *   que o botão 🔄 usa. A resposta nova continua sendo GRAVADA no cache: quem
+ *   pediu para atualizar renova o dado dos comandos seguintes também.
+ */
+async function getUser(username, mode = DEFAULT_MODE, { fresh = false } = {}) {
   const cacheKey = _userCacheKey(mode, username);
-  const cached = _userCache.get(cacheKey);
-  metrics.cache('usuario', Boolean(cached));
+  const cached = fresh ? null : _userCache.get(cacheKey);
+  if (!fresh) metrics.cache('usuario', Boolean(cached));
   if (cached) return cached;
 
   const user = await apiFor(mode).fetchUser(username, mode);
@@ -250,6 +256,13 @@ async function getUser(username, mode = DEFAULT_MODE) {
     // vier pelo link, e vice-versa. Quando a consulta já foi por ID, as duas
     // chaves coincidem e a segunda escrita só renova a mesma entrada.
     _userCache.set(_userCacheKey(mode, user.id), user);
+    // Refresh por ID (é como o 🔄 busca): sem renovar também a chave do NOME, quem
+    // consultasse o mesmo jogador pelo nome logo depois veria o pp de antes.
+    // Nick só de dígitos ficaria de fora: a chave dele seria a de um ID, e
+    // sobrescreveria a entrada de outra pessoa.
+    if (fresh && user.username && !/^\d+$/.test(user.username)) {
+      _userCache.set(_userCacheKey(mode, user.username), user);
+    }
   }
   return user;
 }
@@ -284,11 +297,16 @@ const BEST_TTL_MS = USER_CACHE_TTL_MS;
 const BEST_MAX    = 300;
 const _bestCache = new TtlCache({ ttlMs: BEST_TTL_MS, max: BEST_MAX });
 
-async function getBestScores(userId, limit = 10, mode = DEFAULT_MODE) {
+/**
+ * `fresh` pula a leitura do cache e grava o resultado (ver `getUser`). O refresh
+ * do /topplays e do /profile precisa dele: sem, o botão 🔄 devolveria a lista de
+ * até um minuto atrás — justamente a que a pessoa quer ver trocada.
+ */
+async function getBestScores(userId, limit = 10, mode = DEFAULT_MODE, { fresh = false } = {}) {
   const chave = `${mode}:${userId}:${limit}`;
 
-  const guardado = _bestCache.get(chave);
-  metrics.cache('topPlays', Boolean(guardado));
+  const guardado = fresh ? null : _bestCache.get(chave);
+  if (!fresh) metrics.cache('topPlays', Boolean(guardado));
   if (guardado) return guardado;
 
   const scores = await apiFor(mode).bestScores(userId, limit, mode);

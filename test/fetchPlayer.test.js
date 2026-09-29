@@ -128,3 +128,17 @@ test('falha ao buscar o perfil sobe, mesmo com os scores prontos', async () => {
     /500 no perfil/,
   );
 });
+
+test('`fresh` chega ao perfil, com id conhecido ou não (é o botão 🔄)', async () => {
+  const opcoes = [];
+  osuMock.getUser = async (_v, _mode, opts) => { opcoes.push(opts); return JOGADOR; };
+
+  await fetchPlayer({ username: 42, mode: 'official' }, async () => [], { fresh: true });
+  await fetchPlayer({ username: 'pudim2', mode: 'official' }, async () => [], { fresh: true });
+  assert.deepEqual(opcoes, [{ fresh: true }, { fresh: true }]);
+
+  // Sem pedir, ninguém fura o cache.
+  opcoes.length = 0;
+  await fetchPlayer({ username: 42, mode: 'official' }, async () => []);
+  assert.deepEqual(opcoes, [{ fresh: false }]);
+});
