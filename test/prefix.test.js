@@ -324,6 +324,33 @@ test('prefixo sozinho convida a começar', async t => {
   await t.test('sugere o modo texto com o prefixo configurado', async () => {
     assert.match((await run('k!')).reply, /k!help/);
   });
+
+  // O teclado do celular capitaliza a primeira letra: `K!` vale como `k!`. O
+  // texto do convite continua mostrando o prefixo configurado, em minúsculo.
+  await t.test('K! maiúsculo conta como prefixo puro', async () => {
+    const { context, reply } = await run('K!');
+    assert.equal(context, null);
+    assert.match(reply, /\/help/);
+    assert.match(reply, /k!help/);
+  });
+});
+
+test('prefixo aceita K! maiúsculo', async t => {
+  await t.test('K!rs roda o comando como k!rs', async () => {
+    const { context } = await run('K!rs mrekk');
+    assert.equal(context.options.getString('player'), 'mrekk');
+  });
+
+  await t.test('nome do comando em maiúsculo também', async () => {
+    const { context } = await run('K!RS mrekk');
+    assert.equal(context.options.getString('player'), 'mrekk');
+  });
+
+  await t.test('K!qualquercoisa continua calado', async () => {
+    const { context, sent } = await run('K!naoexiste');
+    assert.equal(context, null);
+    assert.equal(sent.length, 0);
+  });
 });
 
 test('/topif por texto', async t => {

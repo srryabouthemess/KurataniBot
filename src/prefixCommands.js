@@ -112,13 +112,25 @@ function edicaoValida(oldMessage, newMessage) {
 // ─── Despacho ─────────────────────────────────────────────────────────────────
 
 /**
+ * O texto começa com o prefixo, sem diferenciar maiúsculas de minúsculas?
+ *
+ * O teclado do celular capitaliza a primeira letra da mensagem, e `K!rs` não
+ * pode falhar por isso. Comparar só o pedaço do tamanho do prefixo mantém o
+ * `slice(PREFIX.length)` de quem chama valendo, já que o conteúdo original não
+ * é alterado.
+ */
+function startsWithPrefix(content) {
+  return content.slice(0, PREFIX.length).toLowerCase() === PREFIX.toLowerCase();
+}
+
+/**
  * @returns {{command: object, spec: object, args: string[]}|null} null quando a
  *   mensagem não é um comando conhecido — e aí o bot fica em silêncio, porque
  *   `k!` é curto e vai colidir com conversa normal. A única exceção é o
  *   prefixo sozinho, tratada no `handleMessage` (ver isBarePrefix).
  */
 function resolveCommand(client, specs, content) {
-  if (!content.startsWith(PREFIX)) return null;
+  if (!startsWithPrefix(content)) return null;
 
   const tokens = tokenize(content.slice(PREFIX.length));
   const name   = tokens.shift()?.toLowerCase();
@@ -141,7 +153,7 @@ function resolveCommand(client, specs, content) {
  * responder a cada uma viraria ruído no canal.
  */
 function isBarePrefix(content) {
-  return content.trim() === PREFIX;
+  return content.trim().toLowerCase() === PREFIX.toLowerCase();
 }
 
 /** Por onde começar, para quem acabou de descobrir que o bot existe. */
