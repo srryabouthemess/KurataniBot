@@ -36,9 +36,10 @@ function chaveDoDaycore() {
 }
 
 /**
- * O MySQL respondeu? Depois do `deferReply`, e não antes como no /invitecode:
- * o `connectTimeout` é de 5s e a interação só espera 3s pela primeira resposta
- * — com o banco lento, a pessoa veria "a interação falhou" em vez do aviso.
+ * O MySQL respondeu? Depois do `deferReply`, como no /invitecode (onde o defer
+ * agora é do despacho): o `connectTimeout` é de 5s e a interação só espera 3s
+ * pela primeira resposta — com o banco lento, a pessoa veria "a interação
+ * falhou" em vez do aviso.
  */
 async function mysqlNoAr(interaction, s, label) {
   const check = await daycore.checkConnection();
@@ -50,6 +51,11 @@ async function mysqlNoAr(interaction, s, label) {
 }
 
 module.exports = {
+  // Valida a entrada e responde o erro em efêmero ANTES do próprio defer
+  // público; um defer do despacho tornaria esse erro público (ver
+  // bot/dispatch.js).
+  defer: false,
+
   data: new SlashCommandBuilder()
     .setName('matchcost')
     .setDescription('Performance rating of each player in a multiplayer match')

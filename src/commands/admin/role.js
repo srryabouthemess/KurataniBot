@@ -22,7 +22,7 @@
 
 const {
   SlashCommandBuilder, EmbedBuilder, ApplicationIntegrationType,
-  InteractionContextType, MessageFlags,
+  InteractionContextType,
 } = require('discord.js');
 
 const osu = require('../../osuClient');
@@ -67,6 +67,10 @@ module.exports = {
   // Como o /moderate e o /staff: a resposta traz privilégio de terceiro, e em
   // texto a flag de efêmero some — ver o comentário em prefix/spec.js.
   prefix: { slashOnly: true },
+  // O despacho faz o defer efêmero (ver bot/dispatch.js): a checagem de
+  // privilégio e a do Redis correm com a interação já respondida, e toda
+  // recusa sai por `editReply` — efêmera como antes.
+  defer: 'ephemeral',
 
   data: new SlashCommandBuilder()
     .setName('role')
@@ -109,15 +113,13 @@ module.exports = {
     // O cargo escolhido é que decide o privilégio exigido — ver ROLES.
     const staff = await resolveStaff(interaction, role.requires, s);
     if (staff.error) {
-      return interaction.reply({ content: staff.error, flags: MessageFlags.Ephemeral });
+      return interaction.editReply(staff.error);
     }
 
     const redisError = await checkRedisOrError(s);
     if (redisError) {
-      return interaction.reply({ content: redisError, flags: MessageFlags.Ephemeral });
+      return interaction.editReply(redisError);
     }
-
-    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
     try {
       const reason   = interaction.options.getString('reason');

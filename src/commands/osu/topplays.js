@@ -54,6 +54,11 @@ function organizar(todas, opcoes) {
 }
 
 module.exports = {
+  // Valida a entrada e responde o erro em efêmero ANTES do próprio defer
+  // público; um defer do despacho tornaria esse erro público (ver
+  // bot/dispatch.js).
+  defer: false,
+
   data: modo.addOption(new SlashCommandBuilder()
     .setName('topplays')
     .setDescription("Show a player's top plays")

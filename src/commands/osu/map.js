@@ -46,6 +46,11 @@ const ACCS = [100, 99, 98, 97, 95];
 const cemPara = (acc, objetos) => Math.round((3 * objetos * (1 - acc / 100)) / 2);
 
 module.exports = {
+  // Valida a entrada e responde o erro em efêmero ANTES do próprio defer
+  // público; um defer do despacho tornaria esse erro público (ver
+  // bot/dispatch.js).
+  defer: false,
+
   data: modo.addOption(new SlashCommandBuilder()
     .setName('map')
     .setDescription('Show a beatmap and what a FC on it would pay')

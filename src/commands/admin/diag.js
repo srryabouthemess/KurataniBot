@@ -92,6 +92,9 @@ function linhasDeComandos(comandos) {
 }
 
 module.exports = {
+  // Responde direto: lê só contadores em memória.
+  defer: false,
+
   data: new SlashCommandBuilder()
     .setName('diag')
     .setDescription('Bot diagnostics (server administrators)')

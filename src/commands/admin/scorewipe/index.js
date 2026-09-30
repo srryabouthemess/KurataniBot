@@ -54,7 +54,7 @@
 
 const {
   SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle,
-  StringSelectMenuBuilder, ApplicationIntegrationType, InteractionContextType, MessageFlags,
+  StringSelectMenuBuilder, ApplicationIntegrationType, InteractionContextType,
 } = require('discord.js');
 
 const osu = require('../../../osuClient');
@@ -75,6 +75,10 @@ const MODE_CHOICES = Object.entries(daycore.GameModes)
 module.exports = {
   // Como o /wipe: toda resposta é efêmera, e em texto a flag some.
   prefix: { slashOnly: true },
+  // O despacho faz o defer efêmero (ver bot/dispatch.js): a checagem de
+  // privilégio e a do Redis correm com a interação já respondida, e toda
+  // recusa sai por `editReply` — efêmera como antes.
+  defer: 'ephemeral',
 
   data: new SlashCommandBuilder()
     .setName('scorewipe')
@@ -116,15 +120,13 @@ module.exports = {
     // este canal, então esta linha é a tranca inteira.
     const staff = await resolveStaff(interaction, daycore.Privileges.DEVELOPER, s);
     if (staff.error) {
-      return interaction.reply({ content: staff.error, flags: MessageFlags.Ephemeral });
+      return interaction.editReply(staff.error);
     }
 
     const redisError = await checkRedisOrError(s);
     if (redisError) {
-      return interaction.reply({ content: redisError, flags: MessageFlags.Ephemeral });
+      return interaction.editReply(redisError);
     }
-
-    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
     try {
       const modeNum   = interaction.options.getInteger('mode');

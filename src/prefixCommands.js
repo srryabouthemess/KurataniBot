@@ -29,6 +29,7 @@ const { tokenize } = require('./prefix/tokenize');
 const { buildSpec } = require('./prefix/spec');
 const { parseArgs } = require('./prefix/parseArgs');
 const { MessageCommand, buildOptionAccessors } = require('./prefix/MessageCommand');
+const { executar } = require('./bot/dispatch');
 
 /**
  * Intents extras necessários para ler mensagens. Ficam vazios quando o modo
@@ -211,8 +212,9 @@ async function handleMessage(client, specs, message, editada = false) {
 
   try {
     // Mesma chave do slash: o `execute` é o mesmo, e separar por via dobraria
-    // as linhas do /diag para medir o que é igual dos dois lados.
-    await metrics.timed(name, () => command.execute(context));
+    // as linhas do /diag para medir o que é igual dos dois lados. O despacho
+    // também: o `defer` que o comando declara vale aqui (ver bot/dispatch.js).
+    await metrics.timed(name, () => executar(command, context));
   } catch (error) {
     logError(`prefix:${name}`, error);
     await refuse(s.error_generic);

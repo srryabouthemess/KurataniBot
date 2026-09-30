@@ -68,6 +68,11 @@ const CHALLENGE_TTL_MS = 30 * 60 * 1000;
  * concede privilégio a terceiro, não a si mesmo — e exige a colaboração dela.
  */
 module.exports = {
+  // `remove` e as recusas respondem direto; `confirm`, `list` e `register`
+  // fazem o próprio defer. Tudo o que vem antes é local (banco e permissão do
+  // Discord), então não há o que o defer do despacho proteger.
+  defer: false,
+
   // Efêmero em tudo: a lista de vínculos diz quem no Discord é quem no jogo, e
   // o register confirma cargo. Em texto a flag some e vira mensagem no canal —
   // ver o comentário em prefix/spec.js.

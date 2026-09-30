@@ -3,6 +3,7 @@ const { Client, Collection, GatewayIntentBits, REST, Routes, MessageFlags } = re
 const { logError } = require('./lib/logger');
 const { t, forGuild } = require('./i18n');
 const { loadCommands, commandsPayload, hashCommands } = require('./bot/loadCommands');
+const { executar } = require('./bot/dispatch');
 const db = require('./db');
 const pp = require('./pp');
 const cooldowns = require('./cooldowns');
@@ -162,8 +163,12 @@ client.on('interactionCreate', async interaction => {
   }
 
   try {
+    // O defer padrão sai daqui, antes do execute (ver bot/dispatch.js). Fica
+    // dentro do timed para o /diag medir o mesmo de antes, quando cada
+    // comando deferia por conta própria.
+    //
     // Só o nome do comando: nada de usuário ou guild nas métricas.
-    await metrics.timed(interaction.commandName, () => command.execute(interaction));
+    await metrics.timed(interaction.commandName, () => executar(command, interaction));
   } catch (error) {
     logError(`command:${interaction.commandName}`, error);
 
@@ -178,8 +183,8 @@ client.on('interactionCreate', async interaction => {
     let content = 'Erro ao executar o comando.';
     try { content = t(interaction).error_generic; } catch { /* fica o fallback */ }
 
-    // A interação já pode ter sido respondida/deferida dentro do próprio
-    // comando antes de falhar — usar reply() nesse caso lança
+    // A interação já pode ter sido respondida/deferida (pelo despacho ou
+    // dentro do próprio comando) antes de falhar — usar reply() nesse caso lança
     // InteractionAlreadyReplied, e como isso roda sem outro catch por perto
     // vira uma unhandled rejection que derruba o processo (Node 15+). O
     // .catch(() => {}) no fim é a rede de segurança final caso a própria

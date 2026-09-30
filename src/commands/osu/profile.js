@@ -160,6 +160,11 @@ async function montarPerfil(resolved, s, { fresh = false, anexado = null } = {})
 }
 
 module.exports = {
+  // Valida a entrada e responde o erro em efêmero ANTES do próprio defer
+  // público; um defer do despacho tornaria esse erro público (ver
+  // bot/dispatch.js).
+  defer: false,
+
   data: modo.addOption(new SlashCommandBuilder()
     .setName('profile')
     .setDescription("Show a player's osu! profile")

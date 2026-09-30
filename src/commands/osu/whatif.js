@@ -30,6 +30,11 @@ function simulateWhatIf(currentPlays, hypotheticalPP) {
 }
 
 module.exports = {
+  // Valida a entrada e responde o erro em efêmero ANTES do próprio defer
+  // público; um defer do despacho tornaria esse erro público (ver
+  // bot/dispatch.js).
+  defer: false,
+
   data: modo.addOption(new SlashCommandBuilder()
     .setName('whatif')
     .setDescription('Simulate how much pp you would gain from a hypothetical score')
