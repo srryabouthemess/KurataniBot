@@ -70,6 +70,12 @@ test('score traduzido mantém os números certos', () => {
   assert.equal(s.beatmapset.id, 1130415);
 });
 
+test('o id do score sobrevive à tradução', () => {
+  // O /recent casa a play por ele: o 🔄 e o "PB #N" (ver recentMerge.scoreIdOf).
+  assert.equal(ripple.normalizeScore(SCORE_V1).score_id, '519553671');
+  assert.equal(ripple.normalizeScore({ ...SCORE_V1, id: undefined }).score_id, null);
+});
+
 test('mods viram acrônimos', () => {
   // 24 = HD (8) + HR (16). Bitmask, como no bancho.py.
   assert.deepEqual(ripple.normalizeScore(SCORE_V1).mods.sort(), ['HD', 'HR']);
