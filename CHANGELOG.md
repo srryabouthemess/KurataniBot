@@ -2,6 +2,24 @@
 
 ---
 
+# Sessão de 2026-09-30 (plays do bancho.py pela v1)
+
+## 🔧 Mudanças
+
+- **Top e recentes de bancho.py saem da v1 do próprio bancho.py.** [`scores.js`](src/osu/banchoPyApi/scores.js)
+  - Também no Daycore, que lia o `get_player_scores` da Shiina-Web. Aquela
+    resposta trazia pp e acc truncados e nenhum acerto nem combo, e o bot
+    buscava o detalhe de cada play para completar.
+  - O detalhe de score (`/v2/scores/{id}`) só sai quando a lista vem sem
+    acertos ou combo. Num `/nc` frio de 100 plays, a fila do servidor cai de
+    ~205 para ~105 requisições (a outra metade é o mapa de cada play).
+  - Plays em mapas **Approved** passam a aparecer no top, como já contavam no
+    pp do perfil.
+  - `limit` acima de 100 é clampado: a v1 responde 422 e a lista sairia vazia.
+  - A investigação: [`docs/investigacoes/2026-09-30-daycore-scores-v1.md`](docs/investigacoes/2026-09-30-daycore-scores-v1.md).
+
+---
+
 # Sessão de 2026-09-27 (menção, link oficial, edição e Try #N)
 
 ## ✨ Novidades

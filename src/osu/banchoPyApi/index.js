@@ -6,17 +6,20 @@
  * `bestScores`, `recentScores`, `beatmapScores`, `userUrl`, `mapUrl` — para o
  * osuClient poder escolher um ou outro sem saber a diferença.
  *
- * ATENÇÃO: "bancho.py" aqui quer dizer a stack completa. As top plays vêm de
- * `get_player_scores`, que é da Shiina-Web (o front-end) e não do bancho.py —
- * por isso `webApi` e `banchoV1/V2` são endereços separados no registro: um
- * servidor com outro front responde o resto e falha nessa.
+ * Tudo sai do próprio bancho.py-ex (v1 e v2), tenha o servidor o front-end
+ * Shiina-Web ou não. Ele já foi fonte de duas coisas, e deixou de ser:
  *
- * O rank global também saía de lá, do `get_rank_cache`, e deixou de sair: ele
- * não existe fora da Shiina-Web e não traz o rank do país. As duas posições vêm
- * da v1 do bancho.py-ex, que todo servidor desses tem (ver fetchUser).
+ *   - o rank global, do `get_rank_cache`: não existe fora da Shiina-Web e não
+ *     traz o rank do país (ver fetchUser);
+ *   - as top e as recentes, do `get_player_scores` dela: pp e acc truncados,
+ *     sem acertos nem combo, o que custava uma requisição de detalhe por play
+ *     (ver playerScores em scores.js).
+ *
+ * Do front-end sobram os selos de grupo, raspados da página pública — é para
+ * isso que o `webApi` do registro ainda diz se ele existe.
  *
  * ── Como está dividido ────────────────────────────────────────────────────────
- *   http.js       as três portas de rede (Shiina-Web, v1, v2)
+ *   http.js       as portas de rede (v1, v2)
  *   normalize.js  resposta do servidor → formato da API oficial (puro)
  *   server.js     leituras cruas, sem cache, para os comandos administrativos
  *   lookups.js    id por nome, mapa por md5, nick por id (com cache)

@@ -245,7 +245,8 @@ module.exports = {
         // Adianta a próxima página inteira enquanto a pessoa lê a atual.
         //
         // O enriquecimento vem PRIMEIRO, e não os arquivos: em servidor privado
-        // ele é uma requisição por score (294–843ms medidos numa página de
+        // ele busca o mapa de cada score no servidor (e, quando a lista vem sem
+        // acertos, o detalhe do score — 294–843ms medidos numa página de
         // cinco), enquanto o .osu quase sempre já está no cache em disco. Era o
         // que sobrava no relógio depois que o cálculo de PP saiu dele.
         prefetch: async (page) => {

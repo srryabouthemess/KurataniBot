@@ -1,8 +1,7 @@
 /**
  * osu/banchoPyApi/http.js
- * As três portas de rede de um servidor bancho.py: a API do front-end
- * (Shiina-Web), a v1 e a v2 do bancho.py-ex. Todas passam pelo rate limiter do
- * servidor e pelo retry.
+ * As portas de rede de um servidor bancho.py: a v1 e a v2 do bancho.py-ex. As
+ * duas passam pelo rate limiter do servidor e pelo retry.
  */
 
 const axios = require('axios');
@@ -27,25 +26,18 @@ const PRIVATE_MODE = servers.resolveKey('private') ?? servers.defaultKey();
  *
  * Vale para o servidor, não para o tipo — o mesmo adaptador atende bancho.py
  * com Shiina-Web (Daycore) e sem (EZPP Farm).
+ *
+ * Hoje decide só o que é conceito do front-end: os selos de grupo (groups.js).
+ * Já decidiu de onde vinham as plays — ver o `playerScores` em scores.js.
  */
 const temShiina = (mode) => Boolean(servers.get(mode).webApi);
 
-/**
- * GET na API do front-end (Shiina-Web) do servidor.
- *
- * É um serviço DIFERENTE do bancho.py, apesar de conviverem no mesmo domínio:
- * o `get_player_scores` daqui não é o de lá. Só chame depois de conferir o
- * `temShiina` — num servidor sem Shiina-Web este endereço responde 200 com o
- * HTML da página, que viraria "resposta vazia" silenciosa.
- */
-async function webApiGet(mode, endpoint, params = {}) {
-  const server = servers.get(mode);
-  const res = await withRetry(async () => {
-    await rateLimiter.acquire(`server:${server.namespace}`);
-    return axios.get(`${server.webApi}/${endpoint}`, { params, timeout: 10000 });
-  });
-  return res.data;
-}
+// (Havia um webApiGet aqui, o GET na API do front-end. O último chamador dele
+// era o `get_player_scores` da Shiina-Web, e as plays passaram a vir da v1 do
+// bancho.py — ver o `playerScores` em scores.js. Se algum endpoint que só a
+// Shiina-Web tem voltar a ser lido, ele volta junto, com o cuidado que tinha:
+// num servidor sem Shiina-Web o `/api/v1/...` responde 200 com o HTML da
+// página, que viraria "resposta vazia" calada — conferir o `temShiina` antes.)
 
 /**
  * GET na API v1 do bancho.py-ex.
@@ -80,7 +72,6 @@ async function banchoV2Get(mode, path, params = {}) {
 module.exports = {
   PRIVATE_MODE,
   temShiina,
-  webApiGet,
   banchoV1Get,
   banchoV2Get,
 };

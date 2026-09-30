@@ -45,17 +45,15 @@ Só a URL é obrigatória. A chave (`daycore`, `daycore_rx`) vira o valor da op�
 
 As URLs de API seguem a convenção do [onl-docker](https://github.com/osu-NoLimits/onl-docker) — `api.<domínio>` e `a.<domínio>` —, sobrescrevíveis com `SERVER_<CHAVE>_API` e `SERVER_<CHAVE>_AVATARS`. `SERVER_<CHAVE>_LABEL` muda o nome exibido. O Discord limita 25 escolhas por opção.
 
-**As top plays vêm do front-end, não do bancho.py.** Na stack padrão quem responde é a Shiina-Web (`get_player_scores`, em `<site>/api/v1`). Se o seu servidor roda outro front-end, diga:
+**Plays e ranks não dependem do front-end.** As top plays e as recentes saem do `get_player_scores` da v1 do bancho.py-ex, e o rank global e o do país do `get_player_info` da mesma v1 — em qualquer servidor desses, com Shiina-Web ou não. (As plays já vieram da Shiina-Web: ela manda pp e acc truncados e nenhum acerto, e o bot pagava uma requisição de detalhe por play para completar.)
+
+**O front-end só decide os grupos.** Se o seu servidor roda outro front-end que não a Shiina-Web, diga:
 
 ```bash
 SERVER_<CHAVE>_WEB=none
 ```
 
-e o bot busca o `get_player_scores` do próprio bancho.py. É o que o EZPP Farm usa. Sem isso, os pedidos vão para um endereço que devolve a página HTML: o `/topplays` sai vazio, sem erro nenhum no log.
-
-**Os ranks não dependem do front-end.** O global e o do país saem do `get_player_info` da v1 do bancho.py-ex, que todo servidor desses tem — inclusive os com Shiina-Web, que antes davam só o global.
-
-O mesmo campo aceita um endereço, para front-end que serve a API noutro lugar: `SERVER_<CHAVE>_WEB=https://front.exemplo.org/api/v1`.
+É o que o EZPP Farm usa. O campo também aceita um endereço, para front-end que serve a API noutro lugar: `SERVER_<CHAVE>_WEB=https://front.exemplo.org/api/v1`.
 
 **Sem Shiina-Web não há grupos de jogador.** Os selos embaixo do nick (✅ Legit, ❌ Closet Cheating…) são desenho dela — o `/leaderboard` e o `/topscores` simplesmente não os exibem, e o `/topscores` deixa de filtrar por grupo.
 

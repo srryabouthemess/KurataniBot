@@ -78,8 +78,10 @@ function normalizeScorePrivate(v1, v2) {
   const pp = parseFloat(v2?.pp ?? v1.pp ?? 0);
   const acc = parseFloat(v2?.acc ?? v1.acc ?? 0) / 100;
   // O combo cai para o lado v1 porque a resposta nativa do bancho.py já o traz
-  // (a da Shiina-Web não tem o campo, e ali o `?? null` continua valendo). Sem
-  // isso, uma falha no detalhe da v2 apagaria um número que já estava em mãos.
+  // (a da Shiina-Web, que já foi a fonte do Daycore, não tinha o campo, e ali o
+  // `?? null` continua valendo). Sem isso, uma falha no detalhe da v2 apagaria
+  // um número que já estava em mãos. Hoje, com o combo e os acertos na lista,
+  // o detalhe nem é buscado (ver `jaTemDetalhe` em scores.js).
   const max_combo = v2?.max_combo ?? v1.max_combo ?? null;
   const grade = v2?.grade ?? v1.grade ?? 'F';
  
@@ -142,9 +144,14 @@ function normalizeScorePrivate(v1, v2) {
  * Os dois endpoints têm o mesmo nome e devolvem coisas diferentes: a Shiina-Web
  * manda o mapa achatado (`map_id`, `map_set_id`, `map_name`) e o id em
  * `score_id`; o bancho.py manda o mapa aninhado em `beatmap` e o id em `id`.
- * Traduzir aqui, na entrada, é o que mantém o `normalizeScorePrivate` e o
- * `enrichScores` sem um segundo caminho — eles nunca ficam sabendo de qual dos
- * dois o score veio.
+ * O formato achatado é o que o `normalizeScorePrivate` e o `enrichScores` leem
+ * porque a Shiina-Web foi a primeira fonte; hoje TODA play de bancho.py passa
+ * por aqui (ver `playerScores` em scores.js), e traduzir na entrada é o que
+ * mantém os dois sem um segundo caminho.
+ *
+ * Do mapa aninhado sai só o nome: o `beatmap.max_combo` do bancho.py-ex é o
+ * combo da PLAY, e não o do mapa (bug de lá, conferido no Daycore), então ele
+ * fica de fora de propósito. O combo da play sai do `max_combo` do topo.
  *
  * O `map_name` é remontado no formato do nome de arquivo (`Artista - Título
  * (Mapper) [Dificuldade]`) porque é dele que o normalizador extrai título e

@@ -201,9 +201,9 @@ test('entradas inválidas não derrubam as válidas', async t => {
 });
 
 // ─── Front-end do servidor ───────────────────────────────────────────────────
-// Nem todo bancho.py roda a Shiina-Web, e o rank global e as plays saem dela.
-// `webApi: null` é como o registro diz "este não tem", e o adaptador então
-// busca as duas coisas no próprio bancho.py.
+// Nem todo bancho.py roda a Shiina-Web. `webApi: null` é como o registro diz
+// "este não tem". O rank global e as plays já saíram dela; hoje saem do próprio
+// bancho.py em qualquer servidor, e o campo decide só os selos de grupo.
 //
 // Cada caso recarrega o registro, então isto vive num teste separado: o `load`
 // limpa o `process.env`, e o `defaultKey` lê o OSU_MODE na hora da chamada —
@@ -284,9 +284,9 @@ test('embutidos', async t => {
   });
 
   await t.test('o EZPP declara que não tem Shiina-Web', () => {
-    // É o que manda o adaptador buscar rank e plays no próprio bancho.py. Sem
-    // isto, as duas coisas iriam para `ez-pp.farm/api/v1`, que responde 200 com
-    // o HTML da página — e a falha seria muda, não um erro.
+    // Rank e plays já não dependem disto (saem do bancho.py em qualquer
+    // servidor), mas os selos de grupo sim: sem isto, o /leaderboard baixaria a
+    // página de cada jogador atrás de selos que este front-end não desenha.
     const s = comEmbutidos();
     assert.equal(s.get('ezpp').webApi, null);
     assert.equal(s.get('ezpp').banchoV1, 'https://api.ez-pp.farm/v1');

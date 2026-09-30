@@ -64,9 +64,8 @@ const RANKING_MAX = 100;
 /**
  * O ranking de pp do servidor, do primeiro colocado para baixo.
  *
- * Este vem da API v1 do **bancho.py-ex**, e não da Shiina-Web como o
- * `get_player_scores` logo acima — apesar do nome parecido, `get_leaderboard` é
- * do outro serviço, no host `api.`. Servidor com front-end diferente continua
+ * Este vem da API v1 do **bancho.py-ex**, no host `api.`, e não da Shiina-Web —
+ * que tem endpoints de nome parecido. Servidor com front-end diferente continua
  * respondendo este aqui.
  *
  * O filtro de país é case-insensitive (conferido com `br` e `BR`); mandamos em

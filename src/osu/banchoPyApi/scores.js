@@ -9,7 +9,7 @@ const metrics = require('../../lib/metrics');
 const { idSegment } = require('../../lib/urlSafe');
 const { dedupe } = require('../../lib/inflight');
 const { TtlCache } = require('../../lib/ttlCache');
-const { PRIVATE_MODE, temShiina, webApiGet, banchoV1Get, banchoV2Get } = require('./http');
+const { PRIVATE_MODE, banchoV1Get, banchoV2Get } = require('./http');
 const { normalizeScorePrivate, mergeServerMap, nativeScore } = require('./normalize');
 const { getServerMap } = require('./server');
 
@@ -21,6 +21,11 @@ const { getServerMap } = require('./server');
  * SCORE, cinco por página do /topplays e uma por play do /recent, e nada disso
  * era reaproveitado. Medido numa página de cinco: 294ms numa rodada, 843ms na
  * seguinte — de 25% a 75% do tempo total do comando.
+ *
+ * Hoje ele quase não sai: as plays vêm da v1 do bancho.py, que já traz tudo o
+ * que o detalhe traria, e o `enrichScores` só o pede quando falta algum acerto
+ * ou o combo (ver `jaTemDetalhe`). O cache continua pelo que sobra — score de
+ * fonte sem hits — e porque é ele que garante o "uma vez só" quando sai.
  *
  * E o dado é quase imutável: acertos, combo, mods e data de um score que já
  * aconteceu não mudam mais. O TTL existe pelo que PODE mudar — o pp, quando
@@ -95,15 +100,43 @@ function precisaDoMapa(score) {
       || !score.beatmap?.status;
 }
 
+/**
+ * O que o `normalizeScorePrivate` ainda iria buscar no detalhe, se faltasse.
+ *
+ * Os acertos e o combo são o que o detalhe traz e a lista pode não trazer — a
+ * da Shiina-Web não trazia nenhum dos cinco. O resto que ele lê de lá (pp, acc,
+ * grade, mods, data, pontuação) vem em qualquer resposta da v1 com eles, porque
+ * as duas leem as mesmas colunas da tabela `scores` (ver a investigação em
+ * docs/investigacoes/2026-09-30-daycore-scores-v1.md, conferida no Daycore).
+ */
+const CAMPOS_DO_DETALHE = ['n300', 'n100', 'n50', 'nmiss', 'max_combo'];
+
+/**
+ * Se o score cru já dispensa o detalhe.
+ *
+ * NÚMERO, e não só presente: `null` é o que o `nativeScore` escreve quando o
+ * servidor não mandou o combo, e ele tem de cair no detalhe como antes. Faltando
+ * um só dos cinco, a busca acontece — é assim que uma fonte sem hits continua
+ * funcionando sozinha, sem ninguém precisar declarar que ela é diferente.
+ */
+function jaTemDetalhe(s) {
+  return CAMPOS_DO_DETALHE.every(campo => typeof s[campo] === 'number' && Number.isFinite(s[campo]));
+}
+
 async function enrichScores(v1Scores, mode = PRIVATE_MODE) {
   const coverBase = servers.get(mode).covers ?? null;
 
   return Promise.all(
     v1Scores.map(async (s) => {
-      // Sem id não há o que buscar nem o que guardar — e uma chave
-      // `${mode}:undefined` faria scores diferentes dividirem a mesma entrada.
       let score;
-      if (s.score_id === undefined || s.score_id === null) {
+      if (jaTemDetalhe(s)) {
+        // O detalhe devolveria as mesmas colunas, e com o pp de até uma hora
+        // atrás (o TTL do cache): sem ele o número na tela fica MAIS fresco.
+        metrics.count('scoreDetalhe.dispensado');
+        score = normalizeScorePrivate(s, null);
+      } else if (s.score_id === undefined || s.score_id === null) {
+        // Sem id não há o que buscar nem o que guardar — e uma chave
+        // `${mode}:undefined` faria scores diferentes dividirem a mesma entrada.
         score = normalizeScorePrivate(s, null);
       } else {
         try {
@@ -234,23 +267,51 @@ async function topScores(mode) {
 }
 
 /**
- * As plays daquele jogador, do front-end quando existe e do bancho.py quando
- * não — os dois endpoints se chamam `get_player_scores` e aceitam os mesmos
- * parâmetros, mudando só o host e o formato da resposta (ver nativeScore).
+ * Teto de plays por resposta. Não é escolha nossa: a v1 valida `limit <= 100` e
+ * responde 422 acima disso — e o `banchoV1Get` lê 422 como "sem resultado", então
+ * um pedido maior sairia como lista VAZIA, sem erro nenhum. Clampar aqui faz ele
+ * devolver o que dá, como o `leaderboard` já faz (ver players.js).
+ */
+const PLAYER_SCORES_MAX = 100;
+
+/**
+ * As plays daquele jogador, da v1 do bancho.py — tenha o servidor Shiina-Web ou
+ * não.
+ *
+ * ── Por que não da Shiina-Web, onde o Daycore buscava ────────────────────────
+ * O front-end também tem um `get_player_scores`, e foi dele que as plays saíram
+ * desde o primeiro commit: o bot achava que o endpoint só existia lá. Existe no
+ * bancho.py desde 2021, e a resposta de lá é a melhor das duas (conferido no
+ * Daycore em 30/09, VN e RX: mesmas plays, mesma ordem):
+ *
+ *   - a Shiina manda pp e acc TRUNCADOS em inteiro, e nem acertos, nem combo,
+ *     nem pontuação — o que obrigava a buscar o detalhe de CADA score, uma
+ *     requisição por play (~100 num /nc frio);
+ *   - a v1 manda tudo isso, e o `enrichScores` dispensa o detalhe;
+ *   - no `best`, a Shiina esconde as plays em mapa Approved (`m.status = 2`), e
+ *     a v1 as inclui (`IN (2, 3)`) — que é o mesmo filtro com que o próprio
+ *     bancho.py soma o pp do perfil. O top passa a bater com o total.
+ *
+ * O `temShiina` continua existindo para o que só o front-end tem (os selos de
+ * grupo, ver groups.js). A investigação inteira, com as fontes, está em
+ * docs/investigacoes/2026-09-30-daycore-scores-v1.md.
+ *
+ * Do mapa aninhado da resposta (`beatmap`) só saem os ids e o nome: no
+ * bancho.py-ex o `beatmap.max_combo` sai com o combo da PLAY, e não o do mapa
+ * (bug de lá, confirmado no Daycore). O `nativeScore` não o repassa, e o resto
+ * do mapa continua vindo do `/v2/maps/{id}` no `enrichScores`.
  *
  * Cru de propósito: enriquecer as N buscadas de uma vez seria uma rajada de
  * requisições. Quem chama enriquece só a página que vai exibir.
  */
 async function playerScores(userId, limit, scope, mode) {
-  const params = { id: userId, mode: servers.get(mode).gameMode, scope, limit };
-
-  if (!temShiina(mode)) {
-    const res = await banchoV1Get(mode, 'get_player_scores', params);
-    return (res?.scores ?? []).map(nativeScore);
-  }
-
-  const res = await webApiGet(mode, 'get_player_scores', params);
-  return res.scores ?? [];
+  const res = await banchoV1Get(mode, 'get_player_scores', {
+    id:    userId,
+    mode:  servers.get(mode).gameMode,
+    scope,
+    limit: Math.min(limit, PLAYER_SCORES_MAX),
+  });
+  return (res?.scores ?? []).map(nativeScore);
 }
 
 const bestScores   = (userId, limit, mode) => playerScores(userId, limit, 'best', mode);

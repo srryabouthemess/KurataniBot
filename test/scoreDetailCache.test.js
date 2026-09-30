@@ -56,7 +56,12 @@ require.cache[axiosPath] = {
 
 const { enrichScores } = require('../src/osu/banchoPyApi');
 
-/** Um score da v1 como o `get_player_scores` devolve, no mínimo que a mescla usa. */
+/**
+ * Um score SEM acertos nem combo — o formato da Shiina-Web, que foi a fonte das
+ * plays do Daycore. É o caso em que o detalhe ainda é buscado, e o único em que
+ * este cache trabalha: com os acertos na lista, o detalhe nem sai (ver
+ * fonteDasPlays.test.js).
+ */
 const scoreV1 = (id) => ({
   score_id: id,
   map_id: 1000 + id,

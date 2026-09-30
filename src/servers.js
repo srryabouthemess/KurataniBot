@@ -16,15 +16,14 @@
  * derivadas do domínio do site — `api.` e `a.` — e podem ser sobrescritas uma
  * a uma quando o servidor foge do padrão.
  *
- * ATENÇÃO ao que "suportar bancho.py" quer dizer: as top plays saem de
- * `get_player_scores`, que é da **Shiina-Web** e não do bancho.py — por isso o
- * campo `webApi` é separado da `api`.
+ * O front-end (a **Shiina-Web**) é um serviço à parte do bancho.py — por isso o
+ * campo `webApi` é separado da `api`. Ele já foi a fonte das top plays e do
+ * rank; hoje as duas coisas saem do próprio bancho.py em qualquer servidor, e o
+ * campo só diz se existe o que é conceito do front-end (os selos de grupo).
  *
  * Servidor com outro front-end (o EZPP Farm é um) declara `webApi: null`, ou
- * `SERVER_<chave>_WEB=none` no `.env`, e o adaptador busca no próprio
- * bancho.py. O campo continua existindo porque as duas fontes não são
- * intercambiáveis: os endpoints têm o mesmo nome e devolvem formatos
- * diferentes, então quem lê precisa saber de qual está falando.
+ * `SERVER_<chave>_WEB=none` no `.env`, e o adaptador deixa de procurar esses
+ * selos numa página que não os tem.
  *
  * Cada servidor com `RELAX=true` ganha uma segunda entrada `<chave>_rx`: é o
  * mesmo cadastro (mesmo `namespace`, mesmo link do usuário), mudando só o
@@ -96,9 +95,8 @@ function titleCase(key) {
  * mão os sete campos, e um deles ficaria para trás no dia em que a forma
  * mudasse.
  *
- * `webApi` é o ÚNICO campo que aceita `null`, e é o que separa os dois mundos:
- * `null` quer dizer "este servidor não tem Shiina-Web". Ver o comentário do
- * cabeçalho e o `temShiina` no adaptador.
+ * `webApi` é o ÚNICO campo que aceita `null`: quer dizer "este servidor não tem
+ * Shiina-Web". Ver o comentário do cabeçalho e o `temShiina` no adaptador.
  */
 function banchoPyServer({ key, label, site, api, avatars, webApi, covers = null, mapFiles = null }) {
   return {
@@ -114,7 +112,8 @@ function banchoPyServer({ key, label, site, api, avatars, webApi, covers = null,
     // campo existia sem nunca ser enviado a lugar nenhum — credencial parada só
     // aparece em backup e captura de tela. Se algum endpoint passar a exigir,
     // volta aqui junto do código que a usa.
-    // Shiina-Web: get_player_scores.
+    // Shiina-Web. Hoje só o `temShiina` o lê, como sim ou não: nenhuma chamada
+    // sai para este endereço (as plays vêm da v1, ver scores.js).
     webApi,
     // bancho.py-ex: busca exata por nome (v1) e leitura de scores/mapas (v2).
     banchoV1:  `${api}/v1`,
@@ -144,7 +143,7 @@ function buildBanchoPy(key) {
 
   // SERVER_<chave>_WEB: endereço da API do front-end. O padrão vale para quem
   // roda a Shiina-Web; `none` é para servidor com outro front-end, e faz o
-  // adaptador buscar rank e scores direto no bancho.py.
+  // adaptador não procurar o que só ela tem (os selos de grupo).
   const front = envFor(key, 'WEB');
   const webApi = front?.toLowerCase() === 'none'
     ? null
@@ -235,12 +234,13 @@ const BUILTINS = {
 
   // O EZPP Farm é bancho.py, mas o front-end NÃO é a Shiina-Web: `ez-pp.farm`
   // é uma aplicação Svelte, e `/api/v1/...` lá devolve o HTML da página em vez
-  // de JSON. Daí o `webApi: null` — sem ele, o rank global e as top plays
-  // tentariam ler uma página inteira como se fosse a resposta de uma API.
+  // de JSON. Daí o `webApi: null`. Quando ele entrou, o rank global e as top
+  // plays ainda saíam do front-end, e sem isso leriam uma página inteira como
+  // se fosse a resposta de uma API.
   //
-  // Tudo o que a Shiina-Web serviria tem contraparte no próprio bancho.py
-  // (`get_player_info` com `scope=stats` traz o rank, `get_player_scores` traz
-  // as plays), e é de lá que o adaptador busca quando este campo é nulo.
+  // Hoje rank e plays saem do próprio bancho.py em qualquer servidor
+  // (`get_player_info` com `scope=stats`, `get_player_scores`), e o campo só
+  // poupa o /leaderboard de raspar selos de grupo que este front-end não tem.
   //
   // Entra de fábrica pelo mesmo motivo do Akatsuki: servidor grande, API
   // pública e estável, e nada aqui depende de configuração de quem hospeda.

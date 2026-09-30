@@ -121,7 +121,9 @@ async function fetchEach(keys, fetchOne) {
  *
  * A lista do /recent só é enriquecida página a página, então aqui a play ainda
  * vem no formato do servidor: normalizada com `beatmap.id` (oficial, Ripple,
- * Gatari) ou no formato enxuto do Shiina, com `map_id` e `map_md5` soltos.
+ * Gatari) ou no formato enxuto do bancho.py (o que o `nativeScore` deixa), com
+ * `map_id` solto. O `map_md5` é da Shiina-Web, de quando as plays do Daycore
+ * vinham dela, e fica como último recurso — custa um `??`.
  */
 function mapaDaPlay(play) {
   const id = play?.beatmap?.id ?? play?.map_id ?? play?.map_md5;

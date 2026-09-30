@@ -62,12 +62,17 @@ module.exports = {
       if (!user) return interaction.editReply(s.player_not_found);
       if (plays.length === 0) return interaction.editReply(s.nochoke_none);
 
-      // O `getBestScores` devolve score CRU — e no bancho.py-ex + Shiina-Web
-      // (Daycore) o cru é só pp, acc e mods, sem hits nem combo. Sem enriquecer,
-      // o getFCpp não tem como saber se a play foi choke e devolve null para
-      // todas — "nenhum choke" para qualquer jogador. O enrichScores resolve o
-      // detalhe de cada score (scoreDetail, cache de 1h) e o enrichBeatmapData
-      // traz o combo do mapa, que é o que o getFCpp compara.
+      // O `getBestScores` devolve score CRU, no formato do servidor. Sem
+      // enriquecer, o getFCpp não tem como saber se a play foi choke e devolve
+      // null para todas — "nenhum choke" para qualquer jogador. O enrichScores
+      // normaliza os acertos e o combo da play e traz o mapa do servidor; o
+      // enrichBeatmapData completa o combo do mapa, que é o que o getFCpp
+      // compara.
+      //
+      // Enquanto as plays do Daycore vinham da Shiina-Web (só pp, acc e mods),
+      // isto custava um detalhe de score por play — ~100 requisições num /nc
+      // frio. Hoje elas vêm da v1 do bancho.py com os acertos, e o detalhe só
+      // sai quando falta algum (ver `jaTemDetalhe` em scores.js).
       const enriched = await osu.enrichBeatmapData(await osu.enrichScores(plays, mode));
 
       // O FC de cada play, com o teto de chamadas em voo. O getFCpp devolve

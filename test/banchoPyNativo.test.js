@@ -1,5 +1,8 @@
 /**
- * Servidor bancho.py SEM o front-end Shiina-Web (o EZPP Farm é um).
+ * A resposta nativa do `get_player_scores` do bancho.py — que hoje é a fonte das
+ * plays de TODO servidor bancho.py, com Shiina-Web ou sem (ver
+ * fonteDasPlays.test.js). Este arquivo nasceu com o EZPP Farm, o primeiro sem
+ * ela.
  *
  * O `get_player_scores` existe nos dois serviços, com o mesmo nome e os mesmos
  * parâmetros, e devolve formatos DIFERENTES: a Shiina-Web achata o mapa

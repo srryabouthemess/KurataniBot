@@ -14,8 +14,9 @@
  * duas de uma vez.
  *
  * Agora as duas saem da v1 em qualquer servidor bancho.py. Custa a mesma
- * requisição que o `get_rank_cache` custava, e o `webApi` continua existindo
- * para o que só o front-end tem (`get_player_scores`).
+ * requisição que o `get_rank_cache` custava. (Quando isto foi escrito, o
+ * `webApi` ainda servia o `get_player_scores`; as plays também passaram para a
+ * v1 depois, e ele ficou só para os selos de grupo — ver fonteDasPlays.test.js.)
  *
  * ── Por que o teste dubla o axios, e não o adaptador ──────────────────────────
  * O que precisa continuar valendo é qual ENDEREÇO o `fetchUser` procura. Um
