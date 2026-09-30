@@ -22,6 +22,7 @@ const { GatewayIntentBits, InteractionContextType, PermissionFlagsBits } = requi
 
 const { t } = require('./i18n');
 const cooldowns = require('./cooldowns');
+const metrics = require('./lib/metrics');
 const { logError } = require('./lib/logger');
 const { PREFIX, ENABLED } = require('./prefix/config');
 const { tokenize } = require('./prefix/tokenize');
@@ -209,7 +210,9 @@ async function handleMessage(client, specs, message, editada = false) {
   context.options = buildOptionAccessors(parsed);
 
   try {
-    await command.execute(context);
+    // Mesma chave do slash: o `execute` é o mesmo, e separar por via dobraria
+    // as linhas do /diag para medir o que é igual dos dois lados.
+    await metrics.timed(name, () => command.execute(context));
   } catch (error) {
     logError(`prefix:${name}`, error);
     await refuse(s.error_generic);

@@ -468,6 +468,7 @@ Current ${ADMIN} role: **${role}**
   // match against what the modules actually say.
   diag_title:             '📊 Bot diagnostics',
   diag_uptime:            (texto) => `Up for **${texto}**`,
+  diag_commands:          'Commands (n · p50 / p95 / max · ✗ errors)',
   diag_caches:            'Caches (hits / total)',
   diag_limiter:           'Rate limiter (calls, accumulated wait)',
   diag_workers:           'PP engines',

@@ -62,6 +62,35 @@ function linhasDeLimiter(contadores) {
     `\`${nome.padEnd(14)}\` ${String(d.calls).padStart(5)} — ${(d.waitMs / 1000).toFixed(1)}s`);
 }
 
+/** Limite do Discord para o valor de um campo de embed. */
+const LIMITE_CAMPO = 1024;
+const TOP_COMANDOS = 10;
+
+/** `0.042` → `42ms`, `1.83` → `1.8s`. Milissegundos até 1s, onde mora a maioria. */
+function tempo(segundos) {
+  return segundos < 1 ? `${Math.round(segundos * 1000)}ms` : `${segundos.toFixed(1)}s`;
+}
+
+/**
+ * Os comandos mais usados, uma linha cada: n, p50/p95/máx e erros.
+ *
+ * Ordena por quantidade porque é onde uma otimização rende; o que roda duas
+ * vezes por dia pode ser lento sem ninguém sentir. Corta linhas do fim se
+ * passar do limite do campo — com nomes de comando de até 32 caracteres não
+ * deveria, mas um embed recusado derrubaria o /diag inteiro.
+ */
+function linhasDeComandos(comandos) {
+  const linhas = Object.entries(comandos)
+    .sort(([a, x], [b, y]) => y.n - x.n || a.localeCompare(b))
+    .slice(0, TOP_COMANDOS)
+    .map(([nome, d]) =>
+      `\`${nome.padEnd(11)}\` ${String(d.n).padStart(5)} · ${tempo(d.p50)} / ${tempo(d.p95)} / ${tempo(d.max)}` +
+      (d.erros ? ` · ✗${d.erros}` : ''));
+
+  while (linhas.join('\n').length > LIMITE_CAMPO) linhas.pop();
+  return linhas;
+}
+
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('diag')
@@ -80,7 +109,7 @@ module.exports = {
 
   async execute(interaction) {
     const s = t(interaction);
-    const { uptimeMs, contadores, caches } = metrics.snapshot();
+    const { uptimeMs, contadores, caches, comandos } = metrics.snapshot();
     const workers = wasmWorker.stats();
 
     const embed = new EmbedBuilder()
@@ -88,13 +117,17 @@ module.exports = {
       .setTitle(s.diag_title)
       .setDescription(s.diag_uptime(duracao(uptimeMs)));
 
+    const comandoLinhas = linhasDeComandos(comandos);
     const cacheLinhas = linhasDeCache(caches);
     const limiterLinhas = linhasDeLimiter(contadores);
 
-    if (cacheLinhas.length === 0 && limiterLinhas.length === 0) {
+    if (comandoLinhas.length === 0 && cacheLinhas.length === 0 && limiterLinhas.length === 0) {
       embed.addFields({ name: '​', value: s.diag_empty });
     }
 
+    if (comandoLinhas.length > 0) {
+      embed.addFields({ name: s.diag_commands, value: comandoLinhas.join('\n') });
+    }
     if (cacheLinhas.length > 0) {
       embed.addFields({ name: s.diag_caches, value: cacheLinhas.join('\n') });
     }

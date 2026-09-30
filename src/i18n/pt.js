@@ -490,6 +490,7 @@ Cargo atual no ${ADMIN}: **${role}**
   // com o que está escrito nos módulos.
   diag_title:             '📊 Diagnóstico do bot',
   diag_uptime:            (texto) => `No ar há **${texto}**`,
+  diag_commands:          'Comandos (n · p50 / p95 / máx · ✗ erros)',
   diag_caches:            'Caches (acertos / total)',
   diag_limiter:           'Rate limiter (chamadas, espera acumulada)',
   diag_workers:           'Motores de PP',

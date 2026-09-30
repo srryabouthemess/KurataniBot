@@ -6,6 +6,7 @@ const { loadCommands, commandsPayload, hashCommands } = require('./bot/loadComma
 const db = require('./db');
 const pp = require('./pp');
 const cooldowns = require('./cooldowns');
+const metrics = require('./lib/metrics');
 const prefixCommands = require('./prefixCommands');
 const mapContext = require('./mapContext');
 const emojis = require('./emojis');
@@ -161,7 +162,8 @@ client.on('interactionCreate', async interaction => {
   }
 
   try {
-    await command.execute(interaction);
+    // Só o nome do comando: nada de usuário ou guild nas métricas.
+    await metrics.timed(interaction.commandName, () => command.execute(interaction));
   } catch (error) {
     logError(`command:${interaction.commandName}`, error);
 
