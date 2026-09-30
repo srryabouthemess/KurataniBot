@@ -2,6 +2,34 @@
 
 ---
 
+# Sessão de 2026-09-30 (defer no despacho)
+
+## 🔧 Mudanças
+
+- **O despacho faz o `deferReply` antes do `execute`, e o comando declara quando não quer.** [`dispatch.js`](src/bot/dispatch.js), [`index.js`](src/index.js), [`prefixCommands.js`](src/prefixCommands.js)
+  - `defer` no módulo do comando: ausente é defer público, `'ephemeral'` é
+    efêmero e `false` não defere. Comando novo que esquecer o defer não
+    estoura mais os 3s do Discord.
+  - Vale nos dois caminhos: no modo texto o defer é o "digitando...".
+  - Valor desconhecido (`'efemero'`) é falha de carga, como comando sem
+    `execute`. Senão viraria defer público em silêncio.
+  - Defer que falha (interação expirada ou já respondida) não roda o
+    `execute` e cai no mesmo catch de antes.
+- **`/role`, `/wipe`, `/scorewipe`, `/moderate` e `/invitecode` usam o defer efêmero do despacho.**
+  - As respostas continuam efêmeras. A checagem de privilégio (HTTP no
+    Daycore) e a do Redis/MySQL passam a rodar depois do defer, e não antes.
+- **`/topscores` usa o defer público padrão.** A recusa de servidor sem
+  suporte já era pública.
+- **Os demais ficam com `defer: false`, sem mudança.** Os públicos respondem o
+  erro de entrada em efêmero antes do próprio defer, e um defer público no
+  despacho tornaria esse erro visível no canal. `/help`, `/language`,
+  `/link`, `/staff` e `/diag` respondem direto.
+- Um teste recusa comando com o defer do despacho que ainda chame
+  `interaction.reply` ou `interaction.deferReply`. Depois do defer, os dois
+  lançam.
+
+---
+
 # Sessão de 2026-09-30 (PB #N no /recent)
 
 ## ✨ Novidades
