@@ -133,6 +133,7 @@ module.exports = ({ ADMIN }) => ({
 
   recent_none:             (name) => `No recent plays found for **${name}**.`,
   recent_error:            'Error fetching recent play. Check if the player exists.',
+  recent_personal_best:    (n) => `**Personal Best #${n}**`,
   recent_footer:           (page, total, label, status, mapper, tries) =>
     `${tries ? `Try #${tries} • ` : ''}${status ? `${status} • ` : ''}${mapper ? `mapset by ${mapper} • ` : ''}Play ${page}/${total} • ${label}`,
 

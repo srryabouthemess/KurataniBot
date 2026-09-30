@@ -133,6 +133,7 @@ module.exports = ({ ADMIN }) => ({
 
   recent_none:             (name) => `Недавних плеев для **${name}** не найдено.`,
   recent_error:            'Ошибка при получении последнего плея. Проверьте, существует ли игрок.',
+  recent_personal_best:    (n) => `**Личный топ #${n}**`,
   recent_footer:           (page, total, label, status, mapper, tries) =>
     `${tries ? `Попытка #${tries} • ` : ''}${status ? `${status} • ` : ''}${mapper ? `карта от ${mapper} • ` : ''}Плей ${page}/${total} • ${label}`,
 

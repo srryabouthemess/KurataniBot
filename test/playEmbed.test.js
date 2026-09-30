@@ -65,6 +65,27 @@ const jogador = (over = {}) => ({
   ...over,
 });
 
+// ─── PB #N ─────────────────────────────────────────────────────────────────────
+
+test('play no top do jogador abre o embed com a posição', async () => {
+  setup();
+  const bloco = await playEmbed.single(jogada(), { mode: 'official', s, personalBest: 12 });
+
+  assert.equal(bloco.description.split('\n')[0], s.recent_personal_best(12));
+  assert.match(bloco.description, /Top #12 pessoal/);
+});
+
+test('sem posição, nenhuma linha a mais', async () => {
+  // null (fora do top, ou top indisponível) e lixo não viram "#0" nem "#NaN".
+  setup();
+  const sem = await playEmbed.single(jogada(), { mode: 'official', s });
+  for (const personalBest of [null, 0, -1, 1.5, '3']) {
+    const bloco = await playEmbed.single(jogada(), { mode: 'official', s, personalBest });
+    assert.equal(bloco.description, sem.description, `personalBest=${personalBest}`);
+  }
+  assert.doesNotMatch(sem.description, /pessoal/);
+});
+
 // ─── PP ───────────────────────────────────────────────────────────────────────
 
 test('a play e o FC dela ficam na mesma fração', async () => {

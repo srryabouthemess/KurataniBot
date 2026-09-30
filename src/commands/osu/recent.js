@@ -15,6 +15,11 @@ const { safeEditReply } = require('../../replies');
 
 const FETCH_LIMIT = 50;
 
+// O top que o "PB #N" consulta. É o mesmo limite do /topplays, do /nc e do /pp
+// de propósito: a chave do cache do getBestScores inclui o limite, então com
+// 100 aqui a lista que um deles acabou de buscar serve de graça.
+const TOP_LIMIT = 100;
+
 module.exports = {
   data: modo.addOption(new SlashCommandBuilder()
     .setName('recent')
@@ -60,13 +65,19 @@ module.exports = {
       // Com par VN/RX, "as plays" pode vir de mais de uma chave — fetchEach
       // busca as duas em paralelo e tolera uma falhando; mergeRecent junta e
       // corta no FETCH_LIMIT, marcando cada play com o `_mode` de onde veio.
+      //
+      // O top de cada chave vai junto, em paralelo, para o "PB #N". Ele não
+      // pode derrubar nada: o fetchTops nunca rejeita, e sem top o comando
+      // responde como antes, só sem a marca.
+      let tops = new Map();
       const { user, scores: recents } = await fetchPlayer(
         resolved,
         async id => {
-          const porModo = await recentMerge.fetchEach(
-            keys,
-            key => osu.getRecentScores(id, FETCH_LIMIT, key),
-          );
+          const [porModo, topsPorModo] = await Promise.all([
+            recentMerge.fetchEach(keys, key => osu.getRecentScores(id, FETCH_LIMIT, key)),
+            recentMerge.fetchTops(keys, key => osu.getBestScores(id, TOP_LIMIT, key)),
+          ]);
+          tops = topsPorModo;
           return recentMerge.mergeRecent(porModo, FETCH_LIMIT);
         },
       );
@@ -126,7 +137,13 @@ module.exports = {
         // comando. O que sobra aqui é a moldura: quem jogou, e onde a play
         // está na lista de páginas.
         const [bloco, dono] = await Promise.all([
-          playEmbed.single(recent, { mode: playMode, s }),
+          playEmbed.single(recent, {
+            mode: playMode,
+            s,
+            // Da play CRUA: é nela que o id do score está em todo servidor (o
+            // enriquecimento do bancho.py reescreve o objeto).
+            personalBest: recentMerge.personalBestAt(rawPlay, tops),
+          }),
           perfilDe(playMode),
         ]);
 
@@ -158,11 +175,9 @@ module.exports = {
           });
       }
 
-      // Identidade de um score cru: bancho.py/ripple usam `score_id`, a API
-      // oficial usa `id` (sobrevive ao normalizeScore por causa do `...raw`
-      // — ver officialApi.js). Sem casar por isto o refresh não teria como
-      // saber, dentro da lista nova, qual item é "a mesma play".
-      const scoreIdOf = (score) => score?.score_id ?? score?.id ?? null;
+      // Sem casar pelo id do score o refresh não teria como saber, dentro da
+      // lista nova, qual item é "a mesma play" (ver recentMerge.scoreIdOf).
+      const { scoreIdOf } = recentMerge;
 
       /**
        * Busca de novo a lista de recentes da CHAVE de onde a play da página
@@ -170,6 +185,10 @@ module.exports = {
        * páginas) fica como estava. Reaproveita `osu.getRecentScores`, o mesmo
        * fetch cru do carregamento inicial; `buildEmbed` reenriquece sozinho
        * a partir do que for deixado em `recents[page]`.
+       *
+       * O top daquela chave é buscado de novo junto, sem cache: o 🔄 é o jeito
+       * de ver o "PB #N" de uma play que o top guardado (até um minuto) ainda
+       * não tinha. Falhando, fica o top de antes.
        */
       async function refreshPlay(page) {
         const current = recents[page];
@@ -178,7 +197,12 @@ module.exports = {
         const playMode = current._mode;
         const scoreId  = scoreIdOf(current);
 
-        const freshList = await osu.getRecentScores(user.id, FETCH_LIMIT, playMode);
+        const [freshList, freshTops] = await Promise.all([
+          osu.getRecentScores(user.id, FETCH_LIMIT, playMode),
+          recentMerge.fetchTops([playMode], key => osu.getBestScores(user.id, TOP_LIMIT, key, { fresh: true })),
+        ]);
+        if (freshTops.has(playMode)) tops.set(playMode, freshTops.get(playMode));
+
         const match = scoreId != null
           ? freshList.find(score => scoreIdOf(score) === scoreId)
           : null;

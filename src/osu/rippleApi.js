@@ -130,6 +130,9 @@ function normalizeScore(raw) {
   const { artist, title, version } = parseSongName(bm.song_name);
 
   return {
+    // O /recent casa a play por este id: o refresh e o "PB #N" (ver
+    // recentMerge.scoreIdOf). Sem ele, as duas coisas falhavam no Ripple.
+    score_id: raw.id ?? null,
     pp: parseFloat(raw.pp ?? 0),
     // A API manda 0-100; o resto do bot trabalha com 0-1.
     accuracy: parseFloat(raw.accuracy ?? 0) / 100,
