@@ -1,5 +1,34 @@
 /**
  * test/setup.js
+ * O registro de servidores da suíte, fixo — e não o do `.env` de quem roda.
+ *
+ * Os testes de modo (VN/RX), do `/compare`, do prefixo e do link de mapa usam
+ * o par `daycore`/`daycore_rx` e o domínio `daycore.org`. Esse registro vinha
+ * do `.env` da máquina: num clone limpo o servers.js montava só os embutidos,
+ * e 31 testes falhavam sem relação com o que afirmam. As três variáveis são
+ * todas necessárias — sem a URL o servidor é ignorado, sem o RELAX não existe
+ * `daycore_rx`.
+ *
+ * O `??=` vence o `.env` porque este arquivo roda antes de tudo (ver abaixo)
+ * e o dotenv nunca sobrescreve o que já está no ambiente. Só um valor
+ * exportado no shell passa na frente, e aí é de propósito.
+ */
+process.env.SERVERS              ??= 'daycore';
+process.env.SERVER_DAYCORE_URL   ??= 'https://daycore.org';
+process.env.SERVER_DAYCORE_RELAX ??= 'true';
+
+// Estas não faltam num clone limpo — a ausência delas é o que os testes
+// esperam. Fixadas no valor que equivale a não existir, para um `.env` com
+// `OSU_MODE=daycore_rx`, `BUILTIN_SERVERS=` (quem hospeda para um servidor só)
+// ou outro rótulo não mudar o servidor padrão, os embutidos ou os nomes.
+//
+// A lista dos embutidos repete a do servers.js: servidor novo de fábrica entra
+// aqui também, senão fica desligado na suíte.
+process.env.OSU_MODE             ??= 'official';
+process.env.BUILTIN_SERVERS      ??= 'akatsuki,ezpp,gatari';
+process.env.SERVER_DAYCORE_LABEL ??= 'Daycore';
+
+/**
  * Cada processo de teste ganha a sua própria pasta de dados.
  *
  * Carregado por `--require` no script `test` do package.json, o que faz ele
