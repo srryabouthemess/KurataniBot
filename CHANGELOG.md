@@ -2,6 +2,73 @@
 
 ---
 
+# Sessão de 2026-09-30 (scores guardados localmente)
+
+## ✨ Novidades
+
+- **Os scores que o bot já busca para responder passam a ser guardados, depois da resposta.** [`scoreStore.js`](src/scoreStore.js), [`db/scores.js`](src/db/scores.js)
+  - Entram: `/recent`, `/topplays`, `/nochoke`, `/pp`, `/whatif`, `/topif`,
+    `/profile`, `/score` e a varredura do `/topscores` (bancho.py). O
+    comportamento de nenhum comando muda. É só a camada de armazenamento,
+    base de um ranking de servidor que não varra a API a cada consulta.
+  - Ponto de ligação único no [`osuClient`](src/osuClient.js). Score servido
+    do cache não é regravado.
+  - Só plays que passaram. Rank F fica de fora.
+  - Chave `(servidor com variante, id do score)`: ver o mesmo score de novo é
+    UPSERT, não duplica. O pp novo vence (rework). O resto só preenche o que
+    faltava.
+  - A varredura do `/topscores` conta em `sweep_count` e na métrica
+    `scoreStoreVarredura`, separada de `seen_count` e `scoreStore`. Os mesmos
+    3000 scores a cada rodada fariam a taxa do uso normal parecer 100%.
+  - `forgetPlayer(server, userId)` apaga os scores e o nick de um jogador,
+    para pedidos de remoção. Não há comando.
+  - Consultas básicas: `topScoresGuardados`, `scoresGuardadosDoJogador`,
+    `scoresGuardadosDoMapa` e `estatisticasScores`.
+
+## 🔧 Mudanças
+
+- **Terceiro arquivo, `data/scores.db`, anexado como `scores`.** [`connection.js`](src/db/connection.js), [`schema.js`](src/db/schema.js)
+  - No bot.db iria junto em todo backup diário. No cache.db violaria o
+    contrato de "pode apagar que o bot baixa de novo": score não se baixa de
+    novo.
+  - Fica fora do backup diário ([`backup.js`](src/db/backup.js)).
+- **Versão própria do scores.db (`VERSAO_SCORES = 1`), sem subir a do bot.db.** [`migrations.js`](src/db/migrations.js)
+  - Subir a `VERSAO_ATUAL` faria o código anterior recusar o bot.db por uma
+    tabela que nem mora lá.
+  - scores.db de versão mais nova desliga só o store, com aviso. O boot
+    segue.
+- **A gravação acontece depois do `editReply`, nunca no caminho da resposta.** [`dispatch.js`](src/bot/dispatch.js)
+  - O osuClient só registra (O(1), sem I/O). O despacho roda o `execute`
+    num escopo (`AsyncLocalStorage`), e o flush sai num `setImmediate`
+    depois que ele termina.
+  - Fora de escopo (o 🔄 da paginação, que roda no coletor), o flush tem
+    atraso de 5s (`setTimeout` com `unref`). O `pagination.js` não mudou.
+  - Lotes de 100 por transação, um por tick. Medido com 300 mil linhas:
+    1,8ms (p50) por lote.
+  - Falha de gravação vai para o log (uma vez por causa) e para
+    `scoreStore.falhas`. Nunca chega ao comando. Fila com teto de 5000
+    scores: o excedente é descartado e contado em `scoreStore.filaCheia`.
+  - O shutdown grava o que restou na fila antes de fechar o banco.
+- **Teto configurável: `SCORE_STORE_MAX`, padrão 300000 (medido: 64MB).**
+  - Passando do teto, a poda desce a 90% dele. Sai do servidor com mais
+    linhas: primeiro os sem pp, depois os de menor pp, 100 por tick.
+  - O número de jogadores distintos por dia **não é estimável pelas métricas
+    atuais**: elas são contadores do processo, sem identidade de jogador, e
+    zeram a cada restart. Com o store no ar, `estatisticasScores()` dá esse
+    número (`jogadores24h`). Rodar à mão: a consulta varre a tabela.
+- **O bancho.py deixa de descartar o id do score e o md5 do mapa na normalização.** [`normalize.js`](src/osu/banchoPyApi/normalize.js)
+  - `score_id` e `map_md5` saem do `normalizeScorePrivate`. O `nativeScore`
+    sobe o `beatmap.md5` da v1, onde o md5 vem só aninhado.
+  - md5 **verificado só no bancho.py** (fixtures de resposta real). No
+    oficial, no Ripple e no Gatari fica NULL: nenhum campo desses adaptadores
+    foi conferido.
+- **O score legado do Ripple (`/score` no Akatsuki) carrega o `score_id`.** [`rippleApi.js`](src/osu/rippleApi.js)
+- **Política de privacidade atualizada nas duas línguas.** [`PRIVACY.md`](docs/PRIVACY.md)
+  - Diz que scores de qualquer jogador consultado são guardados, sem nada do
+    Discord, e como pedir a remoção.
+
+---
+
 # Sessão de 2026-09-30 (defer no despacho)
 
 ## 🔧 Mudanças

@@ -8,6 +8,7 @@ const db = require('./db');
 const pp = require('./pp');
 const cooldowns = require('./cooldowns');
 const metrics = require('./lib/metrics');
+const scoreStore = require('./scoreStore');
 const prefixCommands = require('./prefixCommands');
 const mapContext = require('./mapContext');
 const emojis = require('./emojis');
@@ -259,6 +260,8 @@ async function shutdown(signal) {
     ['eventos',      () => daycoreEvents.close()],
     ['redis',        () => daycoreAdmin.closeRedis()],
     ['motores',      () => pp.closeWasmWorker()],
+    // Antes do banco: o que ainda está na fila do scoreStore se perderia.
+    ['scores',       () => scoreStore.flushAgora()],
     ['banco',        () => db.close()],
   ];
 

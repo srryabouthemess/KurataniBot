@@ -262,7 +262,8 @@ Do lado do servidor isso exige o fork publicar `ex:priv_change` no `!addpriv`/`!
 | `OSU_MODE` | Servidor padrão dos comandos (`official` ou a chave de um configurado) |
 | `BEATMAP_CACHE_MAX` | Quantos `.osu` manter em cache; padrão `1500` (~75–150 MB) |
 | `FC_PP_CACHE_MAX` | Quantos valores de "PP se tivesse sido FC" manter; padrão `20000` (~1–2 MB) |
-| `KURATANI_DATA_DIR` | Onde ficam `bot.db` e `cache.db`; vazio = `data/`, dentro do projeto. No `npm test` ela é preenchida sozinha (ver [Testes](#testes)) |
+| `SCORE_STORE_MAX` | Quantos scores manter no `scores.db`; padrão `300000` (~64 MB). Passando do teto, saem os sem pp e os de menor pp |
+| `KURATANI_DATA_DIR` | Onde ficam `bot.db`, `cache.db` e `scores.db`; vazio = `data/`, dentro do projeto. No `npm test` ela é preenchida sozinha (ver [Testes](#testes)) |
 | `EXIT_ON_UNCAUGHT` | `true` faz o bot sair com código 1 numa exceção não capturada. Ligue **se** você usa supervisor (systemd, pm2, Docker com `restart`) |
 
 ---

@@ -104,6 +104,18 @@ function normalizeScorePrivate(v1, v2) {
   const countMiss = v2?.nmiss ?? v1.count_miss  ?? v1.nmiss ?? null;
  
   return {
+    // O id sai daqui desde o scoreStore: era descartado, e sem ele o score não
+    // tem chave para ser guardado. Na v2 é `id`; na lista da v1 (já traduzida
+    // pelo `nativeScore`), `score_id`.
+    score_id: v2?.id ?? v1.score_id ?? null,
+    // md5 do mapa — VERIFICADO nos dois formatos, e é por isso que este
+    // adaptador o preenche e os outros não (ver scoreStore.linhaDe):
+    //   - v2 (`/scores`, `/scores/{id}`): `map_md5` no topo, é a coluna da
+    //     tabela de scores (fixture de test/topscores.test.js);
+    //   - v1 (`get_player_scores`): só ANINHADO, em `beatmap.md5`, que o
+    //     `nativeScore` sobe para `map_md5` (resposta real em
+    //     test/scorewipe.test.js).
+    map_md5: v2?.map_md5 ?? v1.map_md5 ?? null,
     pp,
     accuracy: acc,
     rank: grade,
@@ -170,6 +182,9 @@ function nativeScore(s) {
   return {
     score_id:    s.id ?? null,
     map_id:      bm.id ?? null,
+    // O SELECT da v1 traz `t.map_md5`, mas o handler remonta a resposta e o md5
+    // sai só aninhado (ver o mesmo cuidado em scorewipe/format.js).
+    map_md5:     s.map_md5 ?? bm.md5 ?? null,
     map_set_id:  bm.set_id ?? null,
     map_name:    nomeDoMapa,
     pp:          s.pp,

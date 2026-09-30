@@ -97,6 +97,16 @@ const config = {
     };
   },
 
+  /**
+   * Teto de scores guardados no scores.db (ver db/scores.js). Medido: 300 mil
+   * linhas com os índices deram 64MB (~215 bytes por linha).
+   */
+  get scoreStore() {
+    return {
+      maxRows: int('SCORE_STORE_MAX', 300000, 1),
+    };
+  },
+
   /** Sair com código 1 em exceção não capturada — ver index.js. */
   get exitOnUncaught() {
     return bool('EXIT_ON_UNCAUGHT');
@@ -152,7 +162,7 @@ const config = {
 const VARS = [
   'DISCORD_TOKEN', 'CLIENT_ID', 'COMMAND_PREFIX',
   'OSU_CLIENT_ID', 'OSU_CLIENT_SECRET',
-  'KURATANI_DATA_DIR', 'BEATMAP_CACHE_MAX', 'FC_PP_CACHE_MAX',
+  'KURATANI_DATA_DIR', 'BEATMAP_CACHE_MAX', 'FC_PP_CACHE_MAX', 'SCORE_STORE_MAX',
   'EXIT_ON_UNCAUGHT',
   'DAYCORE_GUILD_ID', 'DAYCORE_ANNOUNCE_CHANNEL_ID', 'DAYCORE_ROLE_LOG_CHANNEL_ID',
   'DAYCORE_CUSTOM_MAP_CHANNEL_ID', 'NOMINATION_THRESHOLD',
@@ -162,7 +172,7 @@ const VARS = [
 ];
 
 const INTS = {
-  BEATMAP_CACHE_MAX: 1, FC_PP_CACHE_MAX: 1, NOMINATION_THRESHOLD: 1,
+  BEATMAP_CACHE_MAX: 1, FC_PP_CACHE_MAX: 1, SCORE_STORE_MAX: 1, NOMINATION_THRESHOLD: 1,
   REDIS_PORT: 1, REDIS_DB: 0, DAYCORE_MYSQL_PORT: 1,
 };
 

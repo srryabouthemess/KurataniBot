@@ -207,6 +207,8 @@ function normalizeLegacyScore(raw, beatmapId) {
   const iso = data ? `${data.replace(' ', 'T')}Z` : null;
 
   return {
+    // O legado manda o id; sem ele o score não tem chave para o scoreStore.
+    score_id: raw.score_id,
     pp: parseFloat(raw.pp ?? 0),
     accuracy,
     rank: raw.rank ?? 'F',
