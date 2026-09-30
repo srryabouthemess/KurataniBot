@@ -38,6 +38,7 @@ const { TtlCache } = require('./lib/ttlCache');
 const { logErrorOnce } = require('./lib/logger');
 const { criarLote } = require('./lib/batch');
 const metrics = require('./lib/metrics');
+const scoreStore = require('./scoreStore');
 
 const DEFAULT_MODE = servers.defaultKey();
 
@@ -295,6 +296,24 @@ async function getUser(username, mode = DEFAULT_MODE, { fresh = false } = {}) {
   return user;
 }
 
+// ─── Guardar o que passou por aqui ────────────────────────────────────────────
+/**
+ * Entrega ao scoreStore os scores que acabaram de vir da rede.
+ *
+ * Só registra: normalizar e gravar acontecem depois da resposta (ver
+ * scoreStore.js), e nada aqui espera nem lança. Score servido do cache não
+ * passa por aqui — já passou quando foi buscado.
+ *
+ * O nick vem do cache de usuário, que o comando quase sempre aqueceu antes
+ * (é o `getUser` que resolve o jogador). Sem ele, fica para o próximo.
+ */
+function guardar(scores, mode, userId, adaptar) {
+  const username = userId === undefined || userId === null
+    ? null
+    : _userCache.get(_userCacheKey(mode, userId))?.username ?? null;
+  scoreStore.record(scores, { server: mode, userId, username, adaptar });
+}
+
 // ─── Cache de top plays ───────────────────────────────────────────────────────
 /**
  * A lista de melhores plays, do cache quando possível.
@@ -337,9 +356,11 @@ async function getBestScores(userId, limit = 10, mode = DEFAULT_MODE, { fresh = 
   if (!fresh) metrics.cache('topPlays', Boolean(guardado));
   if (guardado) return guardado;
 
-  const scores = await apiFor(mode).bestScores(userId, limit, mode);
+  const api = apiFor(mode);
+  const scores = await api.bestScores(userId, limit, mode);
   // Falha não chega aqui: ela sobe para quem chamou, e nada é guardado.
   _bestCache.set(chave, scores);
+  guardar(scores, mode, userId, api.paraGuardar);
   return scores;
 }
 
@@ -355,8 +376,13 @@ async function getBestScores(userId, limit = 10, mode = DEFAULT_MODE, { fresh = 
  * Scores crus, sem enriquecer: quem chama enriquece só a página que vai exibir.
  * Enriquecer as 50 buscadas de uma vez seria uma rajada de requisições.
  */
-const getRecentScores = (userId, limit = 1, mode = DEFAULT_MODE) =>
-  apiFor(mode).recentScores(userId, limit, mode);
+async function getRecentScores(userId, limit = 1, mode = DEFAULT_MODE) {
+  const api = apiFor(mode);
+  const scores = await api.recentScores(userId, limit, mode);
+  // As que não passaram ficam de fora no próprio store (ver scoreStore.linhaDe).
+  guardar(scores, mode, userId, api.paraGuardar);
+  return scores;
+}
 
 /**
  * Todos os scores que o jogador tem num mapa — o que o /score exibe.
@@ -372,6 +398,8 @@ async function getUserBeatmapScores(userId, beatmapId, mode = DEFAULT_MODE) {
   // embed sairia sem capa nem título.
   const bm = await fetchBeatmap(beatmapId);
   const withMap = scores.map(score => mergeBeatmapInfo(score, beatmapId, bm));
+  // Aqui todo adaptador já devolve normalizado: nada a adaptar.
+  guardar(withMap, mode, userId);
 
   // pp nulo (score de lazer que a API não pontuou, mapa unranked) vai para o
   // fim, em vez de virar 0 e passar na frente de quem pontuou.
@@ -497,6 +525,9 @@ async function getTopScores(mode = DEFAULT_MODE) {
   // A varredura incompleta também é guardada: repetir o comando não vai fazer o
   // servidor encolher, e sem isso cada tentativa refaria as 30 requisições.
   _topScoresCache.set(mode, resultado);
+  // Cada linha tem o próprio dono (`userid`), então não há userId de contexto.
+  // `varredura` conta à parte no store: são os mesmos scores a cada rodada.
+  scoreStore.record(resultado.scores, { server: mode, adaptar: api.topParaGuardar, varredura: true });
   return resultado;
 }
 

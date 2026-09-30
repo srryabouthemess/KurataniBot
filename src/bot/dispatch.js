@@ -37,6 +37,7 @@
  */
 
 const { MessageFlags } = require('discord.js');
+const scoreStore = require('../scoreStore');
 
 const MODOS = new Set([true, false, 'ephemeral']);
 
@@ -62,7 +63,10 @@ async function executar(command, interaction) {
     await interaction.deferReply();
   }
 
-  return command.execute(interaction);
+  // O escopo é o que põe a gravação dos scores DEPOIS da resposta: o que o
+  // osuClient registrar durante o `execute` só vai para o banco quando ele
+  // terminar, e ele termina depois do `editReply` (ver scoreStore.js).
+  return scoreStore.escopo(() => command.execute(interaction));
 }
 
 module.exports = { executar, deferValido };
