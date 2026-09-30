@@ -155,4 +155,70 @@ function triesAt(list, index, limit) {
   return { count: fim - index, partial: fim === list.length && list.length >= limit };
 }
 
-module.exports = { pairFor, keysToFetch, mergeRecent, fetchEach, triesAt };
+/**
+ * Identidade de um score cru, como string (ou null quando não há).
+ *
+ * bancho.py, Ripple e Gatari usam `score_id`; a API oficial usa `id`, que
+ * sobrevive ao normalizeScore por causa do `...raw` (ver officialApi.js). Em
+ * string porque o mesmo id chega em número de um endpoint e em texto de outro.
+ */
+function scoreIdOf(score) {
+  const id = score?.score_id ?? score?.id;
+  return id === undefined || id === null || id === '' ? null : String(id);
+}
+
+/**
+ * O top de cada chave, para o "PB #N" do /recent. NUNCA rejeita.
+ *
+ * O top é enfeite: sem ele o /recent responde como sempre respondeu, sem a
+ * marca. Então a falha de uma chave (ou de todas) vira "sem top daquela chave",
+ * e vai para o log uma vez por causa — do contrário "top fora do ar" e "play
+ * fora do top" ficariam indistinguíveis, como no `fetchEach`.
+ *
+ * @param {string[]} keys
+ * @param {(mode: string) => Promise<object[]>} fetchOne
+ * @returns {Promise<Map<string, object[]>>} só as chaves que responderam
+ */
+async function fetchTops(keys, fetchOne) {
+  // O `async` embrulha um throw síncrono de `fetchOne` numa rejeição, que o
+  // allSettled segura — senão ele escaparia pelo `map` e derrubaria o comando.
+  const settled = await Promise.allSettled(keys.map(async key => fetchOne(key)));
+
+  const tops = new Map();
+  settled.forEach((result, i) => {
+    if (result.status === 'rejected') logErrorOnce(`recentMerge:top:${keys[i]}`, result.reason);
+    else if (Array.isArray(result.value)) tops.set(keys[i], result.value);
+  });
+  return tops;
+}
+
+/**
+ * Em que posição do top do jogador a play está — o "PB #N" do /recent —, ou
+ * null quando ela não está lá (ou não dá para afirmar que está).
+ *
+ * Casa pelo ID do score, e só por ele. A lista de recentes e a de top vêm do
+ * mesmo adaptador, então o id é o mesmo nas duas. Mapa + mods + pp parece
+ * equivalente e não é: duas plays com os mesmos mods no mesmo mapa (a de agora
+ * pior que a do top) casariam, e o embed diria "PB" numa play que não é. Sem id
+ * de um dos lados, a marca some em vez de ser chutada.
+ *
+ * O top consultado é o da CHAVE da play (`_mode`): com `modo: both`, uma play
+ * de RX é procurada no top de RX, nunca no de VN.
+ *
+ * @param {object} play score cru, com o `_mode` que o mergeRecent pôs
+ * @param {Map<string, object[]>} tops o que o fetchTops devolveu
+ * @returns {number|null} posição começando em 1
+ */
+function personalBestAt(play, tops) {
+  const id  = scoreIdOf(play);
+  const top = tops?.get(play?._mode);
+  if (id === null || !Array.isArray(top)) return null;
+
+  const i = top.findIndex(score => scoreIdOf(score) === id);
+  return i === -1 ? null : i + 1;
+}
+
+module.exports = {
+  pairFor, keysToFetch, mergeRecent, fetchEach, triesAt,
+  scoreIdOf, fetchTops, personalBestAt,
+};

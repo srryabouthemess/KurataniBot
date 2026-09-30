@@ -142,6 +142,9 @@ module.exports = ({ ADMIN }) => ({
 
   recent_none:             (name) => `Nenhuma play recente encontrada para **${name}**.`,
   recent_error:            'Erro ao buscar a play recente. Verifique se o jogador existe.',
+  // Posição da play no top do jogador (o "PB #N" do Bathbot); só aparece
+  // quando o id do score está no top daquele servidor/modo.
+  recent_personal_best:    (n) => `**Top #${n} pessoal**`,
   // `status` é o do MAPA (ranked, loved, graveyard...) e `mapper` é quem o fez.
   // Os dois podem faltar: só a API oficial manda esses campos, o bancho.py não.
   recent_footer:           (page, total, label, status, mapper, tries) =>

@@ -316,6 +316,7 @@ function author(user, mode, s) {
  * A play que ocupa o embed inteiro (/recent): o mapa está no título, então as
  * linhas falam só do que aconteceu nele.
  *
+ *   **Top #12 pessoal**                       ← só com `personalBest`
  *   {grade} @47% +NM • 1,234,567 • 81.48% • há 2 horas
  *   121.21/457.95pp • 55x/284x • ❌ 23
  *   { 148 / 18 / 0 / 23 }
@@ -326,8 +327,12 @@ function author(user, mode, s) {
  *                    status: string|null, creator: string|null}>}
  *   o `status` e o `creator` saem junto porque quem monta o rodapé é o comando
  *   — a frase dele é traduzida, e o mapa é quem tem os dados.
+ *
+ * `personalBest` é a posição da play no top do jogador (ver
+ * recentMerge.personalBestAt). Quem sabe se ela está lá é o comando; aqui só se
+ * desenha, e sem o número a linha não existe.
  */
-async function single(play, { mode, s }) {
+async function single(play, { mode, s, personalBest = null }) {
   const [pp, estrelas, meta, attrs] = await Promise.all([
     ppText(play, mode),
     stars(play, mode),
@@ -348,6 +353,7 @@ async function single(play, { mode, s }) {
   ].filter(Boolean).join(' ');
 
   const linhas = [
+    Number.isInteger(personalBest) && personalBest > 0 ? s.recent_personal_best(personalBest) : null,
     join([identidade, total, accuracy(play), timeAgo(play.created_at)]),
     join([pp, combo(play), misses(play)]),
     hits(play),

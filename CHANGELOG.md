@@ -2,6 +2,30 @@
 
 ---
 
+# Sessão de 2026-09-30 (PB #N no /recent)
+
+## ✨ Novidades
+
+- **"Top #N pessoal" no `/recent`, quando a play está no top do jogador.** [`recent.js`](src/commands/osu/recent.js), [`recentMerge.js`](src/recentMerge.js), [`play.js`](src/embeds/play.js)
+  - O top 100 é buscado junto com os recentes (`Promise.all`), pelo mesmo
+    `getBestScores` do `/topplays` e do `/nc` — mesma chave de cache.
+  - Casa pelo **id do score**, e só por ele. Mapa + mods + pp casaria uma
+    play pior no mesmo mapa com a do top. Sem id de um dos lados, a marca some.
+  - O top consultado é o da chave DA PLAY: com `modo: both`, play de RX é
+    procurada no top de RX.
+  - Top fora do ar não derruba nada: o `/recent` responde como antes, sem a
+    marca, e a falha vai para o log uma vez.
+  - O 🔄 busca o top de novo sem cache. É o jeito de ver a marca de uma play
+    que o top guardado (até um minuto) ainda não tinha.
+
+## 🐛 Correções
+
+- **O 🔄 do `/recent` funciona no Akatsuki.** [`rippleApi.js`](src/osu/rippleApi.js)
+  - O score do Ripple perdia o `id` na tradução, e o refresh sempre caía em
+    "play não encontrada". Agora ele sai como `score_id`, como no Gatari.
+
+---
+
 # Sessão de 2026-09-30 (metadados de mapa em lote)
 
 ## ⚡ Desempenho
