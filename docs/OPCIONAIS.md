@@ -11,6 +11,7 @@ Cada seção é independente — ligue só o que você quer.
 - [O cálculo de PP](#o-cálculo-de-pp)
 - [Administração do servidor](#administração-do-servidor)
 - [Outras variáveis](#outras-variáveis)
+- [Backup](#backup)
 - [Testes](#testes)
 
 ---
@@ -265,6 +266,46 @@ Do lado do servidor isso exige o fork publicar `ex:priv_change` no `!addpriv`/`!
 | `FC_PP_CACHE_MAX` | Quantos valores de "PP se tivesse sido FC" manter; padrão `20000` (~1–2 MB) |
 | `KURATANI_DATA_DIR` | Onde ficam `bot.db` e `cache.db`; vazio = `data/`, dentro do projeto. No `npm test` ela é preenchida sozinha (ver [Testes](#testes)) |
 | `EXIT_ON_UNCAUGHT` | `true` faz o bot sair com código 1 numa exceção não capturada. Ligue **se** você usa supervisor (systemd, pm2, Docker com `restart`) |
+
+---
+
+## Backup
+
+Só o `bot.db` importa: links, idiomas, preferências e vínculos de staff não se refazem. O `cache.db` fica de fora — o bot baixa e recalcula tudo dele de novo.
+
+```bash
+npm run backup
+```
+
+Grava `data/backups/bot-AAAA-MM-DD.db` (rodar de novo no mesmo dia sobrescreve) e apaga os com mais de 14 dias. Pode rodar com o bot no ar.
+
+Para um por dia, às 4h, no `crontab -e` de quem roda o bot:
+
+```bash
+0 4 * * * cd /caminho/do/KurataniBot && /usr/bin/node scripts/backup.js >> data/backup.log 2>&1
+```
+
+O cron não carrega o seu shell: use o caminho que `which node` mostrar (com nvm, é um dentro de `~/.nvm`).
+
+**Antes de migrar, o bot copia sozinho.** Quando uma atualização muda o formato do banco, o boot grava `bot-pre-v<versão>-AAAA-MM-DD.db` antes de mexer em qualquer coisa. E um código mais antigo que o banco **se recusa a subir**, em vez de gravar num formato que não conhece.
+
+<details>
+<summary>Voltar para uma versão anterior</summary>
+
+Se a atualização não migrou o banco, basta voltar o código. Se migrou, o bot antigo recusa o banco novo, e é preciso o backup de antes:
+
+```bash
+pm2 stop kuratanibot                         # o nome que o `pm2 ls` mostrar
+cd data && rm -f bot.db-wal bot.db-shm
+cp backups/bot-pre-v8-2026-09-30.db bot.db   # o de antes da migração
+cd .. && git checkout <commit anterior> && pm2 start kuratanibot
+```
+
+O `-wal` e o `-shm` saem **antes**: são do banco que está sendo substituído, e o SQLite os aplicaria por cima da cópia. O que foi gravado depois da migração se perde.
+
+</details>
+
+Os backups ficam no mesmo disco do bot — contra disco perdido, copie `data/backups/` para fora da máquina.
 
 ---
 

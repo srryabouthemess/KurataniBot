@@ -218,3 +218,102 @@ test('o .migrated que sobrou da importação antiga não atrapalha', t => {
   const db = load();
   assert.equal(userVersion(dbPath), db.SCHEMA_VERSION);
 });
+
+// ─── Rollback: banco mais novo que o código, e o backup de antes de migrar ────
+
+test('banco de schema mais novo que o código é recusado, sem ser tocado', t => {
+  // É o rollback de código depois de uma migração: antes o `run` via
+  // `versao >= VERSAO_ATUAL`, saía calado, e o bot seguia gravando num formato
+  // que não conhece.
+  const { dbPath, load } = dbWorkspace(t);
+
+  const primeiro = load();
+  const atual = primeiro.SCHEMA_VERSION;
+  primeiro.setUserLang('discord-A', 'en');
+  primeiro.close();
+
+  comHandle(dbPath, h => h.exec(`PRAGMA user_version = ${atual + 1}`));
+
+  const erro = recusa(load);
+  assert.ok(erro, 'deveria ter recusado o banco');
+  assert.match(erro.message, new RegExp(`versão ${atual + 1} do schema`));
+  assert.match(erro.message, new RegExp(`só conhece até a ${atual}`));
+  assert.match(erro.message, /backup de antes dela/);
+
+  assert.equal(userVersion(dbPath), atual + 1, 'o carimbo não deveria ter descido');
+  assert.equal(
+    comHandle(dbPath, h => h.prepare("SELECT lang FROM users WHERE discord_id = 'discord-A'").get().lang),
+    'en',
+  );
+});
+
+test('o run também recusa o banco mais novo, e aceita o da versão atual', () => {
+  // A trava mora no `run` além da conferência do boot: quem chamar as
+  // migrações por outro caminho não passa por cima dela.
+  const migrations = require(path.join(ROOT, 'db', 'migrations'));
+  const h = new DatabaseSync(':memory:');
+  try {
+    h.exec(`PRAGMA user_version = ${migrations.VERSAO_ATUAL}`);
+    assert.equal(migrations.run(h), migrations.VERSAO_ATUAL);
+
+    h.exec(`PRAGMA user_version = ${migrations.VERSAO_ATUAL + 1}`);
+    assert.throws(() => migrations.run(h), /só conhece até a/);
+  } finally {
+    h.close();
+  }
+});
+
+/** Os backups gravados na pasta de dados do workspace. */
+const backupsEm = (dir) => {
+  const pasta = path.join(dir, 'backups');
+  return fs.existsSync(pasta) ? fs.readdirSync(pasta).sort() : [];
+};
+
+test('antes de migrar, o bot.db é copiado como estava', t => {
+  // Voltar o código depois de uma migração exige o banco de antes dela; esta
+  // é a cópia, tirada antes até do schema.apply.
+  const { dir, dbPath, load } = dbWorkspace(t);
+
+  const primeiro = load();
+  primeiro.setLink('1', 'official', 'fulano', 123);
+  primeiro.close();
+  assert.deepEqual(backupsEm(dir), [], 'banco novo não tem o que copiar');
+
+  comHandle(dbPath, h => {
+    h.exec("UPDATE users SET osu_user = 'fulano' WHERE discord_id = '1'");
+    h.exec('PRAGMA user_version = 7');
+  });
+
+  const db = load();
+  const [nome, ...resto] = backupsEm(dir);
+  assert.match(nome, /^bot-pre-v7-\d{4}-\d{2}-\d{2}\.db$/);
+  assert.deepEqual(resto, []);
+
+  // A cópia é o banco de ANTES: carimbo 7 e o valor que a 7 → 8 apaga.
+  const copia = path.join(dir, 'backups', nome);
+  assert.equal(userVersion(copia), 7);
+  assert.equal(comHandle(copia, h => h.prepare("SELECT osu_user FROM users WHERE discord_id = '1'").get().osu_user), 'fulano');
+  assert.equal(userVersion(dbPath), db.SCHEMA_VERSION, 'e a migração rodou mesmo assim');
+  db.close();
+
+  // Já na versão atual, nada a migrar: nada a copiar.
+  load().close();
+  assert.equal(backupsEm(dir).length, 1);
+
+  // Outra migração a partir da mesma versão no mesmo dia não sobrescreve a
+  // primeira cópia: ela pode ser o único retrato bom de antes de uma falha.
+  comHandle(dbPath, h => h.exec('PRAGMA user_version = 7'));
+  load();
+  assert.deepEqual(backupsEm(dir), [nome, nome.replace(/\.db$/, '-2.db')].sort());
+});
+
+test('banco mais novo não ganha backup de "antes de migrar"', t => {
+  const { dir, dbPath, load } = dbWorkspace(t);
+  const primeiro = load();
+  const atual = primeiro.SCHEMA_VERSION;
+  primeiro.close();
+
+  comHandle(dbPath, h => h.exec(`PRAGMA user_version = ${atual + 1}`));
+  assert.ok(recusa(load));
+  assert.deepEqual(backupsEm(dir), []);
+});

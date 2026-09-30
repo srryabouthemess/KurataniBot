@@ -69,5 +69,7 @@ module.exports = {
   dadosEsquecidosNaRaiz,
   BOT_DB:   path.join(DATA_DIR, 'bot.db'),
   CACHE_DB: path.join(DATA_DIR, 'cache.db'),
+  // Só do bot.db: o cache.db é regenerável (ver db/backup.js).
+  BACKUPS_DIR: path.join(DATA_DIR, 'backups'),
   ASSETS:   path.join(ROOT, 'assets'),
 };

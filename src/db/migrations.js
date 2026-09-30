@@ -30,12 +30,20 @@
  * mensagem aponta o commit que ainda sabe migrá-lo. Recusar é o lado seguro:
  * aplicar o schema atual por cima de tabelas antigas misturaria os dois
  * formatos sem erro nenhum na hora.
+ *
+ * ── E o que veio DEPOIS ───────────────────────────────────────────────────────
+ * O caminho inverso também é recusado: um banco carimbado numa versão acima da
+ * `VERSAO_ATUAL` é de um código mais novo do que este, e isto aqui não conhece
+ * as colunas e tabelas que ele ganhou (ver `conferirVersao`). É o rollback de
+ * código depois de uma migração — que só se desfaz com o backup de antes dela,
+ * tirado sozinho por `backupAntesDeMigrar`.
  */
 
 const fs   = require('fs');
 const path = require('path');
 
 const { DATA_DIR } = require('../paths');
+const backup = require('./backup');
 
 const VERSAO_ATUAL = 8;
 
@@ -55,6 +63,24 @@ function ehNovo(db) {
 }
 
 /**
+ * Recusa o banco de schema MAIS NOVO do que este código.
+ *
+ * Sem isto, voltar o código depois de uma migração subia normalmente: o
+ * `run` via `versao >= VERSAO_ATUAL` e saía, e o bot seguia gravando num banco
+ * cujo formato não conhece — coluna nova ficando sem valor, tabela nova sem
+ * ninguém mantendo. O estrago aparece depois, e longe daqui.
+ */
+function conferirVersao(versao) {
+  if (versao > VERSAO_ATUAL) {
+    throw new Error(
+      `O bot.db está na versão ${versao} do schema, e este código só conhece até a ${VERSAO_ATUAL}.\n` +
+      '  Voltar o código depois de uma migração exige restaurar o backup de antes dela\n' +
+      '  (data/backups/bot-pre-v<versão>-AAAA-MM-DD.db), com o bot parado — ou volte para o código novo.',
+    );
+  }
+}
+
+/**
  * Recusa o banco que estas migrações não sabem levar até a versão atual.
  *
  * Roda ANTES do `schema.apply`: os CREATE de lá sobre tabelas no formato antigo
@@ -70,6 +96,8 @@ function conferirOrigem(db, { novo = ehNovo(db), dataDir = DATA_DIR } = {}) {
     `Rode uma vez o commit ${COMMIT_COM_MIGRACAO_ANTIGA} do KurataniBot (git checkout ${COMMIT_COM_MIGRACAO_ANTIGA} && npm start),\n` +
     '  que ainda sabe migrar, pare o bot e volte para a versão atual.';
 
+  conferirVersao(versao);
+
   if (!novo && versao < VERSAO_MINIMA) {
     throw new Error(`O bot.db é de uma versão do bot anterior à numeração do schema (user_version ${versao}).\n  ${instrucao}`);
   }
@@ -78,6 +106,28 @@ function conferirOrigem(db, { novo = ehNovo(db), dataDir = DATA_DIR } = {}) {
   if (novo && jsons.length > 0) {
     throw new Error(`Há dados de antes do SQLite (${jsons.join(', ')}) e nenhum bot.db para recebê-los.\n  ${instrucao}`);
   }
+}
+
+/**
+ * Copia o bot.db antes de uma migração que vai de fato rodar.
+ *
+ * Roda ANTES do `schema.apply`, pela mesma razão da conferência: os CREATE de
+ * lá já acrescentam tabelas ao banco antigo, e o backup tem que ser o banco
+ * exatamente como o código anterior o deixou. Banco novo não tem o que copiar;
+ * banco na versão atual não vai migrar.
+ *
+ * Se a cópia falhar, o boot falha junto. Migrar sem ela é justamente o que
+ * deixaria um rollback sem volta — melhor o bot parado com o erro na tela.
+ *
+ * @returns {string|null} o arquivo gravado, ou null quando não há migração
+ */
+function backupAntesDeMigrar(db, { novo = ehNovo(db), dir } = {}) {
+  const versao = db.prepare('PRAGMA user_version').get().user_version;
+  if (novo || versao >= VERSAO_ATUAL) return null;
+
+  const destino = backup.backupPreMigracao(db, versao, { dir });
+  console.log(`[db] Backup antes de migrar da versão ${versao} para a ${VERSAO_ATUAL}: ${destino}`);
+  return destino;
 }
 
 /** O banco recém-criado já nasce no formato atual: só falta dizer isso a ele. */
@@ -320,7 +370,8 @@ function zerarLinkAntigoDeUsers(db) {
 
 function run(db) {
   const versao = db.prepare('PRAGMA user_version').get().user_version;
-  if (versao >= VERSAO_ATUAL) return versao;
+  conferirVersao(versao);
+  if (versao === VERSAO_ATUAL) return versao;
 
   if (versao < 2) {
     migrarCachesDeCalculoParaMods(db);
@@ -356,4 +407,6 @@ function run(db) {
   return VERSAO_ATUAL;
 }
 
-module.exports = { run, ehNovo, conferirOrigem, carimbar, VERSAO_ATUAL, VERSAO_MINIMA };
+module.exports = {
+  run, ehNovo, conferirOrigem, backupAntesDeMigrar, carimbar, VERSAO_ATUAL, VERSAO_MINIMA,
+};

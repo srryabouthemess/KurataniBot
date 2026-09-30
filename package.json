@@ -12,7 +12,8 @@
     "config:check": "node src/config.js",
     "smoke:commands": "node scripts/smokeCommands.js",
     "post": "node scripts/postEmbeds.js",
-    "notices": "node scripts/gerar-notices.js"
+    "notices": "node scripts/gerar-notices.js",
+    "backup": "node scripts/backup.js"
   },
   "keywords": [],
   "author": "",

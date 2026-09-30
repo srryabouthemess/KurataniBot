@@ -39,11 +39,14 @@ const mapCache    = require('./mapCache');
 const meta        = require('./meta');
 
 // A ordem é obrigatória. A conferência vem antes de tudo: o schema aplicado por
-// cima de um banco que as migrações não sabem levar misturaria dois formatos. O
+// cima de um banco que as migrações não sabem levar (antigo demais, ou de um
+// código mais novo) misturaria dois formatos. O backup vem antes do schema, que
+// já acrescenta tabelas, para ser o banco como o código anterior o deixou. O
 // "novo" é medido antes do schema, que é quem cria as tabelas. E as migrações
 // terminam antes de qualquer consulta rodar.
 const novo = migrations.ehNovo(connection.db);
 migrations.conferirOrigem(connection.db, { novo });
+migrations.backupAntesDeMigrar(connection.db, { novo });
 schema.apply(connection.db);
 if (novo) migrations.carimbar(connection.db);
 else migrations.run(connection.db);
