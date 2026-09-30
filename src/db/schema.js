@@ -248,6 +248,66 @@ function apply(db) {
     -- varrendo a tabela inteira a cada inserção.
     CREATE INDEX IF NOT EXISTS cache.idx_fc_pp_age ON fc_pp (cached_at);
   `);
+
+  // ─── Scores vistos (arquivo separado, ver connection.js) ────────────────────
+  // Cada score que o bot já buscou para responder um comando, guardado depois
+  // da resposta (ver scoreStore.js). É a base de rankings que não dependam de
+  // varrer a API a cada consulta.
+  //
+  // Versão própria (`scores.user_version`, ver runScores em migrations.js).
+  // Coluna nova aqui entra também como migração de lá, pela mesma regra do
+  // topo deste arquivo.
+  db.exec(`
+    -- A chave é o servidor COM a variante (daycore_rx, akatsuki_rx), e não o
+    -- namespace do link: nada garante que os ids de score de VN e de RX de um
+    -- mesmo servidor venham da mesma sequência.
+    --
+    -- Só entra play que passou: F não serve a ranking nenhum, e é o que menos
+    -- deveria ficar guardado sobre alguém.
+    CREATE TABLE IF NOT EXISTS scores.scores (
+      server      TEXT    NOT NULL,  -- chave do registro (servers.js)
+      score_id    INTEGER NOT NULL,
+      user_id     INTEGER NOT NULL,
+      ruleset     INTEGER NOT NULL DEFAULT 0,  -- 0 = osu!; o RX é dado pelo server
+      map_id      INTEGER,
+      map_md5     TEXT,              -- só de onde a API comprovadamente manda
+      mods        TEXT    NOT NULL,  -- canonicalMods: 'CL,DT(speed_change=1.4),HD'
+      mods_bits   INTEGER,           -- modsToBits: sem CL nem ajuste, só para filtro
+      pp          REAL,              -- NULL = não pontuado (unranked, loved)
+      accuracy    REAL,              -- 0–1, como no resto do bot
+      max_combo   INTEGER,
+      total_score INTEGER,
+      n300        INTEGER,
+      n100        INTEGER,
+      n50         INTEGER,
+      nmiss       INTEGER,
+      rank        TEXT,
+      played_at   INTEGER,           -- epoch ms
+      first_seen  INTEGER NOT NULL,
+      last_seen   INTEGER NOT NULL,
+      -- Quantas vezes um COMANDO trouxe este score. A varredura do /topscores
+      -- conta à parte: ela devolve os mesmos 3000 scores a cada rodada, e
+      -- somada aqui faria qualquer score do topo parecer o mais consultado.
+      seen_count  INTEGER NOT NULL DEFAULT 0,
+      sweep_count INTEGER NOT NULL DEFAULT 0,
+      PRIMARY KEY (server, score_id)
+    ) WITHOUT ROWID;
+
+    -- Topo do servidor, e a poda (menor pp de um servidor, NULL primeiro).
+    CREATE INDEX IF NOT EXISTS scores.idx_scores_server_pp ON scores (server, pp DESC);
+    CREATE INDEX IF NOT EXISTS scores.idx_scores_user      ON scores (server, user_id, pp DESC);
+    CREATE INDEX IF NOT EXISTS scores.idx_scores_map       ON scores (server, map_id, pp DESC);
+
+    -- O nick fica fora do score: trocar de nick é um UPDATE aqui, e não um
+    -- por score. Pode faltar — o score nem sempre chega com ele.
+    CREATE TABLE IF NOT EXISTS scores.score_players (
+      server     TEXT    NOT NULL,
+      user_id    INTEGER NOT NULL,
+      username   TEXT,
+      updated_at INTEGER NOT NULL,
+      PRIMARY KEY (server, user_id)
+    ) WITHOUT ROWID;
+  `);
 }
 
 module.exports = { apply };

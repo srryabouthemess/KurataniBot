@@ -19,7 +19,7 @@ try {
 }
 
 const fs = require('fs');
-const { BOT_DB, CACHE_DB, DATA_DIR, dadosEsquecidosNaRaiz } = require('../paths');
+const { BOT_DB, CACHE_DB, SCORES_DB, DATA_DIR, dadosEsquecidosNaRaiz } = require('../paths');
 
 // ANTES de abrir: abrir cria o arquivo, e um bot.db vazio em data/ com o de
 // verdade parado na raiz é justamente o que esta checagem existe para impedir
@@ -61,10 +61,27 @@ db.exec('PRAGMA synchronous = NORMAL');
 // então não é injeção — mas basta um apóstrofo em `C:\Users\O'Brien\KurataniBot`
 // para o ATTACH virar SQL inválido e o bot não subir, com um erro de sintaxe que
 // não menciona o nome da pasta em lugar nenhum.
-const CACHE_DB_LITERAL = CACHE_DB.replace(/\\/g, '/').replace(/'/g, "''");
-db.exec(`ATTACH DATABASE '${CACHE_DB_LITERAL}' AS cache`);
+const literal = (caminho) => caminho.replace(/\\/g, '/').replace(/'/g, "''");
+db.exec(`ATTACH DATABASE '${literal(CACHE_DB)}' AS cache`);
 db.exec('PRAGMA cache.journal_mode = WAL');
 db.exec('PRAGMA cache.synchronous = NORMAL');
+
+/**
+ * Os scores vistos pelo bot moram num TERCEIRO arquivo, anexado como `scores`.
+ *
+ * Nenhum dos dois primeiros serve. O bot.db tem backup diário por `VACUUM INTO`
+ * do arquivo inteiro (ver backup.js), e dezenas de MB de score iriam junto em
+ * cada cópia. O cache.db é, por contrato, "pode apagar que o bot baixa de
+ * novo" — e score não se baixa de novo: o recente do oficial some em 24h, e o
+ * top de ontem não é o de hoje.
+ *
+ * O arquivo tem o `user_version` DELE (ver `runScores` em migrations.js), e não
+ * mexe no do bot.db: voltar o código não exige restaurar backup por causa de
+ * uma tabela que nem mora lá.
+ */
+db.exec(`ATTACH DATABASE '${literal(SCORES_DB)}' AS scores`);
+db.exec('PRAGMA scores.journal_mode = WAL');
+db.exec('PRAGMA scores.synchronous = NORMAL');
 
 function close() {
   try {

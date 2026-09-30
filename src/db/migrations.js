@@ -366,6 +366,50 @@ function zerarLinkAntigoDeUsers(db) {
   }
 }
 
+// ─── scores.db: a trilha própria ──────────────────────────────────────────────
+
+/**
+ * A versão do schema do scores.db — separada da `VERSAO_ATUAL`, que é do bot.db.
+ *
+ * Separada porque o arquivo é outro. Subir a `VERSAO_ATUAL` por causa de uma
+ * tabela que nem mora no bot.db faria o `conferirVersao` recusar o código
+ * anterior, e voltar o código passaria a exigir restaurar backup — por uma
+ * mudança que não tocou um byte do bot.db.
+ *
+ * Ao acrescentar uma migração do scores.db, suba esta e trate a faixa nova em
+ * `runScores`, no mesmo formato de `run`.
+ */
+const VERSAO_SCORES = 1;
+
+/**
+ * Leva o scores.db até a `VERSAO_SCORES`, e diz se ele pode ser usado.
+ *
+ * Arquivo novo (versão 0) já foi criado no formato atual pelo `schema.apply`:
+ * só falta o carimbo.
+ *
+ * Arquivo MAIS NOVO que este código NÃO derruba o boot, ao contrário do bot.db:
+ * guardar score é acessório, e o bot responde igual sem ele. O store se desliga
+ * (ver scoreStore.js), e o aviso diz por quê.
+ *
+ * @returns {boolean} se o scores.db está numa versão que este código conhece
+ */
+function runScores(db) {
+  const versao = db.prepare('PRAGMA scores.user_version').get().user_version;
+
+  if (versao > VERSAO_SCORES) {
+    console.warn(
+      `[db] O scores.db está na versão ${versao}, e este código só conhece até a ${VERSAO_SCORES}. ` +
+      'Os scores não serão gravados até o código ser atualizado.',
+    );
+    return false;
+  }
+
+  if (versao < VERSAO_SCORES) {
+    db.exec(`PRAGMA scores.user_version = ${VERSAO_SCORES}`);
+  }
+  return true;
+}
+
 // ─── Execução ─────────────────────────────────────────────────────────────────
 
 function run(db) {
@@ -409,4 +453,5 @@ function run(db) {
 
 module.exports = {
   run, ehNovo, conferirOrigem, backupAntesDeMigrar, carimbar, VERSAO_ATUAL, VERSAO_MINIMA,
+  runScores, VERSAO_SCORES,
 };

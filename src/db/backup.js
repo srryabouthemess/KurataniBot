@@ -1,10 +1,17 @@
 /**
  * db/backup.js
- * Cópias do bot.db — o único banco que não se refaz sozinho.
+ * Cópias do bot.db — o banco que não se refaz sozinho e sem o qual o bot não
+ * funciona.
  *
  * Links, idiomas, preferências e vínculos de staff só existem ali. O cache.db
  * fica de fora de propósito: é regenerável por desenho (ver connection.js), e
  * copiá-lo seria carregar dezenas de MB de coisa que o bot baixa de novo.
+ *
+ * O scores.db também fica de fora, por outra razão. Ele não se refaz sozinho,
+ * mas é acessório: são dados públicos que voltam aos poucos com o uso, e perdê-
+ * lo não tira resposta de comando nenhum. Copiá-lo seriam até 64MB por dia,
+ * guardados por `DIAS_DE_RETENCAO` dias — e um score apagado a pedido
+ * (`forgetPlayer`) continuaria nas cópias por esse tempo todo.
  *
  * Dois momentos usam isto:
  *

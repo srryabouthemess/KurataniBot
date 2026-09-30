@@ -16,6 +16,7 @@
  *   staff.js        vínculo de staff e a prova de posse da conta
  *   nominations.js  fila de nomeação e log de ação administrativa
  *   mapCache.js     os quatro caches de mapa, todos no cache.db
+ *   scores.js       os scores já vistos, no scores.db (quem grava é o scoreStore.js)
  *
  * Era um arquivo de mil linhas em que o schema, seis migrações e sete assuntos
  * de consulta se intercalavam, e onde acrescentar uma tabela significava mexer
@@ -37,6 +38,7 @@ const staff       = require('./staff');
 const nominations = require('./nominations');
 const mapCache    = require('./mapCache');
 const meta        = require('./meta');
+const scores      = require('./scores');
 
 // A ordem é obrigatória. A conferência vem antes de tudo: o schema aplicado por
 // cima de um banco que as migrações não sabem levar (antigo demais, ou de um
@@ -50,6 +52,8 @@ migrations.backupAntesDeMigrar(connection.db, { novo });
 schema.apply(connection.db);
 if (novo) migrations.carimbar(connection.db);
 else migrations.run(connection.db);
+// O scores.db tem trilha própria, e a recusa dele não derruba o boot.
+scores.definirScoresDisponivel(migrations.runScores(connection.db));
 
 module.exports = {
   ...users,
@@ -57,10 +61,12 @@ module.exports = {
   ...nominations,
   ...mapCache,
   ...meta,
+  ...scores,
 
   close: connection.close,
 
   // Exposto para teste e diagnóstico: diz se as migrações herdadas ainda vão
   // rodar no próximo boot.
   SCHEMA_VERSION: migrations.VERSAO_ATUAL,
+  SCORES_SCHEMA_VERSION: migrations.VERSAO_SCORES,
 };

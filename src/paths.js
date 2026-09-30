@@ -69,6 +69,9 @@ module.exports = {
   dadosEsquecidosNaRaiz,
   BOT_DB:   path.join(DATA_DIR, 'bot.db'),
   CACHE_DB: path.join(DATA_DIR, 'cache.db'),
+  // Scores vistos pelo bot (ver db/scores.js). Nem cache (não se baixa de novo)
+  // nem dado essencial (fica fora do backup) — daí um terceiro arquivo.
+  SCORES_DB: path.join(DATA_DIR, 'scores.db'),
   // Só do bot.db: o cache.db é regenerável (ver db/backup.js).
   BACKUPS_DIR: path.join(DATA_DIR, 'backups'),
   ASSETS:   path.join(ROOT, 'assets'),
