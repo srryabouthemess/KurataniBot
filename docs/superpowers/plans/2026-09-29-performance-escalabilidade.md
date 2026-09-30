@@ -159,8 +159,8 @@ A interface `rateLimiter.acquire(site)` não muda: quem chama continua sem saber
 
 [Certo] Hoje `fetchBeatmap` faz um `GET /beatmaps/{id}` por mapa. [Provável] A API v2 tem `GET /beatmaps?ids[]=…` com até 50 ids por requisição e o mesmo `BeatmapExtended` (com `beatmapset` e `max_combo`). Num `/nochoke` frio, **100 requisições viram 2**.
 
-- [ ] **Step 1 — conferir o contrato, antes de qualquer código.** Pedir o mesmo mapa pelos dois endpoints e comparar os campos que o bot lê (`max_combo`, `difficulty_rating`, `version`, `beatmapset.{title,artist,covers}`, `beatmapset_id`). Se algum faltar no lote, parar aqui.
-- [ ] **Step 2 — um agrupador no estilo DataLoader em `src/lib/batch.js`**, para `fetchBeatmap(id)` continuar com a mesma assinatura e todos os chamadores ganharem de graça:
+- [x] **Step 1 — conferir o contrato, antes de qualquer código.** Pedir o mesmo mapa pelos dois endpoints e comparar os campos que o bot lê (`max_combo`, `difficulty_rating`, `version`, `beatmapset.{title,artist,covers}`, `beatmapset_id`). Se algum faltar no lote, parar aqui.
+- [x] **Step 2 — um agrupador no estilo DataLoader em `src/lib/batch.js`**, para `fetchBeatmap(id)` continuar com a mesma assinatura e todos os chamadores ganharem de graça:
 
 ```js
 /**
@@ -203,7 +203,7 @@ function criarLote({ max, janelaMs = 5, buscar }) {
 module.exports = { criarLote };
 ```
 
-- [ ] **Step 3 — ligar no `osuClient.js`:**
+- [x] **Step 3 — ligar no `osuClient.js`:**
 
 ```js
 const carregarMeta = criarLote({
@@ -239,8 +239,8 @@ async function fetchBeatmap(id) {
 }
 ```
 
-- [ ] **Step 4 —** no `enrichBeatmapData`, trocar `mapLimit(idsNeeded, BEATMAP_CONCURRENCY, fetchBeatmap)` por `Promise.all(idsNeeded.map(fetchBeatmap))`. Com o `mapLimit` 5, cada lote sairia com 5 ids e o ganho sumiria. A vazão continua controlada: são 2 requisições, e elas passam pelo balde.
-- [ ] **Step 5 — teste:** 100 ids frios → exatamente 2 chamadas a `officialGet`; id ausente no retorno → cache negativo; erro na requisição → nenhum cache negativo (paridade com o comportamento de hoje para 5xx).
+- [x] **Step 4 —** no `enrichBeatmapData`, trocar `mapLimit(idsNeeded, BEATMAP_CONCURRENCY, fetchBeatmap)` por `Promise.all(idsNeeded.map(fetchBeatmap))`. Com o `mapLimit` 5, cada lote sairia com 5 ids e o ganho sumiria. A vazão continua controlada: são 2 requisições, e elas passam pelo balde.
+- [x] **Step 5 — teste:** 100 ids frios → exatamente 2 chamadas a `officialGet`; id ausente no retorno → cache negativo; erro na requisição → nenhum cache negativo (paridade com o comportamento de hoje para 5xx).
 
 **Ganho esperado:** −98 requisições por comando frio; ~12s → ~0,3s no trecho de metadados. [Provável]
 

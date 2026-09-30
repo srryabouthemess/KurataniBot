@@ -94,23 +94,35 @@ async function comFalha(status, fn) {
 test('mapa que a API não conhece não é pedido de novo', async () => {
   // Sem cache negativo, o `precisaEnriquecer` continua verdadeiro para aquele
   // score para sempre: cada renderização gastava balde do rate limiter para
-  // receber o mesmo 404. É o caso do mapa exclusivo de servidor privado.
-  const id = 900000001;
+  // receber a mesma resposta vazia. É o caso do mapa apagado do osu!.
+  //
+  // O endpoint em lote não dá 404: o mapa que ele não conhece simplesmente não
+  // vem na lista (ver carregarMeta no osuClient).
+  // Abaixo de 100_000_000: daí para cima é id custom do Daycore, que nem é pedido.
+  const id = 99000001;
+  let chamadas = 0;
+  const original = officialApi.officialGet;
+  officialApi.officialGet = async () => {
+    chamadas++;
+    return { beatmaps: [] };
+  };
 
-  const chamadas = await comFalha(404, async () => {
+  try {
     assert.equal(await osu.getBeatmap(id), null);
     assert.equal(await osu.getBeatmap(id), null);
     assert.equal(await osu.getBeatmap(id), null);
-  });
+  } finally {
+    officialApi.officialGet = original;
+  }
 
-  assert.equal(chamadas, 1, 'o 404 deveria ter ficado em cache');
+  assert.equal(chamadas, 1, 'o mapa ausente deveria ter ficado em cache');
 });
 
 test('falha passageira não vira cache negativo', async () => {
   // Um 5xx ou uma queda de rede passam em segundos. Guardá-los faria um blip
   // esconder o mapa por dez minutos — trocando uma falha visível por dados
   // faltando no embed, que é bem pior de diagnosticar.
-  const id = 900000002;
+  const id = 99000002;
 
   const chamadas = await comFalha(502, async () => {
     await osu.getBeatmap(id);

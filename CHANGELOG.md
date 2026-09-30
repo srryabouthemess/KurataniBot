@@ -2,6 +2,24 @@
 
 ---
 
+# Sessão de 2026-09-30 (metadados de mapa em lote)
+
+## ⚡ Desempenho
+
+- **Metadados de mapa saem em lote, 50 por requisição.** [`osuClient.js`](src/osuClient.js), [`batch.js`](src/lib/batch.js)
+  - O `fetchBeatmap` usava um `GET /beatmaps/{id}` por mapa e passou para o
+    `GET /beatmaps?ids[]=`. Num `/nc` frio de 100 plays, a fila `osuApi` cai
+    de ~100 para 2 requisições. Vale para todo servidor, porque o combo do
+    mapa sempre vem da API oficial.
+  - Os dois endpoints devolvem o mesmo objeto: mesmo transformer e mesmos
+    includes no osu-web.
+  - Mapa que não vem na resposta vira cache negativo, como o 404 virava. Erro
+    da requisição continua sem virar.
+  - Mapa custom do Daycore (id ≥ 100.000.000) deixa de ser pedido à API
+    oficial. Antes ele ia, voltava 404 e caía no cache negativo.
+
+---
+
 # Sessão de 2026-09-30 (plays do bancho.py pela v1)
 
 ## 🔧 Mudanças

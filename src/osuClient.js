@@ -36,7 +36,7 @@ const { parseModsString, parseModTokens } = require('./mods');
 const { idSegment } = require('./lib/urlSafe');
 const { TtlCache } = require('./lib/ttlCache');
 const { logErrorOnce } = require('./lib/logger');
-const { mapLimit } = require('./lib/concurrency');
+const { criarLote } = require('./lib/batch');
 const metrics = require('./lib/metrics');
 
 const DEFAULT_MODE = servers.defaultKey();
@@ -87,11 +87,39 @@ const MISSING_MAX    = 500;
 const _missingBeatmaps = new TtlCache({ ttlMs: MISSING_TTL_MS, max: MISSING_MAX });
 
 /**
+ * Metadados de vários mapas numa requisição só, pelo `GET /beatmaps?ids[]=`.
+ *
+ * O teto de 50 é o da API: o osu-web corta a lista em 50 e ignora o resto em
+ * silêncio. O objeto de cada mapa é o MESMO do `GET /beatmaps/{id}` — os dois
+ * endpoints usam o mesmo transformer com os mesmos includes (`beatmapset`,
+ * `max_combo`...), conferido no BeatmapsController do osu-web.
+ *
+ * O axios serializa o array como `ids[]=1&ids[]=2` (com os colchetes
+ * escapados), que é a forma que o PHP lê como lista.
+ */
+const BEATMAP_BATCH_MAX = 50;
+
+const carregarMeta = criarLote({
+  max: BEATMAP_BATCH_MAX,
+  buscar: async ids => {
+    const { beatmaps = [] } = await officialApi.officialGet('/beatmaps', { params: { ids } });
+    return new Map(beatmaps.map(bm => [bm.id, bm]));
+  },
+});
+
+/**
  * Metadados de um beatmap, do cache quando possível.
- * O dedupe compartilha a requisição com quem pedir o mesmo mapa enquanto ela
- * está em voo (ver inflight.js).
+ *
+ * O pedido entra no lote (ver `carregarMeta`), e o dedupe compartilha a espera
+ * com quem pedir o mesmo mapa enquanto ele está em voo (ver inflight.js).
+ *
+ * Mapa custom do Daycore não é pedido: a API oficial não o conhece, e a
+ * resposta seria sempre "não existe". Antes ele ia, voltava 404 e caía no cache
+ * negativo — o mesmo `null`, pago com uma requisição e uma vaga no lote.
  */
 async function fetchBeatmap(id) {
+  if (isCustomMapId(id)) return null;
+
   const cached = beatmapCache.get(id);
   if (cached) return cached;
 
@@ -102,25 +130,24 @@ async function fetchBeatmap(id) {
 
   return dedupe(`meta:${id}`, async () => {
     try {
-      const data = await officialApi.officialGet(`/beatmaps/${idSegment(id)}`);
-      beatmapCache.set(id, data);
+      const data = await carregarMeta(Number(idSegment(id)));
+
+      // O lote não devolve 404: mapa que não veio na resposta é o mapa que a
+      // API não conhece, e vira cache negativo como o 404 virava.
+      if (data) beatmapCache.set(id, data);
+      else _missingBeatmaps.set(id, true);
       return data;
     } catch (error) {
-      // SÓ o 404 vira cache negativo. Um 5xx ou uma queda de rede são
-      // passageiros, e guardá-los faria um blip de dez segundos esconder o mapa
-      // por dez minutos — trocando uma falha visível por dados faltando no
-      // embed, que é bem pior de diagnosticar.
-      if (error?.response?.status === 404) _missingBeatmaps.set(id, true);
-      else logErrorOnce('osuClient:beatmap', error);
-
+      // Erro da REQUISIÇÃO (5xx, rede) não vira cache negativo. É passageiro,
+      // e guardá-lo faria um blip de dez segundos esconder o mapa por dez
+      // minutos — trocando uma falha visível por dados faltando no embed, que é
+      // bem pior de diagnosticar. Um 404 do próprio endpoint em lote cai aqui
+      // também: ele diria que a rota sumiu, não que o mapa não existe.
+      logErrorOnce('osuClient:beatmap', error);
       return null;
     }
   });
 }
-
-// Teto de requisições simultâneas por chamada — evita que uma página inteira de
-// /topplays vire uma rajada e estoure o rate limit.
-const BEATMAP_CONCURRENCY = 5;
 
 /**
  * Preenche `max_combo` e `difficulty_rating` nos scores que vieram sem eles.
@@ -142,10 +169,11 @@ async function enrichBeatmapData(scores) {
       .filter(Boolean),
   )];
 
-  // Piscina de posições, e não lotes: um lote só termina quando o mapa MAIS
-  // LENTO dele termina, então quatro mapas rápidos ficavam parados esperando o
-  // quinto antes de o lote seguinte começar (ver concurrency.js).
-  const results = await mapLimit(idsNeeded, BEATMAP_CONCURRENCY, fetchBeatmap);
+  // Todos de uma vez, e não pelo mapLimit de antes: é o lote que agrupa (ver
+  // carregarMeta), e ele só junta o que foi pedido na mesma janela. Com um teto
+  // de 5 em voo, cada requisição sairia com 5 ids. A vazão continua segura: 100
+  // mapas frios são 2 requisições, e elas passam pelo rate limiter.
+  const results = await Promise.all(idsNeeded.map(fetchBeatmap));
 
   const fetched = {};
   idsNeeded.forEach((id, index) => { fetched[id] = results[index]; });
