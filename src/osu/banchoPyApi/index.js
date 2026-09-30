@@ -42,7 +42,7 @@ const players = require('./players');
 const { fetchUser, leaderboard } = players;
 const { bestScores, recentScores, privateBeatmapScores, topScores, enrichScores } = scores;
 const { getServerPlayerGroups, parseGroups } = groups;
-const { parsePlayTime, normalizeRankingEntry, nativeScore, mergeServerMap, normalizeServerScore } = normalize;
+const { parsePlayTime, normalizeRankingEntry, nativeScore, mergeServerMap, normalizeServerScore, normalizeScorePrivate } = normalize;
 const { resolvePlayerId, getServerMapByMd5, getServerPlayerName } = lookups;
 const {
   getServerPlayerRaw, getServerPlayerStats, getServerScore, getServerPlayerScores,
@@ -70,6 +70,18 @@ module.exports = {
   hasPlayerGroups: temShiina,
   userUrl,
   mapUrl,
+
+  // Para o scoreStore, que grava depois da resposta. As listas deste adaptador
+  // saem CRUAS (quem exibe enriquece só a página), e o store lê a forma
+  // normalizada — a tradução é a mesma do `enrichScores`, sem o detalhe nem o
+  // mapa, que custariam rede. Os outros adaptadores já devolvem normalizado e
+  // não precisam disto.
+  paraGuardar:    (s) => normalizeScorePrivate(s, null),
+  // A varredura do /topscores devolve linhas da v2, e o dono vem em `userid`.
+  topParaGuardar: (row) => {
+    const score = normalizeScorePrivate({ map_id: null }, row);
+    return score && { ...score, user_id: row?.userid ?? null };
+  },
 
   // Exportado para o teste: é a normalização que já derrubou uma página
   // inteira por causa do formato de um campo.
