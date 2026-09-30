@@ -33,8 +33,9 @@ Quando um comando busca scores de osu! para responder (`/recent`, `/topplays`, `
 - São os mesmos dados públicos que o site do servidor de osu! já mostra.
 - **Nada do Discord** vai junto: nem o seu ID, nem o servidor ou canal onde o comando rodou, nem quem pediu.
 - Plays que não passaram (rank F) não são guardadas.
-- Há um teto de tamanho. Passando dele, saem primeiro os scores sem pp e os de menor pp.
+- Não há prazo de validade: os scores ficam guardados enquanto houver espaço. Há um teto de tamanho, e passando dele saem primeiro os scores sem pp e os de menor pp.
 - Esses scores ficam fora do backup diário.
+- **`/link remove` não apaga esses scores**, porque eles não estão ligados à sua conta do Discord. Para apagá-los, veja "Remover seus dados".
 
 ### O que não é guardado
 
@@ -88,8 +89,9 @@ When a command fetches osu! scores to answer (`/recent`, `/topplays`, `/score`, 
 - This is the same public data the osu! server's website already shows.
 - **Nothing from Discord** is stored with it: not your ID, not the server or channel where the command ran, not who asked.
 - Plays that did not pass (rank F) are not stored.
-- There is a size cap. Past it, scores without pp and the lowest-pp scores are removed first.
+- There is no expiry date: scores are kept as long as there is room. There is a size cap, and past it scores without pp and the lowest-pp scores are removed first.
 - These scores are left out of the daily backup.
+- **`/link remove` does not delete these scores**, because they are not tied to your Discord account. To delete them, see "Removing your data".
 
 ### What is not stored
 
