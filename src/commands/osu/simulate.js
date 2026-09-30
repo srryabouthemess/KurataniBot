@@ -9,6 +9,11 @@ const { logError } = require('../../lib/logger');
 const { safeEditReply } = require('../../replies');
 
 module.exports = {
+  // Valida a entrada e responde o erro em efêmero ANTES do próprio defer
+  // público; um defer do despacho tornaria esse erro público (ver
+  // bot/dispatch.js).
+  defer: false,
+
   data: modo.addOption(new SlashCommandBuilder()
     .setName('simulate')
     .setDescription('Simulate the pp value of a hypothetical score on a map')

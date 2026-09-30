@@ -147,6 +147,11 @@ function simulatePlaysNeeded(currentPlays, bonus, targetPP, avgPP, randomize, sp
 }
 
 module.exports = {
+  // Valida a entrada e responde o erro em efêmero ANTES do próprio defer
+  // público; um defer do despacho tornaria esse erro público (ver
+  // bot/dispatch.js).
+  defer: false,
+
   data: modo.addOption(new SlashCommandBuilder()
     .setName('pp')
     .setDescription('Find out how much pp a single score needs to reach a target pp total')

@@ -26,7 +26,7 @@
 
 const {
   SlashCommandBuilder, EmbedBuilder, ApplicationIntegrationType,
-  InteractionContextType, MessageFlags,
+  InteractionContextType,
 } = require('discord.js');
 
 const daycoreInvites = require('../../daycoreInvites');
@@ -57,6 +57,10 @@ module.exports = {
   // Como /role e /scorewipe: ação de staff, resposta efêmera — em texto a
   // flag de efêmero some (ver prefix/spec.js).
   prefix: { slashOnly: true },
+  // O despacho faz o defer efêmero (ver bot/dispatch.js): a checagem de
+  // privilégio e a do MySQL correm com a interação já respondida, e toda
+  // recusa sai por `editReply` — efêmera como antes.
+  defer: 'ephemeral',
 
   data: new SlashCommandBuilder()
     .setName('invitecode')
@@ -83,15 +87,13 @@ module.exports = {
     // Mesmo bit que o site exige no formulário — ver o cabeçalho.
     const staff = await resolveStaff(interaction, daycore.Privileges.ADMINISTRATOR, s);
     if (staff.error) {
-      return interaction.reply({ content: staff.error, flags: MessageFlags.Ephemeral });
+      return interaction.editReply(staff.error);
     }
 
     const mysqlError = await checkMysqlOrError(s);
     if (mysqlError) {
-      return interaction.reply({ content: mysqlError, flags: MessageFlags.Ephemeral });
+      return interaction.editReply(mysqlError);
     }
-
-    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
     try {
       const maxUses     = interaction.options.getInteger('max_uses') ?? 1;

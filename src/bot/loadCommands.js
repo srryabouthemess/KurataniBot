@@ -27,6 +27,7 @@ const path   = require('path');
 const crypto = require('crypto');
 const { logError } = require('../lib/logger');
 const ALIASES = require('./aliases');
+const { deferValido } = require('./dispatch');
 
 const COMMANDS_DIR = path.join(__dirname, '..', 'commands');
 
@@ -102,6 +103,13 @@ function loadCommands({ dir = COMMANDS_DIR, aliases = ALIASES, strict = false } 
 
     if (!command?.data?.name || typeof command.execute !== 'function') {
       fail(source, new Error(`${source} não exporta data.name e execute`));
+      continue;
+    }
+
+    // Um `defer: 'efemero'` digitado errado viraria defer PÚBLICO em silêncio
+    // — o comando responderia no canal o que deveria ser só de quem chamou.
+    if (!deferValido(command)) {
+      fail(source, new Error(`${source}: defer inválido (${JSON.stringify(command.defer)}); use true, false ou 'ephemeral'`));
       continue;
     }
 

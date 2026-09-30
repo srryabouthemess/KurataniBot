@@ -1,6 +1,6 @@
 const {
   SlashCommandBuilder, EmbedBuilder, ApplicationIntegrationType,
-  InteractionContextType, MessageFlags,
+  InteractionContextType,
 } = require('discord.js');
 
 const osu = require('../../osuClient');
@@ -40,6 +40,10 @@ module.exports = {
   // motivo, e o log de moderação inteiro. Em texto a flag some e isso vira
   // mensagem no canal — ver o comentário em prefix/spec.js.
   prefix: { slashOnly: true },
+  // O despacho faz o defer efêmero (ver bot/dispatch.js): a checagem de
+  // privilégio e a do Redis correm com a interação já respondida, e toda
+  // recusa sai por `editReply` — efêmera como antes.
+  defer: 'ephemeral',
 
   data: new SlashCommandBuilder()
     .setName('moderate')
@@ -94,14 +98,14 @@ module.exports = {
 
     const staff = await resolveStaff(interaction, requiredPriv, s);
     if (staff.error) {
-      return interaction.reply({ content: staff.error, flags: MessageFlags.Ephemeral });
+      return interaction.editReply(staff.error);
     }
 
     // ── /moderate log ────────────────────────────────────────────────────────
     if (sub === 'log') {
       const rows = db.listAdminActions(15);
       if (rows.length === 0) {
-        return interaction.reply({ content: s.mod_log_empty, flags: MessageFlags.Ephemeral });
+        return interaction.editReply(s.mod_log_empty);
       }
       const lines = rows.map(r =>
         s.mod_log_line(
@@ -113,17 +117,15 @@ module.exports = {
         .setColor(0x99ccff)
         .setTitle(s.mod_log_title)
         .setDescription(truncate(lines.join('\n'), 4000));
-      return interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
+      return interaction.editReply({ embeds: [embed] });
     }
 
     if (sub !== 'check') {
       const redisError = await checkRedisOrError(s);
       if (redisError) {
-        return interaction.reply({ content: redisError, flags: MessageFlags.Ephemeral });
+        return interaction.editReply(redisError);
       }
     }
-
-    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
     try {
       const target = await resolveTarget(interaction.options.getString('player'));

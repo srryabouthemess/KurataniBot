@@ -98,6 +98,11 @@ function limparFila(setId, statuses) {
 }
 
 module.exports = {
+  // O `queue` responde direto, em efêmero; os que escrevem conferem privilégio
+  // e Redis com resposta efêmera e só depois fazem o próprio defer PÚBLICO.
+  // Um defer do despacho não serve a nenhum dos dois (ver bot/dispatch.js).
+  defer: false,
+
   data: new SlashCommandBuilder()
     .setName('nominate')
     .setDescription('Daycore map nomination (staff only)')

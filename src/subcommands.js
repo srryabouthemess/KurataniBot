@@ -40,8 +40,13 @@
  * O que pega o caso 2 é uma guarda explícita no ramo de queda de cada comando
  * (`if (sub !== 'set') throw`, `if (sub !== 'add') throw`, e assim por diante),
  * que existe em todos os cinco. A daqui vale por falhar CEDO — antes de resolver
- * privilégio, de conferir o Redis e do deferReply —, o que importa nos
- * administrativos, onde o ramo de queda fica depois de tudo isso.
+ * privilégio e de conferir o Redis —, o que importa nos administrativos, onde o
+ * ramo de queda fica depois de tudo isso.
+ *
+ * Nos comandos com `defer: 'ephemeral'` (/role, /moderate) ela já roda depois
+ * do defer, que é do despacho (ver bot/dispatch.js). Não muda o que ela pega: o
+ * erro cai no catch do index.js, que responde por `followUp` — efêmero como
+ * seria o `reply`.
  */
 
 const { ApplicationCommandOptionType: OptionType } = require('discord.js');

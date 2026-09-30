@@ -59,6 +59,9 @@ function fieldFor(group, available, s) {
 }
 
 module.exports = {
+  // Responde direto: monta o embed sem consultar nada.
+  defer: false,
+
   data: new SlashCommandBuilder()
     .setName('help')
     .setDescription('Show what the bot can do')

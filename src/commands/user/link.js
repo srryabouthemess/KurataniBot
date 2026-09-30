@@ -30,6 +30,10 @@ function namespaceLabel(namespace) {
 }
 
 module.exports = {
+  // `status`, `remove` e `default` respondem direto, só com o banco local; o
+  // `set`, o único que consulta a API, faz o próprio defer.
+  defer: false,
+
   data: new SlashCommandBuilder()
     .setName('link')
     .setDescription('Link your Discord account to an osu! profile')

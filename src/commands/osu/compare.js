@@ -38,6 +38,11 @@ const short = (str, max) => {
 };
 
 module.exports = {
+  // Valida a entrada e responde o erro em efêmero ANTES do próprio defer
+  // público; um defer do despacho tornaria esse erro público (ver
+  // bot/dispatch.js).
+  defer: false,
+
   // Os dois lados perguntam servidor e modo separadamente: o `server2:` é o que
   // deixa comparar jogadores de servidores diferentes, e vazio ele herda o do
   // primeiro lado (ver resolveSecondServer). A ordem importa para o modo texto,

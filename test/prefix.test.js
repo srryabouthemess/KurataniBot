@@ -55,6 +55,14 @@ commands.set('fixture', {
   execute: async context => { captured = context; },
 });
 
+// Os dois modos de defer pelo caminho real do texto: o `defer` que o comando
+// declara vale aqui como no slash (ver bot/dispatch.js).
+commands.set('direto', {
+  data: new SlashCommandBuilder().setName('direto').setDescription('só para o teste'),
+  defer: false,
+  execute: async context => { captured = context; },
+});
+
 const client = {
   commands,
   on(event, handler) {
@@ -407,6 +415,18 @@ test('adaptador de resposta', async t => {
     assert.equal(sent[1][0], 'edit');
     // Ephemeral não existe em mensagem comum: mandar a flag seria erro da API.
     assert.equal(sent[0][1].flags, undefined);
+  });
+});
+
+test('o defer declarado vale no modo texto', async t => {
+  await t.test('sem declaração: "digitando..." antes do execute', async () => {
+    const { context } = await run('k!rs mrekk');
+    assert.equal(context.deferred, true);
+  });
+
+  await t.test('defer: false chega ao execute sem defer', async () => {
+    const { context } = await run('k!direto');
+    assert.equal(context.deferred, false);
   });
 });
 

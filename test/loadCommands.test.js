@@ -96,6 +96,30 @@ test('estrito: a primeira falha lança', () => {
   assert.throws(() => loadCommands({ dir, aliases: [], strict: true }), /não exporta/);
 });
 
+test('defer desconhecido vira falha, e não defer público', () => {
+  // `'efemero'` passaria no `defer ?? true` do despacho como verdadeiro: o
+  // comando responderia no canal o que deveria ser só de quem chamou.
+  const dir = fakeDir({
+    'publico.js':  commandSource('publico'),
+    'efemero.js':  commandSource('efemero', "defer: 'ephemeral',"),
+    'direto.js':   commandSource('direto', 'defer: false,'),
+    'errado.js':   commandSource('errado', "defer: 'efemero',"),
+  });
+
+  const { commands, failures } = loadCommands({ dir, aliases: [] });
+  assert.deepEqual([...commands.keys()].sort(), ['direto', 'efemero', 'publico']);
+  assert.deepEqual(failures.map(f => f.source), ['errado.js']);
+  assert.match(failures[0].error.message, /defer inválido/);
+});
+
+test('alias herda o defer do original', () => {
+  const dir = fakeDir({ 'orig.js': commandSource('orig', "defer: 'ephemeral',") });
+  const aliases = [{ name: 'o', of: 'orig', description: 'Alias', pt: 'Atalho' }];
+
+  const { commands } = loadCommands({ dir, aliases });
+  assert.equal(commands.get('o').defer, 'ephemeral');
+});
+
 test('alias herda campos extras do original (prefix e o que vier depois)', () => {
   const dir = fakeDir({ 'orig.js': commandSource('orig', "prefix: { slashOnly: true }, outro: 42,") });
   const aliases = [{ name: 'o', of: 'orig', description: 'Alias', pt: 'Atalho' }];

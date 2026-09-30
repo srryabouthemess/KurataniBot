@@ -24,6 +24,11 @@ const FETCH_LIMIT     = 100;
 const SIM_CONCURRENCY = 5;
 
 module.exports = {
+  // Valida a entrada e responde o erro em efêmero ANTES do próprio defer
+  // público; um defer do despacho tornaria esse erro público (ver
+  // bot/dispatch.js).
+  defer: false,
+
   data: modo.addOption(new SlashCommandBuilder()
     .setName('topif')
     .setDescription('How the top plays would look like with different mods')

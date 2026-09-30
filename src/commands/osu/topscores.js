@@ -147,11 +147,11 @@ module.exports = {
     const mode  = servers.resolveKey(resolveServer(interaction)) ?? osu.DEFAULT_MODE;
     const label = osu.getModeLabel(mode);
 
+    // Já deferido pelo despacho (ver bot/dispatch.js). A recusa era pública
+    // antes do defer e continua pública depois dele.
     if (!osu.supportsTopScores(mode)) {
-      return interaction.reply(s.topscores_unsupported(label));
+      return interaction.editReply(s.topscores_unsupported(label));
     }
-
-    await interaction.deferReply();
 
     try {
       const { scores: todos, completo } = await osu.getTopScores(mode);

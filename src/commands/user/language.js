@@ -4,6 +4,9 @@ const { exigirSubcomando } = require('../../subcommands');
 const { setUserLang, setServerLang, getUserLang, getServerLang } = require('../../db');
 
 module.exports = {
+  // Responde direto: só lê e grava preferência no banco local.
+  defer: false,
+
   data: new SlashCommandBuilder()
     .setName('language')
     .setDescription('Set your language preference / Defina seu idioma')
