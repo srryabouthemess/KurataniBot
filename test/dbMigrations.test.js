@@ -360,7 +360,7 @@ test('8 → 9 acrescenta users.score_format e mantém o resto', t => {
   assert.ok(!colunasDe(dbPath, 'users').includes('score_format'));
 
   const db = load();
-  assert.equal(userVersion(dbPath), 9);
+  assert.equal(userVersion(dbPath), db.SCHEMA_VERSION);
   assert.ok(colunasDe(dbPath, 'users').includes('score_format'));
   assert.equal(db.getScoreFormat('1'), null, 'quem já existia fica sem preferência, o clássico');
   assert.equal(db.getPreferredModo('1'), 'rx');
@@ -368,4 +368,70 @@ test('8 → 9 acrescenta users.score_format e mantém o resto', t => {
 
   db.setScoreFormat('1', 'classic');
   assert.equal(db.getScoreFormat('1'), 'classic');
+});
+
+// ─── 9 → 10: layout do embed do /recent ───────────────────────────────────────
+
+test('banco novo já nasce com users.embed_layout', t => {
+  const { dbPath, load } = dbWorkspace(t);
+  const db = load();
+
+  assert.ok(colunasDe(dbPath, 'users').includes('embed_layout'));
+  assert.equal(db.getEmbedLayout('1'), null, 'sem preferência é null, o embed completo');
+});
+
+test('9 → 10 acrescenta users.embed_layout e mantém modo e formato do score', t => {
+  const { dbPath, load } = dbWorkspace(t);
+
+  const primeiro = load();
+  primeiro.setLink('1', 'official', 'fulano', 123);
+  primeiro.setPreferredModo('1', 'rx');
+  primeiro.setScoreFormat('1', 'standardised');
+  primeiro.setUserLang('1', 'en');
+  primeiro.close();
+
+  // O banco como a versão 9 o deixava: a tabela sem a coluna (refeita pelo
+  // mesmo motivo do teste da 8 → 9).
+  comHandle(dbPath, h => h.exec(`
+    CREATE TABLE users_v9 (
+      discord_id TEXT PRIMARY KEY, osu_user TEXT, osu_server TEXT, lang TEXT,
+      osu_id INTEGER, preferred_server TEXT, preferred_modo TEXT, score_format TEXT
+    );
+    INSERT INTO users_v9 SELECT discord_id, osu_user, osu_server, lang, osu_id,
+      preferred_server, preferred_modo, score_format FROM users;
+    DROP TABLE users;
+    ALTER TABLE users_v9 RENAME TO users;
+    PRAGMA user_version = 9;
+  `));
+  assert.ok(!colunasDe(dbPath, 'users').includes('embed_layout'));
+
+  const db = load();
+  assert.equal(userVersion(dbPath), 10);
+  assert.equal(db.SCHEMA_VERSION, 10);
+  assert.ok(colunasDe(dbPath, 'users').includes('embed_layout'));
+  assert.equal(db.getEmbedLayout('1'), null, 'quem já existia fica no padrão');
+  assert.equal(db.getPreferredModo('1'), 'rx');
+  assert.equal(db.getScoreFormat('1'), 'standardised');
+  assert.equal(db.getUserLang('1'), 'en');
+  assert.equal(db.getLink('1', 'official').osu_user, 'fulano');
+
+  db.setEmbedLayout('1', ['pp', 'combo']);
+  assert.deepEqual([...db.getEmbedLayout('1')], ['pp', 'combo']);
+  assert.equal(db.getScoreFormat('1'), 'standardised', 'gravar o layout não mexe no resto da linha');
+});
+
+test('9 → 10 roda de novo sem erro num banco que já tem a coluna', t => {
+  // Carimbo voltado para 9 com a coluna já lá: a sondagem pelo PRAGMA é o que
+  // impede o ALTER de falhar com "duplicate column".
+  const { dbPath, load } = dbWorkspace(t);
+
+  const primeiro = load();
+  primeiro.setEmbedLayout('1', ['hits']);
+  primeiro.close();
+
+  comHandle(dbPath, h => h.exec('PRAGMA user_version = 9'));
+
+  const db = load();
+  assert.equal(userVersion(dbPath), 10);
+  assert.deepEqual([...db.getEmbedLayout('1')], ['hits']);
 });

@@ -1,13 +1,14 @@
 /**
  * db/users.js
  * Links de conta osu!, servidor preferido, modo preferido (VN/RX/combinado),
- * formato do score total e idioma.
+ * formato do score total, layout do embed do /recent e idioma.
  *
- * O que estas cinco coisas têm em comum: são preferências de uma pessoa, e o
+ * O que estas seis coisas têm em comum: são preferências de uma pessoa, e o
  * bot as lê em praticamente todo comando.
  */
 
 const servers = require('../servers');
+const embedLayout = require('../embedLayout');
 const { db } = require('./connection');
 
 /**
@@ -157,6 +158,42 @@ function getScoreFormat(discordId) {
   return FORMATOS_SCORE.has(salvo) ? salvo : null;
 }
 
+// ─── Layout do embed do /recent ───────────────────────────────────────────────
+
+/**
+ * Grava quais pedaços do embed do /recent ficam ligados.
+ *
+ * Recebe as chaves ligadas (ver embedLayout.js); tudo ligado, ou null, grava
+ * NULL — o padrão. Chave desconhecida lança: gravá-la faria o layout inteiro
+ * cair no padrão na leitura seguinte, sem ninguém saber por quê.
+ *
+ * Como o formato do score, é preferência de quem LÊ: o /recent usa a de quem
+ * pediu o comando, mesmo num `/rs @fulano`.
+ */
+function setEmbedLayout(discordId, chaves) {
+  db.prepare(`
+    INSERT INTO users (discord_id, embed_layout) VALUES (?, ?)
+    ON CONFLICT(discord_id) DO UPDATE SET embed_layout = excluded.embed_layout
+  `).run(discordId, embedLayout.serialize(chaves));
+}
+
+/**
+ * O layout salvo como conjunto de chaves ligadas, ou null (o padrão: tudo
+ * ligado). Valor que não passa na validação também é null — não lança.
+ *
+ * @returns {Set<string>|null}
+ */
+function getEmbedLayout(discordId) {
+  const salvo = db.prepare('SELECT embed_layout FROM users WHERE discord_id = ?')
+    .get(discordId)?.embed_layout ?? null;
+  return embedLayout.parse(salvo);
+}
+
+/** Volta ao padrão (NULL). Não cria linha para quem nunca teve uma. */
+function resetEmbedLayout(discordId) {
+  db.prepare('UPDATE users SET embed_layout = NULL WHERE discord_id = ?').run(discordId);
+}
+
 // ─── Idioma do usuário ────────────────────────────────────────────────────────
 
 function setUserLang(discordId, lang) {
@@ -200,6 +237,7 @@ module.exports = {
   setPreferredServer, getPreferredServer,
   setPreferredModo, getPreferredModo,
   setScoreFormat, getScoreFormat,
+  setEmbedLayout, getEmbedLayout, resetEmbedLayout,
   setUserLang, getUserLang, removeUserLang,
   setServerLang, getServerLang, removeServerLang,
 };

@@ -45,7 +45,7 @@ const path = require('path');
 const { DATA_DIR } = require('../paths');
 const backup = require('./backup');
 
-const VERSAO_ATUAL = 9;
+const VERSAO_ATUAL = 10;
 
 /** A versão mais antiga que as migrações abaixo sabem levar até a atual. */
 const VERSAO_MINIMA = 1;
@@ -380,6 +380,20 @@ function acrescentarColunaScoreFormat(db) {
   }
 }
 
+// ─── 9 → 10: layout do embed do /recent ───────────────────────────────────────
+
+/**
+ * `users.embed_layout`: quais pedaços do embed do /recent a pessoa quer ver
+ * (ver embedLayout.js). Nasce NULL, que é o padrão — o embed completo, o que o
+ * bot já mostrava.
+ */
+function acrescentarColunaEmbedLayout(db) {
+  const colunas = db.prepare('PRAGMA table_info(users)').all().map(c => c.name);
+  if (!colunas.includes('embed_layout')) {
+    db.exec('ALTER TABLE users ADD COLUMN embed_layout TEXT');
+  }
+}
+
 // ─── scores.db: a trilha própria ──────────────────────────────────────────────
 
 /**
@@ -461,6 +475,10 @@ function run(db) {
 
   if (versao < 9) {
     acrescentarColunaScoreFormat(db);
+  }
+
+  if (versao < 10) {
+    acrescentarColunaEmbedLayout(db);
   }
 
   // Interpolado porque PRAGMA não aceita parâmetro; o valor é uma constante do
