@@ -124,6 +124,10 @@ function normalizeScorePrivate(v1, v2) {
     // Pontuação da play (a de milhões, não o pp). O embed a exibe quando existe;
     // aqui ela só não pode virar zero, que na tela pareceria uma play sem nota.
     score: Number(v2?.score ?? v1.score ?? 0) || null,
+    // Um número só, e é o do stable: ninguém joga lazer num servidor privado.
+    // A escala standardised não existe aqui (ver o normalizeScore oficial).
+    score_classic:      Number(v2?.score ?? v1.score ?? 0) || null,
+    score_standardised: null,
     passed: grade !== 'F',
     created_at: playTime.toISOString(),
     mode: 'osu',

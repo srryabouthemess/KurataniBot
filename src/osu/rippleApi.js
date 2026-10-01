@@ -142,6 +142,10 @@ function normalizeScore(raw) {
     // Pontuação da play (a de milhões, não o pp), para a primeira linha do
     // embed. Zero vira null: na tela pareceria uma play sem nota nenhuma.
     score: Number(raw.score ?? 0) || null,
+    // Um número só, e é o do stable: ninguém joga lazer num servidor privado.
+    // A escala standardised não existe aqui (ver o normalizeScore oficial).
+    score_classic:      Number(raw.score ?? 0) || null,
+    score_standardised: null,
     // `completed`: 0 falhou, 1 não passou, 2 passou, 3 é o melhor do jogador.
     // Qualquer coisa a partir de 2 significa que a play foi até o fim.
     passed: Number(raw.completed ?? 0) >= 2,
@@ -215,6 +219,9 @@ function normalizeLegacyScore(raw, beatmapId) {
     max_combo: n(raw.maxcombo),
     mods: decodeMods(n(raw.enabled_mods) ?? 0),
     score: Number(raw.score ?? 0) || null,
+    // Só a escala clássica, como no normalizeScore acima.
+    score_classic:      Number(raw.score ?? 0) || null,
+    score_standardised: null,
     // O legado não diz se passou; um score registrado com grade que não seja F
     // é uma play concluída.
     passed: (raw.rank ?? 'F') !== 'F',

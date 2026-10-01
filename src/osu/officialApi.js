@@ -111,6 +111,9 @@ function normalizeMod(mod) {
   return settings ? { acronym: mod.acronym, settings } : mod.acronym;
 }
 
+/** Um total de score que existe de fato: número, e acima de zero. */
+const totalPositivo = (valor) => (Number.isFinite(valor) && valor > 0 ? valor : null);
+
 /**
  * Score do formato novo → a forma que o resto do bot já lê.
  *
@@ -152,6 +155,21 @@ function normalizeScore(raw) {
     perfect:    raw.is_perfect_combo ?? raw.legacy_perfect ?? raw.perfect ?? false,
     score:      raw.legacy_total_score || raw.total_score || raw.score || 0,
     mode:       raw.mode ?? 'osu',
+
+    // As duas escalas do score total, separadas — é delas que o embed escolhe
+    // pela preferência de quem pediu (ver embeds/play.js). O `score` acima
+    // continua misturando as duas, e fica assim: o cálculo de PP o passa como
+    // `legacyTotalScore` (ver scorePP.js) e o scoreStore o grava.
+    //
+    //   classic       `legacy_total_score`: o número do stable. Score jogado no
+    //                 lazer o manda como 0, e 0 aqui é "não tem", não um total.
+    //   standardised  `total_score`: a escala do lazer, até 1.000.000 por mapa.
+    //
+    // O que não vier fica null, em vez de ser convertido de uma escala para a
+    // outra: a conversão do osu! é uma aproximação, e mostrá-la como se fosse o
+    // número do stable seria afirmar o que a API não disse.
+    score_classic:      totalPositivo(raw.legacy_total_score),
+    score_standardised: totalPositivo(raw.total_score),
 
   };
 }
