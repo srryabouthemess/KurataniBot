@@ -306,3 +306,63 @@ test('servidor privado também mostra o rank no país', async () => {
 
   assert.equal(autor.name, 'pudim2: 4.821,30pp (#12 BR#3)');
 });
+
+// ─── Score total: classic ou standardised ─────────────────────────────────────
+// Quem escolhe é quem pediu o comando (`scoreFormat`), e faltando o número
+// pedido sai o outro COM o nome dele — sem marca, o standardised de uma play de
+// lazer passaria por clássico.
+
+/** A linha da grade, que é onde o total mora. */
+const linhaDoTotal = (bloco) => bloco.description.split('\n')[0];
+const fmt = (n) => n.toLocaleString(s.locale);
+
+test('sem preferência vale o clássico, como sempre foi', async () => {
+  setup();
+  const play = jogada({ score: 12345678, score_classic: 12345678, score_standardised: 987654 });
+
+  const bloco = await playEmbed.single(play, { mode: 'official', s });
+  assert.ok(linhaDoTotal(bloco).includes(fmt(12345678)));
+  assert.ok(!linhaDoTotal(bloco).includes(fmt(987654)));
+  assert.ok(!linhaDoTotal(bloco).includes('('), 'o número pedido não ganha marca');
+});
+
+test('classic e standardised mostram cada um o seu número', async () => {
+  setup();
+  const play = jogada({ score: 12345678, score_classic: 12345678, score_standardised: 987654 });
+
+  const classic = await playEmbed.single(play, { mode: 'official', s, scoreFormat: 'classic' });
+  assert.ok(linhaDoTotal(classic).includes(fmt(12345678)));
+
+  const std = await playEmbed.single(play, { mode: 'official', s, scoreFormat: 'standardised' });
+  assert.ok(linhaDoTotal(std).includes(fmt(987654)));
+  assert.ok(!linhaDoTotal(std).includes(fmt(12345678)));
+  assert.ok(!linhaDoTotal(std).includes('('));
+});
+
+test('play de lazer pedida como classic mostra o standardised, com o nome dele', async () => {
+  setup();
+  const play = jogada({ score: 876543, score_classic: null, score_standardised: 876543 });
+
+  const bloco = await playEmbed.single(play, { mode: 'official', s, scoreFormat: 'classic' });
+  assert.ok(linhaDoTotal(bloco).includes(`${fmt(876543)} (${s.score_format_label('standardised')})`));
+});
+
+test('servidor privado pedido como standardised mostra o clássico, com o nome dele', async () => {
+  setup();
+  const play = jogada({ score: 4590136, score_classic: 4590136, score_standardised: null });
+
+  const bloco = await playEmbed.single(play, { mode: 'official', s, scoreFormat: 'standardised' });
+  assert.ok(linhaDoTotal(bloco).includes(`${fmt(4590136)} (${s.score_format_label('classic')})`));
+});
+
+test('score sem as duas escalas mostra o `score` como antes, sem marca', async () => {
+  // Adaptador que não separa as escalas: não há o que afirmar sobre o número.
+  setup();
+  const bloco = await playEmbed.single(jogada(), { mode: 'official', s, scoreFormat: 'standardised' });
+  assert.ok(linhaDoTotal(bloco).includes(fmt(1234567)));
+  assert.ok(!linhaDoTotal(bloco).includes('('));
+
+  const vazio = await playEmbed.single(jogada({ score: 0, score_classic: null, score_standardised: null }),
+    { mode: 'official', s });
+  assert.ok(!/\b0\b •/.test(linhaDoTotal(vazio)), 'total ausente não vira zero');
+});
