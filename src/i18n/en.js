@@ -62,6 +62,7 @@ module.exports = ({ ADMIN }) => ({
   help_cmd_simulate:       'How much PP a specific play on a map would be worth.',
   help_cmd_link:           'Link your osu! account to Discord.',
   help_cmd_language:       'Change the language: Português, English or Русский.',
+  help_cmd_builder:        'Choose what shows up in the /recent embed, with a preview.',
   help_cmd_nominate:       'Nominate maps to change their status.',
   help_cmd_moderate:       'Inspect and restrict accounts.',
   help_cmd_wipe:           "Erase an account's scores in one mode (irreversible).",
@@ -179,6 +180,30 @@ module.exports = ({ ADMIN }) => ({
   no_link_for_server:      (label) =>
     `❌ You have no link on **${label}**. Use \`/link set\` to link your account on that server, ` +
     `or provide a player name in the command.`,
+
+  // ── /builder ──────────────────────────────────────────────────────────────
+  builder_intro:           '🧩 Choose what shows up in your `/recent` embed. The preview uses a sample play; map title, grade and mods are always shown.',
+  builder_unsaved:         '✏️ Unsaved changes.',
+  builder_saved:           '✅ Layout saved. It applies to your next `/recent`.',
+  builder_reset_done:      '✅ Layout reset to default.',
+  builder_expired:         '⌛ Timed out. Run `/builder` again to edit.',
+  builder_not_yours:       '❌ Only the person who ran the command can change this layout.',
+  builder_error:           "❌ Couldn't save the layout. Try again.",
+  builder_placeholder:     'Visible elements',
+  builder_save:            'Save',
+  builder_reset:           'Reset to default',
+  builder_element:         (chave) => ({
+    pb:        'Personal best #N',
+    score:     'Total score',
+    accuracy:  'Accuracy',
+    time:      'Time ("2 hours ago")',
+    pp:        'PP',
+    combo:     'Combo',
+    misses:    'Misses',
+    hits:      'Hits line (300/100/50/miss)',
+    map:       'Map line (length, CS/AR/OD/HP, BPM)',
+    thumbnail: 'Thumbnail',
+  })[chave] ?? chave,
 
   lang_set:                (lang) => `✅ Language set to **${lang}**.`,
   lang_set_server:         (lang) => `✅ Server language set to **${lang}**.`,

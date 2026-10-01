@@ -34,6 +34,7 @@ const emojis = require('../emojis');
 const { mdLink } = require('../markdown');
 const { formatMods } = require('../mods');
 const { localScorePP } = require('../scorePP');
+const { liga } = require('../embedLayout');
 
 /** Cor do bot para play concluída; vermelho para a que parou no meio. */
 const COLOR      = 0x2b4963;
@@ -197,6 +198,17 @@ const misses = (play) => (missCount(play) > 0 ? `❌ ${missCount(play)}` : null)
  * aparecer é, por si só, o sinal de que houve choke.
  */
 async function ppText(play, mode) {
+  return formatPP(await ppValores(play, mode));
+}
+
+/**
+ * Os dois números do pp, sem formatar: o que a play pagou e o do FC (null
+ * quando ela já é FC). Separado do texto para o /builder poder desenhar a
+ * prévia com números fixos, sem calcular nada.
+ *
+ * @returns {Promise<{proprio: number|null, fc: number|null}>}
+ */
+async function ppValores(play, mode) {
   const doServidor = Number.isFinite(play.pp);
 
   const [proprio, fc] = await Promise.all([
@@ -206,6 +218,11 @@ async function ppText(play, mode) {
     osu.getFCpp(play, mode),
   ]);
 
+  return { proprio, fc };
+}
+
+/** O texto do pp a partir dos dois números (ver ppText). */
+function formatPP({ proprio, fc }) {
   const valor = Number.isFinite(proprio) ? proprio.toFixed(2) : '?';
 
   // O número do FC só entra quando é MAIOR do que o que a play pagou. "Se
@@ -284,7 +301,11 @@ async function mapMeta(play) {
  * @param {number|null} length duração em segundos, sem mods
  */
 async function mapLine(play, { length = null } = {}) {
-  const attrs = await osu.getMapAttrs(play.beatmap?.id, play.mods ?? []);
+  return formatMapLine(await osu.getMapAttrs(play.beatmap?.id, play.mods ?? []), length);
+}
+
+/** A linha do mapa a partir dos atributos já buscados (ver mapLine). */
+function formatMapLine(attrs, length = null) {
   if (!attrs) return null;
 
   // Minuto com dois dígitos ("02:00"), como o osu! escreve a duração — assim a
@@ -363,7 +384,7 @@ function author(user, mode, s) {
  *   `02:00` • `CS 4 AR 9.4 OD 9.6 HP 5` • `128 BPM`
  *
  * @returns {Promise<{title: string, url: string, description: string,
- *                    color: number, thumbnail: string|undefined,
+ *                    color: number, thumbnail: string|null,
  *                    status: string|null, creator: string|null}>}
  *   o `status` e o `creator` saem junto porque quem monta o rodapé é o comando
  *   — a frase dele é traduzida, e o mapa é quem tem os dados.
@@ -375,16 +396,53 @@ function author(user, mode, s) {
  * `scoreFormat` é a preferência de quem PEDIU o comando ('classic' |
  * 'standardised' | null), não a do jogador consultado: é quem lê que escolhe
  * em que escala lê (ver totalScore).
+ *
+ * `layout` é o conjunto de pedaços ligados que o /builder grava (ver
+ * embedLayout.js), também de quem pediu; null é o embed completo. Título,
+ * grade e mods aparecem sempre.
+ *
+ * Em duas etapas: `dadosSingle` busca (rede e pp) só o que o layout vai
+ * mostrar, e `montarSingle` desenha sem buscar nada — que é o que deixa o
+ * /builder mostrar a prévia com uma play fixa.
  */
-async function single(play, { mode, s, scoreFormat = null, personalBest = null }) {
+async function single(play, opts) {
+  return montarSingle(play, await dadosSingle(play, opts), opts);
+}
+
+/**
+ * O que o embed da play precisa de fora: pp, estrelas, metadados e atributos
+ * do mapa. Pedaço desligado não é buscado.
+ *
+ *   - pp (cálculo local e o do FC): só com `pp` ligado;
+ *   - atributos do .osu: só para a linha do mapa, ou para o `@47%` de play
+ *     interrompida — que fica na linha da grade, sempre ligada;
+ *   - estrelas e metadados: sempre, porque vão para o título e o rodapé.
+ *
+ * @returns {Promise<{pp: {proprio: number|null, fc: number|null}|null,
+ *                    estrelas: string|null,
+ *                    meta: {status: string|null, creator: string|null, length: number|null},
+ *                    attrs: object|null}>}
+ */
+async function dadosSingle(play, { mode, layout = null }) {
+  const querAttrs = liga(layout, 'map') || play.passed === false;
+
   const [pp, estrelas, meta, attrs] = await Promise.all([
-    ppText(play, mode),
+    liga(layout, 'pp') ? ppValores(play, mode) : null,
     stars(play, mode),
     mapMeta(play),
-    osu.getMapAttrs(play.beatmap?.id, play.mods ?? []),
+    querAttrs ? osu.getMapAttrs(play.beatmap?.id, play.mods ?? []) : null,
   ]);
 
-  const total = totalScore(play, scoreFormat, s);
+  return { pp, estrelas, meta, attrs };
+}
+
+/**
+ * O embed da play a partir do que `dadosSingle` trouxe. Não faz rede nem
+ * cálculo: tudo que depende de fora já chegou em `dados`.
+ */
+function montarSingle(play, dados, { mode, s, scoreFormat = null, personalBest = null, layout = null }) {
+  const { pp, estrelas, meta, attrs } = dados;
+  const se = (chave, valor) => (liga(layout, chave) ? valor : null);
 
   // Grade, progresso e mods andam juntos, sem o " • " entre eles: são o que a
   // play FOI, e o resto da linha são os números que ela rendeu.
@@ -394,12 +452,26 @@ async function single(play, { mode, s, scoreFormat = null, personalBest = null }
     `**${formatMods(play.mods)}**`,
   ].filter(Boolean).join(' ');
 
+  const temPB = Number.isInteger(personalBest) && personalBest > 0;
+
+  // Cada pedaço desligado vira null, e o `join` já sabia omitir null: uma linha
+  // com tudo desligado sai vazia, e o filtro de baixo a tira — sem linha em
+  // branco no meio do embed.
   const linhas = [
-    Number.isInteger(personalBest) && personalBest > 0 ? s.recent_personal_best(personalBest) : null,
-    join([identidade, total, accuracy(play), timeAgo(play.created_at)]),
-    join([pp, combo(play), misses(play)]),
-    hits(play),
-    await mapLine(play, { length: meta.length }),
+    se('pb', temPB ? s.recent_personal_best(personalBest) : null),
+    join([
+      identidade,
+      se('score', totalScore(play, scoreFormat, s)),
+      se('accuracy', accuracy(play)),
+      se('time', timeAgo(play.created_at)),
+    ]),
+    join([
+      se('pp', pp ? formatPP(pp) : null),
+      se('combo', combo(play)),
+      se('misses', misses(play)),
+    ]),
+    se('hits', hits(play)),
+    se('map', formatMapLine(attrs, meta.length)),
   ];
 
   return {
@@ -409,7 +481,7 @@ async function single(play, { mode, s, scoreFormat = null, personalBest = null }
     color:       rankColor(play),
     // null e não undefined: o setThumbnail do discord.js aceita "sem imagem"
     // escrito assim, e recusa o valor ausente.
-    thumbnail:   play.beatmapset?.covers?.list ?? null,
+    thumbnail:   se('thumbnail', play.beatmapset?.covers?.list ?? null),
     status:      meta.status,
     creator:     meta.creator,
   };
@@ -469,7 +541,7 @@ async function listItem(play, { mode, index, mapUrl = null, autor = null }) {
 
 module.exports = {
   COLOR, COLOR_FAIL, RANK_COLORS,
-  author, single, listItem, rankColor, totalScore,
+  author, single, dadosSingle, montarSingle, listItem, rankColor, totalScore,
   mapTitle, mapLine, mapMeta,
   ppLegivel,
 };

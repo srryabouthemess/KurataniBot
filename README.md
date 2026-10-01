@@ -25,6 +25,7 @@ Funciona no Bancho, no Akatsuki, no EZPP Farm, no Gatari e em servidores bancho.
 | `/pp <alvo>` | O que falta para chegar a um total de PP |
 | `/simulate <mapa>` | Quanto PP daria uma play específica |
 | `/link` | Vincula sua conta do osu! ao Discord |
+| `/builder` | Escolhe o que aparece no embed do `/recent`, com prévia |
 | `/language` | Português, English ou Русский |
 
 Atalhos: `/osu`, `/rs`, `/top`, `/nc`, `/wi`, `/c`, `/choke`, `/lb` e `/mc`.

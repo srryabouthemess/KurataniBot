@@ -15,8 +15,8 @@
 
 function apply(db) {
   db.exec(`
-    -- As colunas osu_id, preferred_server, preferred_modo e score_format
-    -- chegaram por ALTER TABLE e estão aqui já no CREATE: banco novo nasce
+    -- As colunas osu_id, preferred_server, preferred_modo, score_format e
+    -- embed_layout chegaram por ALTER TABLE e estão aqui já no CREATE: banco novo nasce
     -- completo, banco antigo as recebe pela migração correspondente.
     CREATE TABLE IF NOT EXISTS users (
       discord_id       TEXT PRIMARY KEY,
@@ -32,7 +32,11 @@ function apply(db) {
       -- 'classic' | 'standardised' | NULL (padrão, que é o clássico). Como o
       -- score total aparece nos embeds de play de quem PEDE o comando; também
       -- gravado pelo /link default.
-      score_format      TEXT
+      score_format      TEXT,
+      -- Lista JSON dos pedaços do embed do /recent que ficam ligados
+      -- ('["pp","combo"]') | NULL (padrão: tudo ligado). Gravado pelo
+      -- /builder; o formato e a validação estão em embedLayout.js.
+      embed_layout      TEXT
     );
 
     CREATE TABLE IF NOT EXISTS guild_settings (

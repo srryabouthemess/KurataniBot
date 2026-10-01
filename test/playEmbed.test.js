@@ -366,3 +366,195 @@ test('score sem as duas escalas mostra o `score` como antes, sem marca', async (
     { mode: 'official', s });
   assert.ok(!/\b0\b •/.test(linhaDoTotal(vazio)), 'total ausente não vira zero');
 });
+
+// ─── Layout (/builder) ────────────────────────────────────────────────────────
+// Quem nunca usou o /builder (layout null) vê exatamente o embed de antes: a
+// referência é a saída do `single` gravada no commit anterior à refatoração
+// (test/fixtures/recentEmbedAntes.json), não uma descrição dela.
+
+const { CHAVES } = require('../src/embedLayout');
+const ANTES = require('./fixtures/recentEmbedAntes.json');
+
+const sem = (...fora) => new Set(CHAVES.filter(c => !fora.includes(c)));
+
+test('sem layout, a saída é idêntica à de antes da refatoração', async () => {
+  assert.ok(ANTES.length >= 10, 'a referência deveria cobrir vários cenários');
+
+  for (const cenario of ANTES) {
+    for (const layout of [undefined, null]) {
+      setup(cenario.setup);
+      const bloco = await playEmbed.single(cenario.play, { mode: 'official', s, ...cenario.opts, layout });
+      assert.deepEqual(bloco, cenario.saida, `${cenario.nome} (layout ${layout})`);
+    }
+  }
+});
+
+test('layout com tudo ligado também é idêntico ao de antes', async () => {
+  for (const cenario of ANTES) {
+    setup(cenario.setup);
+    const bloco = await playEmbed.single(cenario.play, { mode: 'official', s, ...cenario.opts, layout: new Set(CHAVES) });
+    assert.deepEqual(bloco, cenario.saida, cenario.nome);
+  }
+});
+
+/** O cenário com todos os pedaços preenchidos, e o que identifica cada um na tela. */
+const COMPLETO = ANTES.find(c => c.nome.startsWith('completo'));
+const MARCA = {
+  pb:       'Top #12 pessoal',
+  score:    '1.234.567',
+  accuracy: '81.48%',
+  time:     '<t:1786723477:R>',
+  pp:       '**121.21**/457.95pp',
+  combo:    '55x/284x',
+  misses:   '❌ 23',
+  hits:     '{ 148 / 18 / 0 / 23 }',
+  map:      '`02:00` • `CS 4 AR 9.4 OD 9.6 HP 5` • `128 BPM`',
+};
+
+/** Nem linha em branco, nem separador sobrando na ponta ou dobrado. */
+function semSobras(description) {
+  assert.ok(!description.includes('\n\n'), 'linha em branco');
+  for (const linha of description.split('\n')) {
+    assert.notEqual(linha.trim(), '', 'linha vazia');
+    assert.ok(!/^\s*•|•\s*$/.test(linha), `separador na ponta: "${linha}"`);
+    assert.ok(!linha.includes('•  •') && !linha.includes('• •'), `separador dobrado: "${linha}"`);
+  }
+}
+
+test('cada pedaço desligado some, e só ele', async () => {
+  assert.ok(COMPLETO);
+  for (const chave of CHAVES) {
+    setup(COMPLETO.setup);
+    const bloco = await playEmbed.single(COMPLETO.play, { mode: 'official', s, ...COMPLETO.opts, layout: sem(chave) });
+
+    if (chave === 'thumbnail') {
+      assert.equal(bloco.thumbnail, null);
+      assert.equal(bloco.description, COMPLETO.saida.description);
+    } else {
+      assert.ok(!bloco.description.includes(MARCA[chave]), `${chave} continuou na tela`);
+      assert.equal(bloco.thumbnail, COMPLETO.saida.thumbnail);
+    }
+    for (const [outra, marca] of Object.entries(MARCA)) {
+      if (outra !== chave) assert.ok(bloco.description.includes(marca), `desligar ${chave} levou ${outra} junto`);
+    }
+
+    // O que é sempre ligado não muda.
+    assert.equal(bloco.title, COMPLETO.saida.title);
+    assert.equal(bloco.color, COMPLETO.saida.color);
+    assert.equal(bloco.status, COMPLETO.saida.status);
+    assert.equal(bloco.creator, COMPLETO.saida.creator);
+    assert.match(bloco.description, /\*\*C\*\* \*\*\+HD\*\*/);
+    semSobras(bloco.description);
+  }
+});
+
+test('a linha dos números inteira desligada não deixa linha em branco', async () => {
+  setup(COMPLETO.setup);
+  const bloco = await playEmbed.single(COMPLETO.play, {
+    mode: 'official', s, ...COMPLETO.opts, layout: sem('pp', 'combo', 'misses'),
+  });
+
+  assert.deepEqual(bloco.description.split('\n'), [
+    '**Top #12 pessoal**',
+    '**C** **+HD** • 1.234.567 • 81.48% • <t:1786723477:R>',
+    '{ 148 / 18 / 0 / 23 }',
+    MARCA.map,
+  ]);
+});
+
+test('sem score, acurácia e tempo, a linha da grade fica só com grade e mods', async () => {
+  setup(COMPLETO.setup);
+  const bloco = await playEmbed.single(COMPLETO.play, {
+    mode: 'official', s, ...COMPLETO.opts, layout: sem('score', 'accuracy', 'time'),
+  });
+
+  assert.equal(bloco.description.split('\n')[1], '**C** **+HD**');
+  semSobras(bloco.description);
+});
+
+test('tudo desligado deixa só título, grade e mods', async () => {
+  setup(COMPLETO.setup);
+  const bloco = await playEmbed.single(COMPLETO.play, { mode: 'official', s, ...COMPLETO.opts, layout: new Set() });
+
+  assert.equal(bloco.description, '**C** **+HD**');
+  assert.equal(bloco.title, COMPLETO.saida.title);
+  assert.equal(bloco.thumbnail, null);
+  assert.equal(bloco.color, COMPLETO.saida.color);
+});
+
+test('tudo desligado numa play interrompida ainda mostra até onde ela foi', async () => {
+  // O `@47%` mora na linha da grade, que é sempre ligada.
+  setup({ mapAttrs: { cs: 4, ar: 9.4, od: 9.6, hp: 5, clockRate: 1, bpm: 128, objects: 400 } });
+  const bloco = await playEmbed.single(jogada({ passed: false }), { mode: 'official', s, layout: new Set() });
+
+  assert.equal(bloco.description, '**C** @47% **+HD**');
+});
+
+// ─── O que fica desligado não é buscado ───────────────────────────────────────
+
+/** Conta as chamadas de rede/pp por nome. */
+function contarChamadas() {
+  const contagem = {};
+  for (const nome of ['getFCpp', 'simulatePP', 'getMapAttrs', 'getAdjustedStars', 'getBeatmap']) {
+    const original = osuMock[nome];
+    osuMock[nome] = async (...args) => {
+      contagem[nome] = (contagem[nome] ?? 0) + 1;
+      return original(...args);
+    };
+  }
+  return contagem;
+}
+
+test('pp desligado: nem o pp do FC, nem o cálculo local', async () => {
+  setup({ fcPP: 457.95, localPP: 99 });
+  const chamadas = contarChamadas();
+  await playEmbed.single(jogada({ pp: null }), { mode: 'official', s, layout: sem('pp') });
+
+  assert.equal(chamadas.getFCpp, undefined);
+  assert.equal(chamadas.simulatePP, undefined);
+});
+
+test('linha do mapa desligada: os atributos do .osu não são buscados numa play que passou', async () => {
+  setup({ mapAttrs: { cs: 4, ar: 9.4, od: 9.6, hp: 5, clockRate: 1, bpm: 128, objects: 400 } });
+  const chamadas = contarChamadas();
+  await playEmbed.single(jogada(), { mode: 'official', s, layout: sem('map') });
+
+  assert.equal(chamadas.getMapAttrs, undefined);
+});
+
+test('...mas numa play interrompida eles continuam vindo, pelo @47%', async () => {
+  setup({ mapAttrs: { cs: 4, ar: 9.4, od: 9.6, hp: 5, clockRate: 1, bpm: 128, objects: 400 } });
+  const chamadas = contarChamadas();
+  const bloco = await playEmbed.single(jogada({ passed: false }), { mode: 'official', s, layout: sem('map') });
+
+  assert.equal(chamadas.getMapAttrs, 1);
+  assert.match(bloco.description, /@47%/);
+  assert.doesNotMatch(bloco.description, /BPM/);
+});
+
+test('com tudo ligado os atributos do mapa são buscados uma vez só', async () => {
+  // Antes eram duas: uma no `single` e outra dentro do `mapLine`.
+  setup({ mapAttrs: { cs: 4, ar: 9.4, od: 9.6, hp: 5, clockRate: 1, bpm: 128, objects: 400 } });
+  const chamadas = contarChamadas();
+  await playEmbed.single(jogada(), { mode: 'official', s });
+
+  assert.equal(chamadas.getMapAttrs, 1);
+  assert.equal(chamadas.getFCpp, 1);
+});
+
+test('montarSingle desenha sem buscar nada', () => {
+  // É o que a prévia do /builder usa: com os dados prontos, nenhuma função do
+  // osuClient que faz rede pode ser chamada.
+  for (const nome of ['getFCpp', 'simulatePP', 'getMapAttrs', 'getAdjustedStars', 'getBeatmap']) {
+    osuMock[nome] = () => { throw new Error(`${nome} chamado na montagem`); };
+  }
+  const bloco = playEmbed.montarSingle(jogada(), {
+    pp: { proprio: 121.21, fc: 457.95 },
+    estrelas: '5.12',
+    meta: { status: 'Ranked', creator: 'dectopia', length: 120 },
+    attrs: { cs: 4, ar: 9.4, od: 9.6, hp: 5, clockRate: 1, bpm: 128, objects: 400 },
+  }, { mode: 'official', s, personalBest: 12 });
+
+  assert.equal(bloco.description, COMPLETO.saida.description);
+  assert.equal(bloco.title, COMPLETO.saida.title);
+});

@@ -201,6 +201,7 @@ const ORIGEM = {
   simulate: 'osu/simulate', topplays: 'osu/topplays', topscores: 'osu/topscores',
   whatif: 'osu/whatif', matchcost: 'osu/matchcost', nochoke: 'osu/nochoke',
   topif: 'osu/topif', help: 'user/help', language: 'user/language', link: 'user/link',
+  builder: 'user/builder',
   diag: 'admin/diag', invitecode: 'admin/invitecode', moderate: 'admin/moderate',
   nominate: 'admin/nominate', role: 'admin/role', scorewipe: 'admin/scorewipe',
   staff: 'admin/staff', wipe: 'admin/wipe',
@@ -228,7 +229,7 @@ test('comando com o defer do despacho não chama reply nem deferReply', () => {
 });
 
 test('os efêmeros migrados continuam efêmeros', () => {
-  for (const name of ['role', 'wipe', 'scorewipe', 'moderate', 'invitecode']) {
+  for (const name of ['role', 'wipe', 'scorewipe', 'moderate', 'invitecode', 'builder']) {
     assert.equal(commands.get(name).defer, 'ephemeral', `/${name}`);
   }
 });

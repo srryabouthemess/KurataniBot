@@ -3,7 +3,8 @@ const osu = require('../../osuClient');
 const servers = require('../../servers');
 const recentMerge = require('../../recentMerge');
 const modo = require('../../modo');
-const { getPreferredModo, getScoreFormat } = require('../../db');
+const { getPreferredModo, getScoreFormat, getEmbedLayout } = require('../../db');
+const { liga } = require('../../embedLayout');
 const { resolvePlayer, fetchPlayer } = require('../../userLink');
 const mapContext = require('../../mapContext');
 const playEmbed = require('../../embeds/play');
@@ -64,6 +65,12 @@ module.exports = {
     // O formato do score total é de quem PEDIU, não do dono das plays: com
     // `@fulano`, quem lê é quem digitou (ver embeds/play.js).
     const scoreFormat = getScoreFormat(interaction.user.id);
+    // Quais pedaços do embed aparecem (o /builder), pela mesma regra: de quem
+    // pediu. Null é o embed completo.
+    const layout = getEmbedLayout(interaction.user.id);
+    // Sem a linha do "Top #N", o top de cada chave não é buscado: ele só serve
+    // a ela, e é uma requisição por chave a menos.
+    const querPB = liga(layout, 'pb');
     const pair = recentMerge.pairFor(mode);
     const keys = recentMerge.keysToFetch(pair, modoOption);
     await interaction.deferReply();
@@ -83,7 +90,9 @@ module.exports = {
         async id => {
           const [porModo, topsPorModo] = await Promise.all([
             recentMerge.fetchEach(keys, key => osu.getRecentScores(id, FETCH_LIMIT, key)),
-            recentMerge.fetchTops(keys, key => osu.getBestScores(id, TOP_LIMIT, key)),
+            querPB
+              ? recentMerge.fetchTops(keys, key => osu.getBestScores(id, TOP_LIMIT, key))
+              : new Map(),
           ]);
           tops = topsPorModo;
           return recentMerge.mergeRecent(porModo, FETCH_LIMIT);
@@ -149,6 +158,7 @@ module.exports = {
             mode: playMode,
             s,
             scoreFormat,
+            layout,
             // Da play CRUA: é nela que o id do score está em todo servidor (o
             // enriquecimento do bancho.py reescreve o objeto).
             personalBest: recentMerge.personalBestAt(rawPlay, tops),
@@ -208,7 +218,9 @@ module.exports = {
 
         const [freshList, freshTops] = await Promise.all([
           osu.getRecentScores(user.id, FETCH_LIMIT, playMode),
-          recentMerge.fetchTops([playMode], key => osu.getBestScores(user.id, TOP_LIMIT, key, { fresh: true })),
+          querPB
+            ? recentMerge.fetchTops([playMode], key => osu.getBestScores(user.id, TOP_LIMIT, key, { fresh: true }))
+            : new Map(),
         ]);
         if (freshTops.has(playMode)) tops.set(playMode, freshTops.get(playMode));
 

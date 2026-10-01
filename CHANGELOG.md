@@ -2,6 +2,47 @@
 
 ---
 
+# Sessão de 2026-10-01 (/builder: layout do embed do /recent)
+
+## ✨ Novidades
+
+- **`/builder`: escolher quais elementos do embed do `/recent` aparecem.** [`builder/`](src/commands/user/builder/index.js), [`embedLayout.js`](src/embedLayout.js)
+  - Liga/desliga, por usuário: linha do PB ("Top #N"), score total,
+    acurácia, tempo, pp, combo, misses, linha de hits, linha do mapa e
+    miniatura. Título do mapa, grade e mods ficam sempre.
+  - Resposta efêmera, com prévia de uma play de exemplo fixa (sem rede),
+    um menu de múltipla escolha, **Salvar** e **Restaurar padrão**. Cada
+    mudança no menu atualiza a prévia; só **Salvar** grava.
+  - Só quem abriu mexe. Os componentes expiram pela mesma inatividade da
+    paginação (2 min) e ficam desabilitados na tela.
+  - Vale o layout de quem PEDE o `/recent`, como o formato do score.
+  - Sem layout salvo, o embed é exatamente o de antes (travado por teste
+    contra a saída gravada antes da refatoração).
+  - Strings em pt, en e ru. Fica só no slash: é efêmero.
+
+## 🔧 Mudanças
+
+- **`single` em duas etapas.** [`embeds/play.js`](src/embeds/play.js)
+  - `dadosSingle` busca só o que o layout mostra: sem pp, não calcula pp
+    nem o do FC. Sem a linha do mapa, não busca os atributos do `.osu`
+    (exceto em play interrompida, pelo `@47%`).
+  - `montarSingle` desenha sem rede. É o que a prévia do `/builder` usa.
+  - Com tudo ligado os atributos do mapa são buscados uma vez, não duas.
+- **`/recent` sem a linha do PB não busca o top do jogador**, nem no 🔄. [`recent.js`](src/commands/osu/recent.js)
+- **Coluna `users.embed_layout`, migração 9 → 10.** [`migrations.js`](src/db/migrations.js), [`schema.js`](src/db/schema.js), [`users.js`](src/db/users.js)
+  - Lista JSON das chaves ligadas; NULL é o padrão; `[]` é tudo desligado.
+  - Valor inválido ou chave desconhecida é lido como o padrão, sem lançar.
+- **Política de privacidade** cita o layout do embed entre as preferências.
+
+## ⚠️ Atenção ao atualizar
+
+- Voltar para o código anterior exige restaurar o backup tirado antes da
+  migração (`data/backups/bot-pre-v9-*.db`).
+- Comando novo: o boot registra de novo os slash commands sozinho (o hash
+  do conjunto muda).
+
+---
+
 # Sessão de 2026-10-01 (formato do score total)
 
 ## ✨ Novidades

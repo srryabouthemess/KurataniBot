@@ -25,7 +25,7 @@ const ALIAS_TABLE = require('../../bot/aliases');
 const GROUPS = [
   { key: 'stats',  commands: ['profile', 'recent', 'topplays', 'nochoke', 'topif', 'score', 'compare', 'leaderboard', 'topscores', 'matchcost'] },
   { key: 'pp',     commands: ['whatif', 'pp', 'map', 'simulate'] },
-  { key: 'config', commands: ['link', 'language'] },
+  { key: 'config', commands: ['link', 'builder', 'language'] },
 ];
 
 /**

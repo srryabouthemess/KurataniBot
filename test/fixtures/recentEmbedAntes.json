@@ -1,0 +1,591 @@
+[
+  {
+    "nome": "base, sem nada de rede",
+    "setup": {},
+    "play": {
+      "pp": 121.21,
+      "accuracy": 0.8148,
+      "rank": "C",
+      "mods": [
+        "HD"
+      ],
+      "max_combo": 55,
+      "passed": true,
+      "score": 1234567,
+      "created_at": "2026-08-14T16:04:37Z",
+      "statistics": {
+        "count_300": 148,
+        "count_100": 18,
+        "count_50": 0,
+        "count_miss": 23
+      },
+      "beatmap": {
+        "id": 1,
+        "version": "JOGA ACELERA",
+        "max_combo": 284,
+        "difficulty_rating": 4.82
+      },
+      "beatmapset": {
+        "id": 2,
+        "title": "MONTAGEM BATCHI",
+        "artist": "MC",
+        "covers": {
+          "list": "capa.jpg"
+        }
+      }
+    },
+    "opts": {},
+    "saida": {
+      "title": "MC - MONTAGEM BATCHI [JOGA ACELERA] [4.82★]",
+      "url": "https://osu.ppy.sh/beatmapsets/2#osu/1",
+      "description": "**C** **+HD** • 1.234.567 • 81.48% • <t:1786723477:R>\n**121.21**pp • 55x/284x • ❌ 23\n{ 148 / 18 / 0 / 23 }",
+      "color": 13395711,
+      "thumbnail": "capa.jpg",
+      "status": null,
+      "creator": null
+    }
+  },
+  {
+    "nome": "completo: PB, FC, estrelas, mapa",
+    "setup": {
+      "fcPP": 457.95,
+      "stars": "5.12",
+      "mapAttrs": {
+        "cs": 4,
+        "ar": 9.4,
+        "od": 9.6,
+        "hp": 5,
+        "clockRate": 1,
+        "bpm": 128,
+        "objects": 400
+      },
+      "beatmap": {
+        "total_length": 120,
+        "status": "ranked",
+        "beatmapset": {
+          "creator": "dectopia"
+        }
+      }
+    },
+    "play": {
+      "pp": 121.21,
+      "accuracy": 0.8148,
+      "rank": "C",
+      "mods": [
+        "HD"
+      ],
+      "max_combo": 55,
+      "passed": true,
+      "score": 1234567,
+      "created_at": "2026-08-14T16:04:37Z",
+      "statistics": {
+        "count_300": 148,
+        "count_100": 18,
+        "count_50": 0,
+        "count_miss": 23
+      },
+      "beatmap": {
+        "id": 1,
+        "version": "JOGA ACELERA",
+        "max_combo": 284,
+        "difficulty_rating": 4.82
+      },
+      "beatmapset": {
+        "id": 2,
+        "title": "MONTAGEM BATCHI",
+        "artist": "MC",
+        "covers": {
+          "list": "capa.jpg"
+        }
+      }
+    },
+    "opts": {
+      "personalBest": 12
+    },
+    "saida": {
+      "title": "MC - MONTAGEM BATCHI [JOGA ACELERA] [5.12★]",
+      "url": "https://osu.ppy.sh/beatmapsets/2#osu/1",
+      "description": "**Top #12 pessoal**\n**C** **+HD** • 1.234.567 • 81.48% • <t:1786723477:R>\n**121.21**/457.95pp • 55x/284x • ❌ 23\n{ 148 / 18 / 0 / 23 }\n`02:00` • `CS 4 AR 9.4 OD 9.6 HP 5` • `128 BPM`",
+      "color": 13395711,
+      "thumbnail": "capa.jpg",
+      "status": "Ranked",
+      "creator": "dectopia"
+    }
+  },
+  {
+    "nome": "interrompida com progresso",
+    "setup": {
+      "mapAttrs": {
+        "cs": 4,
+        "ar": 9.4,
+        "od": 9.6,
+        "hp": 5,
+        "clockRate": 1,
+        "bpm": 128,
+        "objects": 400
+      },
+      "beatmap": {
+        "total_length": 120,
+        "status": "ranked",
+        "beatmapset": {
+          "creator": "dectopia"
+        }
+      }
+    },
+    "play": {
+      "pp": 121.21,
+      "accuracy": 0.8148,
+      "rank": "C",
+      "mods": [
+        "HD"
+      ],
+      "max_combo": 55,
+      "passed": false,
+      "score": 1234567,
+      "created_at": "2026-08-14T16:04:37Z",
+      "statistics": {
+        "count_300": 148,
+        "count_100": 18,
+        "count_50": 0,
+        "count_miss": 23
+      },
+      "beatmap": {
+        "id": 1,
+        "version": "JOGA ACELERA",
+        "max_combo": 284,
+        "difficulty_rating": 4.82
+      },
+      "beatmapset": {
+        "id": 2,
+        "title": "MONTAGEM BATCHI",
+        "artist": "MC",
+        "covers": {
+          "list": "capa.jpg"
+        }
+      }
+    },
+    "opts": {},
+    "saida": {
+      "title": "MC - MONTAGEM BATCHI [JOGA ACELERA] [4.82★]",
+      "url": "https://osu.ppy.sh/beatmapsets/2#osu/1",
+      "description": "**C** @47% **+HD** • 1.234.567 • 81.48% • <t:1786723477:R>\n**121.21**pp • 55x/284x • ❌ 23\n{ 148 / 18 / 0 / 23 }\n`02:00` • `CS 4 AR 9.4 OD 9.6 HP 5` • `128 BPM`",
+      "color": 13395711,
+      "thumbnail": "capa.jpg",
+      "status": "Ranked",
+      "creator": "dectopia"
+    }
+  },
+  {
+    "nome": "servidor que não manda nada",
+    "setup": {},
+    "play": {
+      "pp": 121.21,
+      "accuracy": 0.8148,
+      "rank": "C",
+      "mods": [
+        "HD"
+      ],
+      "max_combo": 55,
+      "passed": true,
+      "score": null,
+      "created_at": "2026-08-14T16:04:37Z",
+      "statistics": {
+        "count_300": 148,
+        "count_100": 18,
+        "count_50": 0,
+        "count_miss": 23
+      },
+      "beatmap": {
+        "id": 1,
+        "version": "JOGA ACELERA",
+        "max_combo": 284,
+        "difficulty_rating": 4.82
+      },
+      "beatmapset": {
+        "id": null,
+        "title": "MONTAGEM BATCHI",
+        "artist": "",
+        "covers": {}
+      }
+    },
+    "opts": {
+      "mode": "daycore"
+    },
+    "saida": {
+      "title": "MONTAGEM BATCHI [JOGA ACELERA] [4.82★]",
+      "url": "https://osu.ppy.sh/beatmapsets/null#osu/1",
+      "description": "**C** **+HD** • 81.48% • <t:1786723477:R>\n**121.21**pp • 55x/284x • ❌ 23\n{ 148 / 18 / 0 / 23 }",
+      "color": 13395711,
+      "thumbnail": null,
+      "status": null,
+      "creator": null
+    }
+  },
+  {
+    "nome": "DT com linha do mapa",
+    "setup": {
+      "mapAttrs": {
+        "cs": 4,
+        "ar": 10.33,
+        "od": 9.11,
+        "hp": 5,
+        "clockRate": 1.5,
+        "bpm": 180,
+        "objects": 400
+      },
+      "beatmap": {
+        "total_length": 180,
+        "status": "graveyard",
+        "beatmapset": {
+          "creator": "dectopia"
+        }
+      }
+    },
+    "play": {
+      "pp": 121.21,
+      "accuracy": 0.8148,
+      "rank": "C",
+      "mods": [
+        "DT"
+      ],
+      "max_combo": 55,
+      "passed": true,
+      "score": 1234567,
+      "created_at": "2026-08-14T16:04:37Z",
+      "statistics": {
+        "count_300": 148,
+        "count_100": 18,
+        "count_50": 0,
+        "count_miss": 23
+      },
+      "beatmap": {
+        "id": 1,
+        "version": "JOGA ACELERA",
+        "max_combo": 284,
+        "difficulty_rating": 4.82
+      },
+      "beatmapset": {
+        "id": 2,
+        "title": "MONTAGEM BATCHI",
+        "artist": "MC",
+        "covers": {
+          "list": "capa.jpg"
+        }
+      }
+    },
+    "opts": {},
+    "saida": {
+      "title": "MC - MONTAGEM BATCHI [JOGA ACELERA] [4.82★]",
+      "url": "https://osu.ppy.sh/beatmapsets/2#osu/1",
+      "description": "**C** **+DT** • 1.234.567 • 81.48% • <t:1786723477:R>\n**121.21**pp • 55x/284x • ❌ 23\n{ 148 / 18 / 0 / 23 }\n`02:00` • `CS 4 AR 10.33 OD 9.11 HP 5` • `180 BPM`",
+      "color": 13395711,
+      "thumbnail": "capa.jpg",
+      "status": "Graveyard",
+      "creator": "dectopia"
+    }
+  },
+  {
+    "nome": "standardised pedido",
+    "setup": {},
+    "play": {
+      "pp": 121.21,
+      "accuracy": 0.8148,
+      "rank": "C",
+      "mods": [
+        "HD"
+      ],
+      "max_combo": 55,
+      "passed": true,
+      "score": 12345678,
+      "created_at": "2026-08-14T16:04:37Z",
+      "statistics": {
+        "count_300": 148,
+        "count_100": 18,
+        "count_50": 0,
+        "count_miss": 23
+      },
+      "beatmap": {
+        "id": 1,
+        "version": "JOGA ACELERA",
+        "max_combo": 284,
+        "difficulty_rating": 4.82
+      },
+      "beatmapset": {
+        "id": 2,
+        "title": "MONTAGEM BATCHI",
+        "artist": "MC",
+        "covers": {
+          "list": "capa.jpg"
+        }
+      },
+      "score_classic": 12345678,
+      "score_standardised": 987654
+    },
+    "opts": {
+      "scoreFormat": "standardised"
+    },
+    "saida": {
+      "title": "MC - MONTAGEM BATCHI [JOGA ACELERA] [4.82★]",
+      "url": "https://osu.ppy.sh/beatmapsets/2#osu/1",
+      "description": "**C** **+HD** • 987.654 • 81.48% • <t:1786723477:R>\n**121.21**pp • 55x/284x • ❌ 23\n{ 148 / 18 / 0 / 23 }",
+      "color": 13395711,
+      "thumbnail": "capa.jpg",
+      "status": null,
+      "creator": null
+    }
+  },
+  {
+    "nome": "lazer pedido como classic",
+    "setup": {},
+    "play": {
+      "pp": 121.21,
+      "accuracy": 0.8148,
+      "rank": "C",
+      "mods": [
+        "HD"
+      ],
+      "max_combo": 55,
+      "passed": true,
+      "score": 876543,
+      "created_at": "2026-08-14T16:04:37Z",
+      "statistics": {
+        "count_300": 148,
+        "count_100": 18,
+        "count_50": 0,
+        "count_miss": 23
+      },
+      "beatmap": {
+        "id": 1,
+        "version": "JOGA ACELERA",
+        "max_combo": 284,
+        "difficulty_rating": 4.82
+      },
+      "beatmapset": {
+        "id": 2,
+        "title": "MONTAGEM BATCHI",
+        "artist": "MC",
+        "covers": {
+          "list": "capa.jpg"
+        }
+      },
+      "score_classic": null,
+      "score_standardised": 876543
+    },
+    "opts": {
+      "scoreFormat": "classic"
+    },
+    "saida": {
+      "title": "MC - MONTAGEM BATCHI [JOGA ACELERA] [4.82★]",
+      "url": "https://osu.ppy.sh/beatmapsets/2#osu/1",
+      "description": "**C** **+HD** • 876.543 (Padronizado) • 81.48% • <t:1786723477:R>\n**121.21**pp • 55x/284x • ❌ 23\n{ 148 / 18 / 0 / 23 }",
+      "color": 13395711,
+      "thumbnail": "capa.jpg",
+      "status": null,
+      "creator": null
+    }
+  },
+  {
+    "nome": "pp calculado aqui",
+    "setup": {
+      "localPP": 99
+    },
+    "play": {
+      "pp": null,
+      "accuracy": 0.8148,
+      "rank": "C",
+      "mods": [
+        "HD"
+      ],
+      "max_combo": 55,
+      "passed": true,
+      "score": 1234567,
+      "created_at": "2026-08-14T16:04:37Z",
+      "statistics": {
+        "count_300": 148,
+        "count_100": 18,
+        "count_50": 0,
+        "count_miss": 23
+      },
+      "beatmap": {
+        "id": 1,
+        "version": "JOGA ACELERA",
+        "max_combo": 284,
+        "difficulty_rating": 4.82
+      },
+      "beatmapset": {
+        "id": 2,
+        "title": "MONTAGEM BATCHI",
+        "artist": "MC",
+        "covers": {
+          "list": "capa.jpg"
+        }
+      }
+    },
+    "opts": {},
+    "saida": {
+      "title": "MC - MONTAGEM BATCHI [JOGA ACELERA] [4.82★]",
+      "url": "https://osu.ppy.sh/beatmapsets/2#osu/1",
+      "description": "**C** **+HD** • 1.234.567 • 81.48% • <t:1786723477:R>\n**99.00**pp • 55x/284x • ❌ 23\n{ 148 / 18 / 0 / 23 }",
+      "color": 13395711,
+      "thumbnail": "capa.jpg",
+      "status": null,
+      "creator": null
+    }
+  },
+  {
+    "nome": "pp impossível",
+    "setup": {},
+    "play": {
+      "pp": null,
+      "accuracy": 0.8148,
+      "rank": "C",
+      "mods": [
+        "HD"
+      ],
+      "max_combo": 55,
+      "passed": true,
+      "score": 1234567,
+      "created_at": "2026-08-14T16:04:37Z",
+      "statistics": {
+        "count_300": 148,
+        "count_100": 18,
+        "count_50": 0,
+        "count_miss": 23
+      },
+      "beatmap": {
+        "id": 1,
+        "version": "JOGA ACELERA",
+        "max_combo": 284,
+        "difficulty_rating": 4.82
+      },
+      "beatmapset": {
+        "id": 2,
+        "title": "MONTAGEM BATCHI",
+        "artist": "MC",
+        "covers": {
+          "list": "capa.jpg"
+        }
+      }
+    },
+    "opts": {},
+    "saida": {
+      "title": "MC - MONTAGEM BATCHI [JOGA ACELERA] [4.82★]",
+      "url": "https://osu.ppy.sh/beatmapsets/2#osu/1",
+      "description": "**C** **+HD** • 1.234.567 • 81.48% • <t:1786723477:R>\n**?**pp • 55x/284x • ❌ 23\n{ 148 / 18 / 0 / 23 }",
+      "color": 13395711,
+      "thumbnail": "capa.jpg",
+      "status": null,
+      "creator": null
+    }
+  },
+  {
+    "nome": "FC sem miss",
+    "setup": {
+      "stars": "4.20",
+      "mapAttrs": {
+        "cs": 4,
+        "ar": 9.4,
+        "od": 9.6,
+        "hp": 5,
+        "clockRate": 1,
+        "bpm": 128,
+        "objects": 400
+      },
+      "beatmap": {
+        "total_length": 120,
+        "status": "ranked",
+        "beatmapset": {
+          "creator": "dectopia"
+        }
+      }
+    },
+    "play": {
+      "pp": 121.21,
+      "accuracy": 0.8148,
+      "rank": "C",
+      "mods": [
+        "HD"
+      ],
+      "max_combo": 284,
+      "passed": true,
+      "score": 1234567,
+      "created_at": "2026-08-14T16:04:37Z",
+      "statistics": {
+        "count_300": 189,
+        "count_100": 0,
+        "count_50": 0,
+        "count_miss": 0
+      },
+      "beatmap": {
+        "id": 1,
+        "version": "JOGA ACELERA",
+        "max_combo": 284,
+        "difficulty_rating": 4.82
+      },
+      "beatmapset": {
+        "id": 2,
+        "title": "MONTAGEM BATCHI",
+        "artist": "MC",
+        "covers": {
+          "list": "capa.jpg"
+        }
+      }
+    },
+    "opts": {},
+    "saida": {
+      "title": "MC - MONTAGEM BATCHI [JOGA ACELERA] [4.20★]",
+      "url": "https://osu.ppy.sh/beatmapsets/2#osu/1",
+      "description": "**C** **+HD** • 1.234.567 • 81.48% • <t:1786723477:R>\n**121.21**pp • 284x/284x\n{ 189 / 0 / 0 / 0 }\n`02:00` • `CS 4 AR 9.4 OD 9.6 HP 5` • `128 BPM`",
+      "color": 13395711,
+      "thumbnail": "capa.jpg",
+      "status": "Ranked",
+      "creator": "dectopia"
+    }
+  },
+  {
+    "nome": "data inválida e acurácia ausente",
+    "setup": {},
+    "play": {
+      "pp": 121.21,
+      "accuracy": null,
+      "rank": "C",
+      "mods": [
+        "HD"
+      ],
+      "max_combo": 55,
+      "passed": true,
+      "score": 1234567,
+      "created_at": "lixo",
+      "statistics": {
+        "count_300": 148,
+        "count_100": 18,
+        "count_50": 0,
+        "count_miss": 23
+      },
+      "beatmap": {
+        "id": 1,
+        "version": "v",
+        "max_combo": null,
+        "difficulty_rating": 0
+      },
+      "beatmapset": {
+        "id": 2,
+        "title": "MONTAGEM BATCHI",
+        "artist": "MC",
+        "covers": {
+          "list": "capa.jpg"
+        }
+      }
+    },
+    "opts": {},
+    "saida": {
+      "title": "MC - MONTAGEM BATCHI [v]",
+      "url": "https://osu.ppy.sh/beatmapsets/2#osu/1",
+      "description": "**C** **+HD** • 1.234.567 • 0.00%\n**121.21**pp • 55x/?x • ❌ 23\n{ 148 / 18 / 0 / 23 }",
+      "color": 13395711,
+      "thumbnail": "capa.jpg",
+      "status": null,
+      "creator": null
+    }
+  }
+]
