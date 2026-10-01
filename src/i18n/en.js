@@ -170,6 +170,8 @@ module.exports = ({ ADMIN }) => ({
   link_default_set:        (label) => `✅ Default server set to **${label}**.`,
   link_default_set_modo:   (label, modo) => `✅ Default server set to **${label}**, mode **${modo}**.`,
   link_modo_note:          (modo) => `Mode in use: **${modo}**. Change it anytime with \`/link default\`.`,
+  score_format_label:      (formato) => ({ classic: 'Classic', standardised: 'Standardised' })[formato] ?? formato,
+  link_score_format_note:  (label) => `Total score in play embeds: **${label}**.`,
   link_default_missing:    (label) => `❌ You have no link on **${label}**. Use \`/link set\` on that server first.`,
   no_link_for_mention:     (who, label) =>
     `❌ ${who} has no link on **${label}**. Pick the server where they linked their account, or provide the player name.`,

@@ -185,6 +185,8 @@ module.exports = ({ ADMIN }) => ({
   link_default_set:        (label) => `✅ Servidor padrão definido para **${label}**.`,
   link_default_set_modo:   (label, modo) => `✅ Servidor padrão definido para **${label}**, modo **${modo}**.`,
   link_modo_note:          (modo) => `Modo em uso: **${modo}**. Troque quando quiser com \`/link default\`.`,
+  score_format_label:      (formato) => ({ classic: 'Clássico', standardised: 'Padronizado' })[formato] ?? formato,
+  link_score_format_note:  (label) => `Score total nos embeds de play: **${label}**.`,
   link_default_missing:    (label) => `❌ Você não tem link no **${label}**. Use \`/link set\` nesse servidor primeiro.`,
   no_link_for_mention:     (who, label) =>
     `❌ ${who} não tem link no **${label}**. Informe o servidor em que essa pessoa vinculou a conta, ou o nome do jogador.`,
