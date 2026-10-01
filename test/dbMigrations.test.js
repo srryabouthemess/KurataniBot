@@ -317,3 +317,55 @@ test('banco mais novo não ganha backup de "antes de migrar"', t => {
   assert.ok(recusa(load));
   assert.deepEqual(backupsEm(dir), []);
 });
+
+// ─── 8 → 9: formato do score total ────────────────────────────────────────────
+
+const colunasDe = (dbPath, table) =>
+  comHandle(dbPath, h => h.prepare(`PRAGMA table_info(${table})`).all().map(c => c.name));
+
+test('banco novo já nasce com users.score_format', t => {
+  const { dbPath, load } = dbWorkspace(t);
+  const db = load();
+
+  assert.ok(colunasDe(dbPath, 'users').includes('score_format'));
+  assert.equal(db.getScoreFormat('1'), null, 'sem preferência é null, que vale o clássico');
+
+  db.setScoreFormat('1', 'standardised');
+  assert.equal(db.getScoreFormat('1'), 'standardised');
+  db.setScoreFormat('1', 'lixo');
+  assert.equal(db.getScoreFormat('1'), null, 'valor inválido não é gravado');
+});
+
+test('8 → 9 acrescenta users.score_format e mantém o resto', t => {
+  const { dbPath, load } = dbWorkspace(t);
+
+  const primeiro = load();
+  primeiro.setLink('1', 'official', 'fulano', 123);
+  primeiro.setPreferredModo('1', 'rx');
+  primeiro.close();
+
+  // O banco como a versão 8 o deixava: a tabela sem a coluna. Refeita em vez
+  // de `DROP COLUMN`, que o SQLite recusa por causa dos comentários do CREATE.
+  comHandle(dbPath, h => h.exec(`
+    CREATE TABLE users_v8 (
+      discord_id TEXT PRIMARY KEY, osu_user TEXT, osu_server TEXT, lang TEXT,
+      osu_id INTEGER, preferred_server TEXT, preferred_modo TEXT
+    );
+    INSERT INTO users_v8 SELECT discord_id, osu_user, osu_server, lang, osu_id,
+      preferred_server, preferred_modo FROM users;
+    DROP TABLE users;
+    ALTER TABLE users_v8 RENAME TO users;
+    PRAGMA user_version = 8;
+  `));
+  assert.ok(!colunasDe(dbPath, 'users').includes('score_format'));
+
+  const db = load();
+  assert.equal(userVersion(dbPath), 9);
+  assert.ok(colunasDe(dbPath, 'users').includes('score_format'));
+  assert.equal(db.getScoreFormat('1'), null, 'quem já existia fica sem preferência, o clássico');
+  assert.equal(db.getPreferredModo('1'), 'rx');
+  assert.equal(db.getLink('1', 'official').osu_user, 'fulano');
+
+  db.setScoreFormat('1', 'classic');
+  assert.equal(db.getScoreFormat('1'), 'classic');
+});

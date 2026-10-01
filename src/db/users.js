@@ -1,9 +1,9 @@
 /**
  * db/users.js
- * Links de conta osu!, servidor preferido, modo preferido (VN/RX/combinado)
- * e idioma.
+ * Links de conta osu!, servidor preferido, modo preferido (VN/RX/combinado),
+ * formato do score total e idioma.
  *
- * O que estas quatro coisas têm em comum: são preferências de uma pessoa, e o
+ * O que estas cinco coisas têm em comum: são preferências de uma pessoa, e o
  * bot as lê em praticamente todo comando.
  */
 
@@ -128,6 +128,35 @@ function getPreferredModo(discordId) {
   return MODOS_VALIDOS.has(salvo) ? salvo : null;
 }
 
+// ─── Formato do score total (classic/standardised) ────────────────────────────
+
+const FORMATOS_SCORE = new Set(['classic', 'standardised']);
+
+/**
+ * Grava como o score total aparece nos embeds de play, ou limpa com `null`.
+ *
+ * É preferência de quem LÊ, não de quem jogou: o embed usa a de quem pediu o
+ * comando (ver embeds/play.js), então um `/rs @fulano` sai no formato de quem
+ * digitou.
+ */
+function setScoreFormat(discordId, formato) {
+  const valor = FORMATOS_SCORE.has(formato) ? formato : null;
+  db.prepare(`
+    INSERT INTO users (discord_id, score_format) VALUES (?, ?)
+    ON CONFLICT(discord_id) DO UPDATE SET score_format = excluded.score_format
+  `).run(discordId, valor);
+}
+
+/**
+ * O formato salvo, ou null se nunca foi definido (ou é inválido). Null é o
+ * padrão, e o padrão é o clássico — quem decide isso é o embed, não o banco.
+ */
+function getScoreFormat(discordId) {
+  const salvo = db.prepare('SELECT score_format FROM users WHERE discord_id = ?')
+    .get(discordId)?.score_format ?? null;
+  return FORMATOS_SCORE.has(salvo) ? salvo : null;
+}
+
 // ─── Idioma do usuário ────────────────────────────────────────────────────────
 
 function setUserLang(discordId, lang) {
@@ -170,6 +199,7 @@ module.exports = {
   setLink, getLink, getAllLinks, removeLink,
   setPreferredServer, getPreferredServer,
   setPreferredModo, getPreferredModo,
+  setScoreFormat, getScoreFormat,
   setUserLang, getUserLang, removeUserLang,
   setServerLang, getServerLang, removeServerLang,
 };

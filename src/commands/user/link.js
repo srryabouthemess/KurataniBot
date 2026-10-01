@@ -3,6 +3,7 @@ const {
   setLink, getLink, getAllLinks, removeLink,
   setPreferredServer, getPreferredServer,
   setPreferredModo, getPreferredModo,
+  setScoreFormat, getScoreFormat,
   linkNamespace,
 } = require('../../db');
 const { t } = require('../../i18n');
@@ -19,6 +20,13 @@ const SERVER_CHOICES = servers.rootChoices();
 
 // Com `both`: aqui a escolha é a preferência que o /recent e o /rs vão ler.
 const MODO_CHOICES = modo.CHOICES_AMBOS;
+
+// Como o score total aparece nos embeds de play (ver embeds/play.js). Os nomes
+// são os do seletor do próprio osu!.
+const SCORE_FORMAT_CHOICES = [
+  { name: 'Classic', value: 'classic', name_localizations: { 'pt-BR': 'Clássico' } },
+  { name: 'Standardised', value: 'standardised', name_localizations: { 'pt-BR': 'Padronizado' } },
+];
 
 /**
  * Rótulo a exibir para uma conta linkada. Vanilla e RX do mesmo servidor
@@ -92,8 +100,8 @@ module.exports = {
     .addSubcommand(sub =>
       sub
         .setName('default')
-        .setDescription('Choose which server (and VN/RX mode) commands use by default')
-        .setDescriptionLocalizations({ 'pt-BR': 'Escolhe qual servidor (e modo VN/RX) os comandos usam por padrão' })
+        .setDescription('Choose the default server, VN/RX mode and total score format')
+        .setDescriptionLocalizations({ 'pt-BR': 'Escolhe o servidor, o modo VN/RX e o formato do score total padrão' })
         .addStringOption(opt =>
           opt
             .setName('server')
@@ -109,6 +117,14 @@ module.exports = {
             .setDescriptionLocalizations({ 'pt-BR': 'VN, RX, ou os dois (mantém o atual se omitido)' })
             .setRequired(false)
             .addChoices(...MODO_CHOICES)
+        )
+        .addStringOption(opt =>
+          opt
+            .setName('score')
+            .setDescription('Total score in play embeds: classic or standardised (unchanged if omitted)')
+            .setDescriptionLocalizations({ 'pt-BR': 'Score total nos embeds de play: clássico ou padronizado (mantém o atual se omitido)' })
+            .setRequired(false)
+            .addChoices(...SCORE_FORMAT_CHOICES)
         )
     ),
 
@@ -166,6 +182,7 @@ module.exports = {
     if (sub === 'default') {
       const server = interaction.options.getString('server');
       const escolhido = interaction.options.getString('modo'); // 'vn' | 'rx' | 'both' | null
+      const formato   = interaction.options.getString('score'); // 'classic' | 'standardised' | null
 
       // Só faz sentido apontar o padrão para um servidor onde há link.
       if (!getLink(interaction.user.id, server)) {
@@ -177,12 +194,18 @@ module.exports = {
       // quando a pessoa pede explicitamente (ver userLink.resolveServer, que
       // é quem aplica isso em todo comando).
       if (escolhido) setPreferredModo(interaction.user.id, escolhido);
+      // O formato do score segue a mesma regra: omitido, fica o salvo.
+      if (formato) setScoreFormat(interaction.user.id, formato);
 
       const label = modo.label(escolhido ?? getPreferredModo(interaction.user.id));
+      const formatoAtual = getScoreFormat(interaction.user.id);
+      const confirmacao = label
+        ? s.link_default_set_modo(osu.getModeLabel(server), label)
+        : s.link_default_set(osu.getModeLabel(server));
       return interaction.reply({
-        content: label
-          ? s.link_default_set_modo(osu.getModeLabel(server), label)
-          : s.link_default_set(osu.getModeLabel(server)),
+        content: formatoAtual
+          ? `${confirmacao}\n${s.link_score_format_note(s.score_format_label(formatoAtual))}`
+          : confirmacao,
         flags: MessageFlags.Ephemeral,
       });
     }

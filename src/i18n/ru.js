@@ -170,6 +170,8 @@ module.exports = ({ ADMIN }) => ({
   link_default_set:        (label) => `✅ Сервер по умолчанию: **${label}**.`,
   link_default_set_modo:   (label, modo) => `✅ Сервер по умолчанию: **${label}**, режим **${modo}**.`,
   link_modo_note:          (modo) => `Текущий режим: **${modo}**. Изменить можно через \`/link default\`.`,
+  score_format_label:      (formato) => ({ classic: 'Классический', standardised: 'Стандартизированный' })[formato] ?? formato,
+  link_score_format_note:  (label) => `Общий счёт в карточках плеев: **${label}**.`,
   link_default_missing:    (label) => `❌ У вас нет привязки на **${label}**. Сначала используйте \`/link set\` там.`,
   no_link_for_mention:     (who, label) =>
     `❌ У ${who} нет привязки на **${label}**. Укажите сервер, где этот игрок привязал аккаунт, или имя игрока.`,

@@ -208,3 +208,68 @@ test('erro que NÃO é 404 continua subindo', async () => {
     restaurar();
   }
 });
+
+// ─── As duas escalas do score total ───────────────────────────────────────────
+// O embed escolhe entre elas pela preferência de quem pediu (ver totalScore em
+// embeds/play.js). O `score` de antes continua igual: o cálculo de PP e o
+// scoreStore o leem.
+
+test('score de stable traz as duas escalas, e o `score` segue no clássico', () => {
+  const s = normalizeScore({ ...FC_STABLE, total_score: 987654 });
+  assert.equal(s.score_classic, 12345678);
+  assert.equal(s.score_standardised, 987654);
+  assert.equal(s.score, 12345678);
+});
+
+test('score de lazer (legacy_total_score 0) não tem total clássico', () => {
+  // A API manda o 0, e 0 aqui é "não existe" — nunca um total de verdade.
+  const s = normalizeScore({ ...FC_STABLE, mods: [{ acronym: 'DT' }], legacy_score_id: null,
+    legacy_total_score: 0, total_score: 876543 });
+  assert.equal(s.score_classic, null);
+  assert.equal(s.score_standardised, 876543);
+  assert.equal(s.score, 876543, 'o `score` mantém o comportamento de antes');
+});
+
+test('campo que não veio vira null, não undefined nem zero', () => {
+  // Mesma esparsidade do `statistics`: o que falta simplesmente não vem.
+  const semLegacy = { ...FC_STABLE };
+  delete semLegacy.legacy_total_score;
+  const s = normalizeScore({ ...semLegacy, total_score: 765432 });
+  assert.equal(s.score_classic, null);
+  assert.equal(s.score_standardised, 765432);
+
+  const nada = normalizeScore({ ...semLegacy });
+  assert.equal(nada.score_classic, null);
+  assert.equal(nada.score_standardised, null);
+  assert.equal(nada.score, 0);
+
+  const nulos = normalizeScore({ ...FC_STABLE, legacy_total_score: null, total_score: null });
+  assert.equal(nulos.score_classic, null);
+  assert.equal(nulos.score_standardised, null);
+});
+
+test('servidor privado: um número só, que é o clássico', () => {
+  // Ninguém joga lazer num bancho.py, Ripple ou Gatari: a escala standardised
+  // não existe ali, e fica null em vez de repetir o clássico com outro nome.
+  const { normalizeScorePrivate } = require('../src/osu/banchoPyApi/normalize');
+  const ripple = require('../src/osu/rippleApi');
+  const gatari = require('../src/osu/gatariApi');
+
+  const casos = {
+    'bancho.py': normalizeScorePrivate({ score: 4590136, grade: 'S', mods: 0, map_name: '' }),
+    'Ripple':    ripple.normalizeScore({ score: 4590136, mods: 0, beatmap: {} }),
+    'Ripple v1': ripple.normalizeLegacyScore({ score_id: 1, score: '4590136', rank: 'S' }, 1),
+    'Gatari':    gatari.normalizeScore({ score: 4590136, mods: 0, beatmap: {} }),
+  };
+
+  for (const [origem, s] of Object.entries(casos)) {
+    assert.equal(s.score, 4590136, origem);
+    assert.equal(s.score_classic, 4590136, origem);
+    assert.equal(s.score_standardised, null, origem);
+  }
+
+  // Sem score, nenhum dos dois: zero na tela pareceria uma play sem nota.
+  const semScore = ripple.normalizeScore({ score: 0, mods: 0, beatmap: {} });
+  assert.equal(semScore.score_classic, null);
+  assert.equal(semScore.score_standardised, null);
+});

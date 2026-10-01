@@ -2,6 +2,38 @@
 
 ---
 
+# Sessão de 2026-10-01 (formato do score total)
+
+## ✨ Novidades
+
+- **Score total em classic ou standardised, por usuário.** [`embeds/play.js`](src/embeds/play.js), [`link.js`](src/commands/user/link.js)
+  - `/link default score:` grava `classic` (o `legacy_total_score` do stable)
+    ou `standardised` (o `total_score` do lazer). Omitido, fica o salvo. Sem
+    preferência, vale o clássico, que é o comportamento de antes.
+  - Vale a preferência de quem PEDE o comando, não a do jogador consultado.
+  - Hoje só o `/recent` exibe score total. Os itens de lista (`/score`,
+    `/topplays`, `/topscores`) não mostram total nenhum, e continuam assim.
+  - Faltando o número pedido, sai o outro com o nome dele ao lado
+    (`876.543 (Padronizado)`). Sem conversão entre escalas.
+
+## 🔧 Mudanças
+
+- **`normalizeScore` preserva as duas escalas.** [`officialApi.js`](src/osu/officialApi.js)
+  - `score_classic` e `score_standardised`, null quando não vêm (o 0 do
+    `legacy_total_score` de play de lazer conta como "não veio").
+  - `score` não mudou: o cálculo de PP e o scoreStore continuam lendo ele.
+  - bancho.py, Ripple e Gatari: `score_classic` = o número que vem,
+    `score_standardised` = null.
+- **Coluna `users.score_format`, migração 8 → 9.** [`migrations.js`](src/db/migrations.js), [`schema.js`](src/db/schema.js), [`users.js`](src/db/users.js)
+
+## ⚠️ Limitação conhecida
+
+- O scoreStore continua gravando `s.score` em `total_score`, e esse campo
+  mistura as duas escalas (clássico em play de stable, standardised em play
+  de lazer). Não serve para ranking por score enquanto não for separado.
+
+---
+
 # Sessão de 2026-09-30 (scores guardados localmente)
 
 ## ✨ Novidades

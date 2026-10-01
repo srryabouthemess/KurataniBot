@@ -15,7 +15,7 @@ O KurataniBot é um bot de Discord que mostra estatísticas de osu! do servidor 
 | Dado | Quando | Para quê |
 |---|---|---|
 | Seu ID do Discord, nick e ID de osu! e servidor escolhido | Quando você usa `/link set` | Rodar comandos sem precisar digitar o nick toda vez |
-| Idioma, servidor padrão e modo (VN/RX) preferidos | Quando você escolhe um | Lembrar a sua preferência |
+| Idioma, servidor padrão, modo (VN/RX) e formato do score total preferidos | Quando você escolhe um | Lembrar a sua preferência |
 | ID do servidor do Discord e idioma dele | Quando um administrador define o idioma | Responder no idioma do servidor |
 | Vínculo de staff, nomeações de mapas e registro de ações administrativas | Só para a staff do servidor privado Daycore | Checar permissão e manter histórico de auditoria |
 
@@ -71,7 +71,7 @@ KurataniBot is a Discord bot that shows osu! statistics from the official server
 | Data | When | Why |
 |---|---|---|
 | Your Discord ID, osu! username and ID, and chosen server | When you use `/link set` | Running commands without typing your username every time |
-| Preferred language, default server and mode (VN/RX) | When you choose one | Remembering your preference |
+| Preferred language, default server, mode (VN/RX) and total score format | When you choose one | Remembering your preference |
 | Discord server ID and its language | When an administrator sets the language | Replying in the server's language |
 | Staff links, map nominations and an administrative action log | Only for staff of the Daycore private server | Permission checks and an audit trail |
 

@@ -125,6 +125,10 @@ function normalizeScore(raw) {
     max_combo: raw.max_combo ?? null,
     mods: decodeMods(raw.mods ?? 0),
     score: Number(raw.score ?? 0) || null,
+    // Um número só, e é o do stable: ninguém joga lazer num servidor privado.
+    // A escala standardised não existe aqui (ver o normalizeScore oficial).
+    score_classic:      Number(raw.score ?? 0) || null,
+    score_standardised: null,
     // Mesma escala do Ripple: 0 falhou, 1 não passou, 2 passou, 3 melhor.
     passed: Number(raw.completed ?? 0) >= 2,
     created_at: epochIso(raw.time),

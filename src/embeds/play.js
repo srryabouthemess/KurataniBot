@@ -114,6 +114,46 @@ function missCount(play) {
   return typeof misses === 'number' ? misses : 0;
 }
 
+/** Um total que existe de fato: número, e acima de zero. */
+const totalPositivo = (valor) => (Number.isFinite(valor) && valor > 0 ? valor : null);
+
+/**
+ * O score total, na escala que quem pediu o comando escolheu (`/link default`).
+ *
+ * `classic` é o número do stable; `standardised`, a escala do lazer (ver
+ * normalizeScore em osu/officialApi.js). Sem preferência (null) vale o clássico,
+ * que é o que o bot sempre mostrou.
+ *
+ * Faltando o número pedido, sai o outro — e com o nome dele ao lado. Uma play
+ * jogada no lazer não tem total clássico, e o standardised dela sem marca seria
+ * lido como clássico por quem escolheu clássico: a escala muda o número em
+ * ordens de grandeza, e nada mais na tela denuncia a troca. Converter de uma
+ * escala para a outra seria pior: a conta do osu! é uma aproximação, e o
+ * resultado passaria pelo número que a API não mandou.
+ *
+ * Score de um adaptador que não separa as escalas (sem os dois campos) mostra o
+ * `score` como sempre mostrou, sem marca: não há o que afirmar sobre ele.
+ */
+function totalScore(play, formato, s) {
+  const pedido  = formato === 'standardised' ? 'standardised' : 'classic';
+  const valores = {
+    classic:      totalPositivo(play.score_classic),
+    standardised: totalPositivo(play.score_standardised),
+  };
+
+  if (valores.classic === null && valores.standardised === null) {
+    const bruto = totalPositivo(play.score);
+    return bruto === null ? null : bruto.toLocaleString(s.locale);
+  }
+
+  const exibido = valores[pedido] !== null
+    ? pedido
+    : (pedido === 'classic' ? 'standardised' : 'classic');
+  const texto = valores[exibido].toLocaleString(s.locale);
+
+  return exibido === pedido ? texto : `${texto} (${s.score_format_label(exibido)})`;
+}
+
 /** `81.48%`. Score sem acurácia é raro, mas "NaN%" é pior do que nada. */
 function accuracy(play) {
   const value = Number(play.accuracy) * 100;
@@ -331,8 +371,12 @@ function author(user, mode, s) {
  * `personalBest` é a posição da play no top do jogador (ver
  * recentMerge.personalBestAt). Quem sabe se ela está lá é o comando; aqui só se
  * desenha, e sem o número a linha não existe.
+ *
+ * `scoreFormat` é a preferência de quem PEDIU o comando ('classic' |
+ * 'standardised' | null), não a do jogador consultado: é quem lê que escolhe
+ * em que escala lê (ver totalScore).
  */
-async function single(play, { mode, s, personalBest = null }) {
+async function single(play, { mode, s, scoreFormat = null, personalBest = null }) {
   const [pp, estrelas, meta, attrs] = await Promise.all([
     ppText(play, mode),
     stars(play, mode),
@@ -340,9 +384,7 @@ async function single(play, { mode, s, personalBest = null }) {
     osu.getMapAttrs(play.beatmap?.id, play.mods ?? []),
   ]);
 
-  const total = Number.isFinite(play.score) && play.score > 0
-    ? play.score.toLocaleString(s.locale)
-    : null;
+  const total = totalScore(play, scoreFormat, s);
 
   // Grade, progresso e mods andam juntos, sem o " • " entre eles: são o que a
   // play FOI, e o resto da linha são os números que ela rendeu.
@@ -427,7 +469,7 @@ async function listItem(play, { mode, index, mapUrl = null, autor = null }) {
 
 module.exports = {
   COLOR, COLOR_FAIL, RANK_COLORS,
-  author, single, listItem, rankColor,
+  author, single, listItem, rankColor, totalScore,
   mapTitle, mapLine, mapMeta,
   ppLegivel,
 };

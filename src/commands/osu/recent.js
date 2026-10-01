@@ -3,7 +3,7 @@ const osu = require('../../osuClient');
 const servers = require('../../servers');
 const recentMerge = require('../../recentMerge');
 const modo = require('../../modo');
-const { getPreferredModo } = require('../../db');
+const { getPreferredModo, getScoreFormat } = require('../../db');
 const { resolvePlayer, fetchPlayer } = require('../../userLink');
 const mapContext = require('../../mapContext');
 const playEmbed = require('../../embeds/play');
@@ -61,6 +61,9 @@ module.exports = {
     // escolheu, em vez de precisar repetir a opção toda vez. Com `@fulano`, é
     // a preferência do fulano (ver resolvePlayer).
     const modoOption = interaction.options.getString('modo') ?? getPreferredModo(resolved.ownerId);
+    // O formato do score total é de quem PEDIU, não do dono das plays: com
+    // `@fulano`, quem lê é quem digitou (ver embeds/play.js).
+    const scoreFormat = getScoreFormat(interaction.user.id);
     const pair = recentMerge.pairFor(mode);
     const keys = recentMerge.keysToFetch(pair, modoOption);
     await interaction.deferReply();
@@ -145,6 +148,7 @@ module.exports = {
           playEmbed.single(recent, {
             mode: playMode,
             s,
+            scoreFormat,
             // Da play CRUA: é nela que o id do score está em todo servidor (o
             // enriquecimento do bancho.py reescreve o objeto).
             personalBest: recentMerge.personalBestAt(rawPlay, tops),
