@@ -54,9 +54,14 @@ const linkStub = {
 
 // O `personalBest` que o comando passou, e ele na tela, para dar para afirmar
 // a partir do embed publicado.
+let opcoesDoEmbed = null;  // o que o comando passou ao último `single`
 const playStub = {
   author: user => ({ name: user.username }),
-  single: async (play, { personalBest = null }) => ({
+  single: async (play, opcoes) => { opcoesDoEmbed = opcoes; return desenhar(play, opcoes); },
+};
+
+function desenhar(play, { personalBest = null }) {
+  return ({
     title: `play ${play.score_id ?? play.id}`,
     url: 'https://example/map',
     color: 0,
@@ -64,8 +69,8 @@ const playStub = {
     description: personalBest ? `PB #${personalBest}` : 'sem PB',
     status: null,
     creator: null,
-  }),
-};
+  });
+}
 
 for (const [caminho, exports] of [
   ['../src/osuClient', osuStub],
@@ -137,6 +142,7 @@ test.beforeEach(() => {
   recentes = {};
   tops = {};
   segurar = null;
+  opcoesDoEmbed = null;
 });
 
 // ─── scoreIdOf ───────────────────────────────────────────────────────────────
@@ -326,4 +332,39 @@ test('🔄 com o top falhando mantém o top de antes', async () => {
   await calado(async () => { clicar('refresh'); await sleep(20); });
 
   assert.equal(tela().descricao, 'PB #1');
+});
+
+// ─── Layout do /builder ──────────────────────────────────────────────────────
+
+const db = require('../src/db');
+
+test('o layout passado ao embed é o de quem PEDIU, não o do dono das plays', async () => {
+  recentes.daycore = [{ score_id: 1, play_time: '2026-09-30T10:00:00Z' }];
+  db.setEmbedLayout('quem-pediu', ['pb', 'pp']);
+  db.setEmbedLayout('dono', ['hits']);
+
+  await rodar({ dono: 'quem-pediu' });
+  assert.deepEqual([...opcoesDoEmbed.layout], ['pb', 'pp']);
+});
+
+test('quem nunca usou o /builder passa layout null, o embed completo', async () => {
+  recentes.daycore = [{ score_id: 1, play_time: '2026-09-30T10:00:00Z' }];
+
+  await rodar({ dono: 'nunca-usou' });
+  assert.equal(opcoesDoEmbed.layout, null);
+  assert.equal(chamadas.best.length, 1, 'com o PB ligado o top continua sendo buscado');
+});
+
+test('sem a linha do PB, o top não é buscado — nem no 🔄', async () => {
+  recentes.daycore = [{ score_id: 3, play_time: '2026-09-30T10:00:00Z' }];
+  tops.daycore = [{ score_id: 3 }];
+  db.setEmbedLayout('sem-pb', ['pp', 'combo']);
+
+  const { tela, clicar } = await rodar({ dono: 'sem-pb' });
+  assert.equal(chamadas.best.length, 0);
+  assert.equal(tela().descricao, 'sem PB');
+
+  clicar('refresh'); await sleep(20);
+  assert.equal(chamadas.best.length, 0);
+  assert.equal(chamadas.recent.length, 2, 'o 🔄 continua buscando a play');
 });
