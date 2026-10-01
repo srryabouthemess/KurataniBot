@@ -15,9 +15,9 @@
 
 function apply(db) {
   db.exec(`
-    -- As colunas osu_id, preferred_server e preferred_modo chegaram por ALTER
-    -- TABLE e estão aqui já no CREATE: banco novo nasce completo, banco antigo
-    -- as recebe pela migração correspondente.
+    -- As colunas osu_id, preferred_server, preferred_modo e score_format
+    -- chegaram por ALTER TABLE e estão aqui já no CREATE: banco novo nasce
+    -- completo, banco antigo as recebe pela migração correspondente.
     CREATE TABLE IF NOT EXISTS users (
       discord_id       TEXT PRIMARY KEY,
       osu_user         TEXT,
@@ -28,7 +28,11 @@ function apply(db) {
       -- 'vn' | 'rx' | 'both' | NULL (sem preferência). Só o /recent e o /rs
       -- leem: é o modo: que /link default grava, pra combinar VN e RX (ou
       -- filtrar pra um só lado) sem precisar repetir a opção toda vez.
-      preferred_modo    TEXT
+      preferred_modo    TEXT,
+      -- 'classic' | 'standardised' | NULL (padrão, que é o clássico). Como o
+      -- score total aparece nos embeds de play de quem PEDE o comando; também
+      -- gravado pelo /link default.
+      score_format      TEXT
     );
 
     CREATE TABLE IF NOT EXISTS guild_settings (

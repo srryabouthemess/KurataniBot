@@ -45,7 +45,7 @@ const path = require('path');
 const { DATA_DIR } = require('../paths');
 const backup = require('./backup');
 
-const VERSAO_ATUAL = 8;
+const VERSAO_ATUAL = 9;
 
 /** A versão mais antiga que as migrações abaixo sabem levar até a atual. */
 const VERSAO_MINIMA = 1;
@@ -366,6 +366,20 @@ function zerarLinkAntigoDeUsers(db) {
   }
 }
 
+// ─── 8 → 9: formato do score total (classic/standardised) ─────────────────────
+
+/**
+ * `users.score_format`: se o score total dos embeds de play sai no formato do
+ * stable (`legacy_total_score`) ou no standardised do lazer (`total_score`).
+ * Nasce NULL, que é o padrão — o clássico, o que o bot já mostrava.
+ */
+function acrescentarColunaScoreFormat(db) {
+  const colunas = db.prepare('PRAGMA table_info(users)').all().map(c => c.name);
+  if (!colunas.includes('score_format')) {
+    db.exec('ALTER TABLE users ADD COLUMN score_format TEXT');
+  }
+}
+
 // ─── scores.db: a trilha própria ──────────────────────────────────────────────
 
 /**
@@ -443,6 +457,10 @@ function run(db) {
 
   if (versao < 8) {
     zerarLinkAntigoDeUsers(db);
+  }
+
+  if (versao < 9) {
+    acrescentarColunaScoreFormat(db);
   }
 
   // Interpolado porque PRAGMA não aceita parâmetro; o valor é uma constante do
