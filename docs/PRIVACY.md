@@ -1,6 +1,6 @@
 # Política de Privacidade / Privacy Policy
 
-*Última atualização / Last updated: 2026-09-30*
+*Última atualização / Last updated: 2026-10-01*
 
 [Português](#português) · [English](#english)
 
@@ -15,7 +15,7 @@ O KurataniBot é um bot de Discord que mostra estatísticas de osu! do servidor 
 | Dado | Quando | Para quê |
 |---|---|---|
 | Seu ID do Discord, nick e ID de osu! e servidor escolhido | Quando você usa `/link set` | Rodar comandos sem precisar digitar o nick toda vez |
-| Idioma, servidor padrão, modo (VN/RX) e formato do score total preferidos | Quando você escolhe um | Lembrar a sua preferência |
+| Idioma, servidor padrão, modo (VN/RX), formato do score total e layout do embed do `/recent` (quais elementos aparecem) preferidos | Quando você escolhe um (o layout, pelo `/builder`) | Lembrar a sua preferência |
 | ID do servidor do Discord e idioma dele | Quando um administrador define o idioma | Responder no idioma do servidor |
 | Vínculo de staff, nomeações de mapas e registro de ações administrativas | Só para a staff do servidor privado Daycore | Checar permissão e manter histórico de auditoria |
 
@@ -53,6 +53,7 @@ Os dados ficam num banco SQLite no servidor que roda o bot. Só o mantenedor tem
 ### Remover seus dados
 
 - `/link remove` apaga seus vínculos de conta.
+- **Restaurar padrão** no `/builder` apaga o layout do embed salvo.
 - Para apagar todo o resto, abra uma issue em <https://github.com/srryabouthemess/KurataniBot/issues>.
 - Para apagar os scores guardados de uma conta de osu!, abra uma issue com o nick e o servidor. Se essa conta for consultada de novo depois disso, os scores voltam a ser guardados.
 
@@ -71,7 +72,7 @@ KurataniBot is a Discord bot that shows osu! statistics from the official server
 | Data | When | Why |
 |---|---|---|
 | Your Discord ID, osu! username and ID, and chosen server | When you use `/link set` | Running commands without typing your username every time |
-| Preferred language, default server, mode (VN/RX) and total score format | When you choose one | Remembering your preference |
+| Preferred language, default server, mode (VN/RX), total score format and `/recent` embed layout (which elements are shown) | When you choose one (the layout, through `/builder`) | Remembering your preference |
 | Discord server ID and its language | When an administrator sets the language | Replying in the server's language |
 | Staff links, map nominations and an administrative action log | Only for staff of the Daycore private server | Permission checks and an audit trail |
 
@@ -109,6 +110,7 @@ Data is kept in a SQLite database on the server that runs the bot. Only the main
 ### Removing your data
 
 - `/link remove` deletes your account links.
+- **Reset to default** in `/builder` deletes your saved embed layout.
 - To delete everything else, open an issue at <https://github.com/srryabouthemess/KurataniBot/issues>.
 - To delete the stored scores of an osu! account, open an issue with the username and the server. If that account is looked up again afterwards, its scores are stored again.
 
