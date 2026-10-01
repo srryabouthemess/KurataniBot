@@ -66,6 +66,7 @@ module.exports = ({ ADMIN }) => ({
   help_cmd_simulate:       'Quanto PP daria uma play específica num mapa.',
   help_cmd_link:           'Vincula sua conta do osu! ao Discord.',
   help_cmd_language:       'Muda o idioma: Português, English ou Русский.',
+  help_cmd_builder:        'Escolhe o que aparece no embed do /recent, com prévia.',
   help_cmd_nominate:       'Nomeia mapas para mudar de status.',
   help_cmd_moderate:       'Consulta e restringe contas.',
   help_cmd_wipe:           'Apaga os scores de uma conta num modo (irreversível).',
@@ -194,6 +195,31 @@ module.exports = ({ ADMIN }) => ({
   no_link_for_server:      (label) =>
     `❌ Você não tem link no **${label}**. Use \`/link set\` para vincular sua conta desse servidor, ` +
     `ou informe o nome do jogador no próprio comando.`,
+
+  // ── /builder ──────────────────────────────────────────────────────────────
+  // O rótulo de cada pedaço do embed do /recent no menu (ver embedLayout.js).
+  builder_intro:           '🧩 Escolha o que aparece no embed do seu `/recent`. A prévia usa uma play de exemplo; título, grade e mods aparecem sempre.',
+  builder_unsaved:         '✏️ Alterações não salvas.',
+  builder_saved:           '✅ Layout salvo. Vale para os seus próximos `/recent`.',
+  builder_reset_done:      '✅ Layout restaurado ao padrão.',
+  builder_expired:         '⌛ Tempo esgotado. Use `/builder` de novo para editar.',
+  builder_not_yours:       '❌ Apenas quem usou o comando pode mexer neste layout.',
+  builder_error:           '❌ Não deu para salvar o layout. Tente de novo.',
+  builder_placeholder:     'Elementos visíveis',
+  builder_save:            'Salvar',
+  builder_reset:           'Restaurar padrão',
+  builder_element:         (chave) => ({
+    pb:        'Top #N pessoal',
+    score:     'Score total',
+    accuracy:  'Acurácia',
+    time:      'Tempo ("há 2 horas")',
+    pp:        'PP',
+    combo:     'Combo',
+    misses:    'Misses',
+    hits:      'Linha de hits (300/100/50/miss)',
+    map:       'Linha do mapa (duração, CS/AR/OD/HP, BPM)',
+    thumbnail: 'Miniatura',
+  })[chave] ?? chave,
 
   lang_set:                (lang) => `✅ Idioma definido para **${lang}**.`,
   lang_set_server:         (lang) => `✅ Idioma do servidor definido para **${lang}**.`,

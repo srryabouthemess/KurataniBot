@@ -160,6 +160,7 @@ caso('/help',     'help',     {});
 caso('/diag',     'diag',     {});
 caso('/language', 'language', {}, { subcommand: 'status' });
 caso('/link',     'link',     {}, { subcommand: 'status' });
+caso('/builder',  'builder',  {});
 
 // ── Administrativos: só para conferir que RECUSAM ─────────────────────────────
 caso('/nominate (recusa)', 'nominate', { map: '1' }, { subcommand: 'queue', esperaRecusa: true });
