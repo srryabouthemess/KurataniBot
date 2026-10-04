@@ -42,24 +42,27 @@ function linhasDeCache(caches) {
 }
 
 /**
- * Junta `limiter.<balde>.calls` e `limiter.<balde>.waitMs` numa linha por balde.
+ * Junta `limiter.<balde>.calls`, `.waitMs` e `.peakMin` numa linha por balde.
  *
  * A espera acumulada é o número que diz se um balde está apertado demais: sem
  * ela, "o bot está lento" não distingue API lenta de limite nosso mal calibrado.
+ * O pico é o maior minuto desde o boot, e é ele que se compara ao teto dos
+ * termos da API (60/min) — o total dividido pelo uptime é média, e esconde a
+ * rajada.
  */
 function linhasDeLimiter(contadores) {
   const baldes = {};
 
   for (const [chave, valor] of Object.entries(contadores)) {
-    const m = chave.match(/^limiter\.(.+)\.(calls|waitMs)$/);
+    const m = chave.match(/^limiter\.(.+)\.(calls|waitMs|peakMin)$/);
     if (!m) continue;
     const [, nome, campo] = m;
-    baldes[nome] ??= { calls: 0, waitMs: 0 };
+    baldes[nome] ??= { calls: 0, waitMs: 0, peakMin: 0 };
     baldes[nome][campo] = valor;
   }
 
   return Object.entries(baldes).map(([nome, d]) =>
-    `\`${nome.padEnd(14)}\` ${String(d.calls).padStart(5)} — ${(d.waitMs / 1000).toFixed(1)}s`);
+    `\`${nome.padEnd(14)}\` ${String(d.calls).padStart(5)} — ${(d.waitMs / 1000).toFixed(1)}s — ${d.peakMin}/min`);
 }
 
 /** Limite do Discord para o valor de um campo de embed. */

@@ -41,6 +41,15 @@ function count(name, n = 1) {
 }
 
 /**
+ * Guarda o maior valor já visto. Mora junto dos contadores porque é lido do
+ * mesmo jeito — um número por chave —, só que não soma: o pico de um minuto
+ * cheio não fica maior por ter havido outros minutos cheios.
+ */
+function max(name, valor) {
+  if (valor > (_contadores.get(name) ?? 0)) _contadores.set(name, valor);
+}
+
+/**
  * Registra acerto ou erro de um cache.
  * Vira duas chaves, `<nome>.hit` e `<nome>.miss`, que o snapshot junta.
  */
@@ -156,4 +165,4 @@ function reset() {
   _duracoes.clear();
 }
 
-module.exports = { count, cache, duration, timed, get, snapshot, reset, JANELA };
+module.exports = { count, max, cache, duration, timed, get, snapshot, reset, JANELA };

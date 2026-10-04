@@ -498,7 +498,7 @@ module.exports = ({ ADMIN }) => ({
   diag_uptime:            (texto) => `В сети **${texto}**`,
   diag_commands:          'Команды (n · p50 / p95 / макс · ✗ ошибки)',
   diag_caches:            'Кэши (попадания / всего)',
-  diag_limiter:           'Ограничитель запросов (вызовы, накопленное ожидание)',
+  diag_limiter:           'Ограничитель запросов (вызовы, накопленное ожидание, пик в минуту)',
   diag_workers:           'Движки PP',
   diag_worker_line:       (nome, vivo, servidos, falhas) =>
     `**${nome}**: ${vivo ? 'в сети' : 'остановлен'} — ${servidos} расчёт(ов), ${falhas} сбой(ев)`,

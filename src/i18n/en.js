@@ -498,7 +498,7 @@ Current ${ADMIN} role: **${role}**
   diag_uptime:            (texto) => `Up for **${texto}**`,
   diag_commands:          'Commands (n · p50 / p95 / max · ✗ errors)',
   diag_caches:            'Caches (hits / total)',
-  diag_limiter:           'Rate limiter (calls, accumulated wait)',
+  diag_limiter:           'Rate limiter (calls, accumulated wait, peak per minute)',
   diag_workers:           'PP engines',
   diag_worker_line:       (nome, vivo, servidos, falhas) =>
     `**${nome}**: ${vivo ? 'up' : 'down'} — ${servidos} calculation(s), ${falhas} failure(s)`,

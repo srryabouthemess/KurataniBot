@@ -22,15 +22,28 @@ const servers = require('./servers');
 
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
+/** Janela do pico: minuto de relógio, que é a unidade dos termos da API do osu!. */
+const MINUTO_MS = 60_000;
+
 class LeakyBucket {
-  /** @param {number} perSecond requisições permitidas por segundo */
-  constructor(name, perSecond) {
+  /**
+   * @param {string} name
+   * @param {{porSegundo: number, rajada: number}} limite
+   *   `porSegundo` é a vazão contínua; `rajada` é quantas saem de uma vez com o
+   *   balde cheio. Antes as duas eram o mesmo número, e não dava para dizer
+   *   "60 por minuto, mas o primeiro comando não espera" — que é o que os termos
+   *   da API pedem (ver docs/investigacoes/2026-10-04-termos-api-osu.md).
+   */
+  constructor(name, { porSegundo, rajada }) {
     this.name       = name;
-    this.capacity   = perSecond;
-    this.tokens     = perSecond;
-    this.intervalMs = 1000 / perSecond;
+    this.capacity   = rajada;
+    this.tokens     = rajada;
+    this.intervalMs = 1000 / porSegundo;
     this.lastRefill = Date.now();
     this.chain      = Promise.resolve();
+
+    this.minuto   = 0;
+    this.noMinuto = 0;
   }
 
   _refill() {
@@ -40,6 +53,23 @@ class LeakyBucket {
       this.tokens     = Math.min(this.capacity, this.tokens + gained);
       this.lastRefill = now;
     }
+  }
+
+  /**
+   * Conta a saída no minuto corrente e guarda o maior minuto já visto.
+   *
+   * O total do /diag é desde o boot, e uma média por minuto esconde o que
+   * importa: 3000 chamadas num dia são 2/min de média e podem ter sido 300 num
+   * minuto só. É o pico que diz se o teto escolhido está perto de ser usado.
+   */
+  _contarMinuto() {
+    const minuto = Math.floor(Date.now() / MINUTO_MS);
+    if (minuto !== this.minuto) {
+      this.minuto   = minuto;
+      this.noMinuto = 0;
+    }
+    this.noMinuto += 1;
+    metrics.max(`limiter.${this.name}.peakMin`, this.noMinuto);
   }
 
   async _acquireOne() {
@@ -55,6 +85,7 @@ class LeakyBucket {
     }
     this.tokens -= 1;
     metrics.count(`limiter.${this.name}.calls`);
+    this._contarMinuto();
   }
 
   /** Resolve quando for permitido fazer a requisição. */
@@ -67,7 +98,15 @@ class LeakyBucket {
 }
 
 /**
- * Limites por recurso (requisições por segundo).
+ * Um limite em BUCKETS é um número (vazão = rajada, o caso de quase todos) ou
+ * `{porSegundo, rajada}` quando os dois diferem.
+ */
+function normalizarLimite(limite) {
+  return typeof limite === 'number' ? { porSegundo: limite, rajada: limite } : limite;
+}
+
+/**
+ * Limites por recurso (requisições por segundo; ver `normalizarLimite`).
  *
  * `osuMapFile` continua sendo o mais apertado: são arquivos de ~50KB, e o
  * endpoint de download é mais sensível que os de metadados. Mas o 2 original
@@ -157,7 +196,7 @@ const BUCKETS = {
 };
 
 const buckets = Object.fromEntries(
-  Object.entries(BUCKETS).map(([name, perSecond]) => [name, new LeakyBucket(name, perSecond)])
+  Object.entries(BUCKETS).map(([name, limite]) => [name, new LeakyBucket(name, normalizarLimite(limite))])
 );
 
 /**
@@ -170,11 +209,11 @@ function acquire(site) {
   // Rede de segurança: todo servidor do registro já tem balde em BUCKETS, então
   // isto só pega um `server:` de namespace que não veio de servers.js.
   if (!bucket && String(site).startsWith('server:')) {
-    bucket = buckets[site] = new LeakyBucket(site, PER_SERVER);
+    bucket = buckets[site] = new LeakyBucket(site, normalizarLimite(PER_SERVER));
   }
   if (!bucket) throw new Error(`rateLimiter: bucket desconhecido "${site}"`);
 
   return bucket.acquire();
 }
 
-module.exports = { acquire, BUCKETS };
+module.exports = { acquire, BUCKETS, LeakyBucket };

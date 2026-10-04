@@ -523,7 +523,7 @@ Cargo atual no ${ADMIN}: **${role}**
   diag_uptime:            (texto) => `No ar há **${texto}**`,
   diag_commands:          'Comandos (n · p50 / p95 / máx · ✗ erros)',
   diag_caches:            'Caches (acertos / total)',
-  diag_limiter:           'Rate limiter (chamadas, espera acumulada)',
+  diag_limiter:           'Rate limiter (chamadas, espera acumulada, pico por minuto)',
   diag_workers:           'Motores de PP',
   diag_worker_line:       (nome, vivo, servidos, falhas) =>
     `**${nome}**: ${vivo ? 'no ar' : 'parado'} — ${servidos} cálculo(s), ${falhas} falha(s)`,

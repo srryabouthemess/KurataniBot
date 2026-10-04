@@ -30,6 +30,25 @@ function isRetryable(error) {
 }
 
 /**
+ * Quanto o servidor pediu para esperar, em ms, ou null se ele não disse.
+ *
+ * O header vem em segundos (`Retry-After: 30`) ou como data HTTP. É o servidor
+ * dizendo quando o limite libera: com ele, o backoff próprio é chute — curto
+ * demais gasta a tentativa batendo no mesmo 429, longo demais segura a resposta
+ * à toa.
+ */
+function retryAfterMs(error, agora = Date.now()) {
+  const valor = error?.response?.headers?.['retry-after'];
+  if (valor == null || valor === '') return null;
+
+  const segundos = Number(valor);
+  if (Number.isFinite(segundos)) return segundos >= 0 ? segundos * 1000 : null;
+
+  const data = Date.parse(valor);
+  return Number.isNaN(data) ? null : Math.max(0, data - agora);
+}
+
+/**
  * Executa `fn` com retry exponencial. Relança o último erro se todas as
  * tentativas falharem — quem chama decide se vira null ou propaga.
  *
@@ -39,9 +58,10 @@ function isRetryable(error) {
  * @param {number} [opts.attempts=4]  total de tentativas (inclui a primeira)
  * @param {number} [opts.baseMs=400]  atraso da primeira espera
  * @param {number} [opts.maxMs=8000]  teto do atraso
+ * @param {number} [opts.maxRetryAfterMs=30000]  teto do `Retry-After` aceito
  * @returns {Promise<T>}
  */
-async function withRetry(fn, { attempts = 4, baseMs = 400, maxMs = 8000 } = {}) {
+async function withRetry(fn, { attempts = 4, baseMs = 400, maxMs = 8000, maxRetryAfterMs = 30_000 } = {}) {
   let lastError;
 
   for (let attempt = 0; attempt < attempts; attempt++) {
@@ -50,6 +70,16 @@ async function withRetry(fn, { attempts = 4, baseMs = 400, maxMs = 8000 } = {}) 
     } catch (error) {
       lastError = error;
       if (attempt === attempts - 1 || !isRetryable(error)) throw error;
+
+      // Se o servidor disse quanto esperar, vale o que ele disse. Acima do teto
+      // desiste na hora: tem alguém esperando a resposta no Discord, e segurar
+      // um comando por minutos é pior que responder com erro.
+      const pedido = retryAfterMs(error);
+      if (pedido !== null) {
+        if (pedido > maxRetryAfterMs) throw error;
+        await sleep(pedido);
+        continue;
+      }
 
       const backoff = Math.min(baseMs * Math.pow(2, attempt), maxMs);
       // Jitter de ±25% para dessincronizar chamadas concorrentes
@@ -61,4 +91,4 @@ async function withRetry(fn, { attempts = 4, baseMs = 400, maxMs = 8000 } = {}) 
   throw lastError;
 }
 
-module.exports = { withRetry, isRetryable };
+module.exports = { withRetry, isRetryable, retryAfterMs };
