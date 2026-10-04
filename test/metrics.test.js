@@ -11,8 +11,12 @@ const assert = require('node:assert');
 
 const metrics = require('../src/lib/metrics');
 const diag = require('../src/commands/admin/diag');
+const botOwner = require('../src/botOwner');
 
-test.beforeEach(() => metrics.reset());
+test.beforeEach(() => {
+  metrics.reset();
+  botOwner._reset();
+});
 
 test('contador soma, e começa em zero', () => {
   assert.equal(metrics.get('qualquer.coisa'), 0);
@@ -127,11 +131,16 @@ test('reset limpa os tempos', () => {
 
 // ─── O comando ────────────────────────────────────────────────────────────────
 
-/** Uma interação com o mínimo que o /diag toca. */
-function fakeInteraction(capturado) {
+/**
+ * Uma interação com o mínimo que o /diag toca. Por padrão quem roda é o dono
+ * da aplicação; `owner` troca o que o Discord responde, e `fetch` a busca
+ * inteira (para simular falha).
+ */
+function fakeInteraction(capturado, { userId = '1', owner = { id: '1' }, fetch } = {}) {
   return {
-    user:    { id: '1' },
+    user:    { id: userId },
     guildId: '2',
+    client:  { application: { fetch: fetch ?? (async () => ({ owner })) } },
     reply:   async (payload) => { capturado.push(payload); },
   };
 }
@@ -209,4 +218,42 @@ test('o /diag mostra no máximo 10 comandos, e cabe no campo do embed', async ()
   assert.ok(linhas.length <= 10);
   assert.ok(campo.value.length <= 1024, `campo com ${campo.value.length} caracteres`);
   assert.match(linhas[0], /comando_14/, 'o mais usado vem primeiro');
+});
+
+// ─── Só o dono do bot ─────────────────────────────────────────────────────────
+// O setDefaultMemberPermissions(0) só esconde o comando de quem não é admin do
+// servidor — e o bot é instalável por qualquer um. Sem a trava, o admin de um
+// servidor qualquer via o uso do bot em todos os outros.
+
+test('o /diag recusa quem não é dono, sem mostrar número nenhum', async () => {
+  metrics.count('limiter.osuApi.calls', 7);
+
+  const capturado = [];
+  await diag.execute(fakeInteraction(capturado, { userId: '99' }));
+
+  assert.equal(capturado.length, 1);
+  assert.ok(capturado[0].flags, 'a recusa deveria ser efêmera');
+  assert.equal(capturado[0].embeds, undefined, 'não deveria mandar o embed');
+  assert.match(capturado[0].content, /dono|owner/i);
+});
+
+test('aplicação de Team: qualquer membro do time é dono', async () => {
+  const team = { members: new Map([['5', { id: '5', user: { id: '5' } }], ['6', { id: '6', user: { id: '6' } }]]) };
+
+  const capturado = [];
+  await diag.execute(fakeInteraction(capturado, { userId: '6', owner: team }));
+
+  assert.ok(capturado[0].embeds?.[0], 'membro do time deveria ver o diagnóstico');
+});
+
+test('Discord fora do ar: ninguém passa, e a próxima tentativa pergunta de novo', async () => {
+  let chamadas = 0;
+  const falha = async () => { chamadas += 1; throw new Error('discord fora'); };
+
+  const capturado = [];
+  await diag.execute(fakeInteraction(capturado, { fetch: falha }));
+  await diag.execute(fakeInteraction(capturado, { fetch: falha }));
+
+  assert.equal(capturado[0].embeds, undefined, 'falha deveria recusar, não liberar');
+  assert.equal(chamadas, 2, 'a falha não deveria ficar em cache');
 });

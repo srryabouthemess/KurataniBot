@@ -9,6 +9,7 @@ const metrics = require('../../lib/metrics');
 // caminho de PP para montar um embed de contadores.
 const wasmWorker = require('../../pp/wasmWorker');
 const { t } = require('../../i18n');
+const { ehDono } = require('../../botOwner');
 
 /**
  * Diagnóstico do próprio bot.
@@ -103,8 +104,10 @@ module.exports = {
     .setDescription('Bot diagnostics (server administrators)')
     .setDescriptionLocalizations({ 'pt-BR': 'Diagnóstico do bot (administradores do servidor)' })
     // "0" no Discord quer dizer "ninguém, exceto quem administra o servidor".
-    // Não é dado sensível — são contadores do processo —, mas também não é
-    // resposta que interesse a quem só quer ver as próprias plays.
+    // Isso só esconde o comando de quem não é admin: quem pode USAR é o dono do
+    // bot, conferido no execute (ver botOwner.js). Os números são do processo
+    // inteiro, com o uso de todos os servidores — admin de um servidor qualquer
+    // não tem por que vê-los.
     .setDefaultMemberPermissions(0)
     .setIntegrationTypes([ApplicationIntegrationType.GuildInstall])
     .setContexts([InteractionContextType.Guild]),
@@ -115,6 +118,11 @@ module.exports = {
 
   async execute(interaction) {
     const s = t(interaction);
+
+    if (!(await ehDono(interaction))) {
+      return interaction.reply({ content: s.diag_owner_only, flags: MessageFlags.Ephemeral });
+    }
+
     const { uptimeMs, contadores, caches, comandos } = metrics.snapshot();
     const workers = wasmWorker.stats();
 

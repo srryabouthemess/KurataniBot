@@ -519,6 +519,7 @@ Cargo atual no ${ADMIN}: **${role}**
   // Os nomes de cache e de balde são identificadores do código, e ficam como
   // estão nos três idiomas — traduzi-los tornaria a saída impossível de casar
   // com o que está escrito nos módulos.
+  diag_owner_only:        '🔒 Só o dono do bot pode usar o `/diag`.',
   diag_title:             '📊 Diagnóstico do bot',
   diag_uptime:            (texto) => `No ar há **${texto}**`,
   diag_commands:          'Comandos (n · p50 / p95 / máx · ✗ erros)',

@@ -494,6 +494,7 @@ Current ${ADMIN} role: **${role}**
   // Cache and bucket names are code identifiers and stay as they are in all
   // three languages: translating them would make the output impossible to
   // match against what the modules actually say.
+  diag_owner_only:        '🔒 Only the bot owner can use `/diag`.',
   diag_title:             '📊 Bot diagnostics',
   diag_uptime:            (texto) => `Up for **${texto}**`,
   diag_commands:          'Commands (n · p50 / p95 / max · ✗ errors)',
