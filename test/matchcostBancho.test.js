@@ -38,10 +38,11 @@ require.cache[axiosPath] = {
   },
 };
 
-const { buscarPartida, normalizarPartida } = require('../src/commands/osu/matchcost/bancho');
+const { buscarPartida, normalizarPartida, _reset } = require('../src/commands/osu/matchcost/bancho');
 const { calcularMatchCost } = require('../src/commands/osu/matchcost/logic');
 
 test.beforeEach(() => {
+  _reset();
   chamadas.length = 0;
   roteiro = () => ({ status: 200, data: EXEMPLO });
 });
@@ -152,4 +153,34 @@ test('404 é partida inexistente; 401 é partida privada', async () => {
 test('outro erro sobe: não é resposta sobre a partida', async () => {
   roteiro = () => ({ status: 403 });
   await assert.rejects(() => buscarPartida(1), /HTTP 403/);
+});
+
+// ─── Cache ────────────────────────────────────────────────────────────────────
+
+test('partida terminada fica guardada: a segunda busca não chama a API', async () => {
+  const a = await buscarPartida(111222333);
+  const b = await buscarPartida(111222333);
+  assert.equal(chamadas.length, 1);
+  assert.deepEqual(b, a);
+});
+
+test('partida em andamento não fica guardada', async () => {
+  roteiro = () => ({ status: 200, data: { ...EXEMPLO, match: { ...EXEMPLO.match, end_time: null } } });
+  await buscarPartida(111222333);
+  await buscarPartida(111222333);
+  assert.equal(chamadas.length, 2);
+});
+
+test('erro não fica guardado', async () => {
+  roteiro = () => ({ status: 401 });
+  await buscarPartida(1);
+  roteiro = () => ({ status: 200, data: EXEMPLO });
+  const r = await buscarPartida(1);
+  assert.ok(r.partida);
+});
+
+test('duas buscas simultâneas da mesma partida dividem a requisição', async () => {
+  const [a, b] = await Promise.all([buscarPartida(111222333), buscarPartida(111222333)]);
+  assert.equal(chamadas.length, 1);
+  assert.deepEqual(a, b);
 });

@@ -23,9 +23,29 @@ const { db } = require('./connection');
 
 // ─── Arquivos .osu ────────────────────────────────────────────────────────────
 
-// Mapas ranked não mudam; os que mudam (loved/graveyard reupload) são raros o
-// bastante para um TTL longo resolver sem precisar de checksum.
+// O prazo é para o mapa que ainda pode mudar (pending, WIP, graveyard e
+// qualified aceitam reupload). Ranked, approved e loved ficam travados no osu!,
+// e o arquivo deles não vence (ver mapaTravado). O teto por LRU continua valendo
+// para todos.
 const MAP_FILE_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 dias
+
+const STATUS_TRAVADOS = ['ranked', 'approved', 'loved'];
+
+/**
+ * O mapa está travado no osu!, segundo os metadados guardados?
+ *
+ * O download do `.osu` é só pelo id e não traz o status, então ele vem do
+ * beatmap_meta, que guarda a resposta da API. A linha é lida mesmo vencida: o
+ * prazo dela é pela estrela, que muda em rework, e o status travado não volta
+ * atrás. Sem linha (mapa de servidor privado, ou meta nunca buscada), vale o
+ * prazo, que é o comportamento de antes.
+ */
+function mapaTravado(mapId) {
+  const row = db
+    .prepare("SELECT json_extract(data, '$.status') AS status FROM cache.beatmap_meta WHERE map_id = ?")
+    .get(mapId);
+  return STATUS_TRAVADOS.includes(row?.status);
+}
 
 /**
  * Teto de mapas em cache. Cada .osu costuma ter ~50KB (mapas longos passam de
@@ -52,7 +72,7 @@ function getBeatmapFile(mapId) {
   }
 
   const now = Date.now();
-  if (now - row.fetched_at > MAP_FILE_TTL_MS) {
+  if (now - row.fetched_at > MAP_FILE_TTL_MS && !mapaTravado(mapId)) {
     db.prepare('DELETE FROM cache.beatmap_files WHERE map_id = ?').run(mapId);
     metrics.cache('beatmapFile', false);
     return null;

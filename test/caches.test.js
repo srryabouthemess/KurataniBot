@@ -191,3 +191,37 @@ test('canal usado de novo sobrevive a quem foi inserido antes dele', async () =>
     'o mais antigo sem reuso deveria ter saído',
   );
 });
+
+// ─── Ranking: meia hora no oficial, cinco minutos nos privados ────────────────
+
+test('ranking do oficial fica 30 min; o de servidor privado, 5', async (t) => {
+  // O oficial é onde os termos da API pedem 60 req/min, e lá uma play quase
+  // nunca mexe na lista. Num servidor pequeno ela mexe, e quem joga confere.
+  t.mock.timers.enable({ apis: ['Date'], now: Date.now() });
+
+  const banchoPy = require('../src/osu/banchoPyApi');
+  const chamadas = { oficial: 0, privado: 0 };
+  const originais = { oficial: officialApi.leaderboard, privado: banchoPy.leaderboard };
+  officialApi.leaderboard = async () => { chamadas.oficial++; return [{ id: 1 }]; };
+  banchoPy.leaderboard    = async () => { chamadas.privado++; return [{ id: 2 }]; };
+
+  try {
+    // Limite que nenhum outro teste usa, para não pegar entrada guardada.
+    const pedir = () => Promise.all([
+      osu.getLeaderboard('official', { limit: 7 }),
+      osu.getLeaderboard('daycore', { limit: 7 }),
+    ]);
+
+    await pedir();
+    t.mock.timers.tick(10 * 60_000);
+    await pedir();
+    assert.deepEqual(chamadas, { oficial: 1, privado: 2 }, 'aos 10 min, só o privado venceu');
+
+    t.mock.timers.tick(21 * 60_000);
+    await pedir();
+    assert.equal(chamadas.oficial, 2, 'aos 31 min, o oficial venceu também');
+  } finally {
+    officialApi.leaderboard = originais.oficial;
+    banchoPy.leaderboard    = originais.privado;
+  }
+});

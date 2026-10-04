@@ -12,17 +12,35 @@
  * O Bathbot (`retrieve_previous`) busca no máximo mais 5 páginas; aqui a busca
  * vai até o primeiro evento, com um teto só para uma resposta estranha da API
  * não virar laço infinito.
+ *
+ * ── Cache ───────────────────────────────────────────────────────────────────
+ * Uma partida grande custa dezenas de requisições, e o caso comum é pedir a
+ * mesma de novo logo em seguida, trocando `skip_first` ou `ez_mult`. Partida
+ * terminada não muda mais, então ela fica guardada; a que está em andamento
+ * não, porque ganha jogo novo a cada mapa.
  */
 
 const { officialGet } = require('../../../osu/officialApi');
 const { idSegment } = require('../../../lib/urlSafe');
 const { modAcronym } = require('../../../mods');
+const metrics = require('../../../lib/metrics');
+const { dedupe } = require('../../../lib/inflight');
+const { TtlCache } = require('../../../lib/ttlCache');
 
 /** O máximo que a API devolve por página. */
 const EVENTOS_POR_PAGINA = 100;
 
 /** Teto de páginas anteriores — 10 mil eventos, bem além de qualquer partida real. */
 const MAX_PAGINAS = 100;
+
+/**
+ * O prazo não é pela partida, que não muda: é pelo nome de quem jogou, que vem
+ * junto e pode mudar. O teto é baixo porque uma partida longa ocupa alguns
+ * MB em memória.
+ */
+const PARTIDA_TTL_MS = 6 * 60 * 60_000;
+const PARTIDA_MAX    = 20;
+const _partidas = new TtlCache({ ttlMs: PARTIDA_TTL_MS, max: PARTIDA_MAX });
 
 /**
  * A partida inteira, com todos os eventos.
@@ -32,6 +50,24 @@ const MAX_PAGINAS = 100;
  *   os dois viram `erro` porque são resposta, e não falha de rede.
  */
 async function buscarPartida(id) {
+  const chave = String(id);
+
+  const guardada = _partidas.get(chave);
+  metrics.cache('partidaBancho', guardada !== undefined);
+  if (guardada !== undefined) return guardada;
+
+  // Duas pessoas pedindo a mesma partida ao mesmo tempo (ou o mesmo comando
+  // repetido antes de o primeiro terminar) dividem a mesma busca.
+  return dedupe(`match:${chave}`, async () => {
+    const r = await buscarDaApi(id);
+    // Só a partida terminada entra. Erro fica de fora: a privada pode virar
+    // pública, e o 404 de um id recém-criado deixa de ser 404.
+    if (r.partida?.match?.end_time != null) _partidas.set(chave, r);
+    return r;
+  });
+}
+
+async function buscarDaApi(id) {
   let primeira;
   try {
     primeira = await officialGet(`/matches/${idSegment(id)}`);
@@ -112,4 +148,9 @@ function normalizarPartida(raw) {
   };
 }
 
-module.exports = { buscarPartida, normalizarPartida };
+/** Só para teste: o cache é de processo. */
+function _reset() {
+  _partidas._map.clear();
+}
+
+module.exports = { buscarPartida, normalizarPartida, _reset };

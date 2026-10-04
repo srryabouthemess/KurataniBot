@@ -2,6 +2,28 @@
 
 ---
 
+# Sessão de 2026-10-04 (menos requisições ao osu!)
+
+## 🔧 Mudanças
+
+- **`/matchcost` guarda a partida terminada do Bancho.** [`matchcost/bancho.js`](src/commands/osu/matchcost/bancho.js)
+  - Uma partida longa custa dezenas de requisições à API. Pedir a mesma de
+    novo (trocando `skip_first` ou `ez_mult`) agora não chama a API.
+  - Só entra partida terminada; a em andamento e os erros (404, privada)
+    ficam de fora.
+  - 6 h de prazo, por causa do nome dos jogadores, e teto de 20 partidas.
+  - Pedidos simultâneos da mesma partida dividem a busca. Acerto aparece
+    no `/diag` como `partidaBancho`.
+- **`.osu` de mapa ranked, approved ou loved não vence mais.** [`db/mapCache.js`](src/db/mapCache.js)
+  - O osu! não aceita reupload nesses status. O status vem do `beatmap_meta`
+    já guardado; sem ele, vale o prazo de 30 dias como antes.
+  - O teto de 1500 arquivos (LRU) continua valendo para todos.
+- **Ranking do osu! oficial em cache por 30 min** (era 5). [`osuClient.js`](src/osuClient.js)
+  - Os servidores privados continuam em 5 min: num servidor pequeno uma
+    play muda o ranking.
+
+---
+
 # Sessão de 2026-10-01 (/builder: layout do embed do /recent)
 
 ## ✨ Novidades

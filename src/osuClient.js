@@ -431,24 +431,32 @@ async function getUserBeatmapScores(userId, beatmapId, mode = DEFAULT_MODE) {
  * consultado) não pagar rede nenhuma. A navegação entre páginas já não paga:
  * quem chama busca a lista inteira de uma vez e pagina em memória.
  *
+ * O do osu! oficial fica meia hora, como no Bathbot. Lá uma play quase nunca
+ * mexe na lista, e é o host em que os termos da API pedem no máximo 60
+ * requisições por minuto. Nos servidores privados continua em cinco: num
+ * servidor pequeno uma play muda o ranking, e quem joga confere logo depois.
+ *
  * A chave inclui o LIMITE e o PAÍS. Sem eles, um `/leaderboard country:BR`
  * serviria a lista global guardada momentos antes.
  */
-const RANKING_TTL_MS = 5 * 60_000;
-const RANKING_MAX    = 60;
-const _rankingCache = new TtlCache({ ttlMs: RANKING_TTL_MS, max: RANKING_MAX });
+const RANKING_TTL_MS          = 5 * 60_000;
+const RANKING_OFICIAL_TTL_MS  = 30 * 60_000;
+const RANKING_MAX             = 60;
+const _rankingCache        = new TtlCache({ ttlMs: RANKING_TTL_MS, max: RANKING_MAX });
+const _rankingOficialCache = new TtlCache({ ttlMs: RANKING_OFICIAL_TTL_MS, max: RANKING_MAX });
 
 async function getLeaderboard(mode = DEFAULT_MODE, { limit = 50, country = null } = {}) {
   const pais  = country ? String(country).toUpperCase() : null;
   const chave = `${mode}:${limit}:${pais ?? ''}`;
+  const cache = servers.isOfficial(mode) ? _rankingOficialCache : _rankingCache;
 
-  const guardado = _rankingCache.get(chave);
+  const guardado = cache.get(chave);
   metrics.cache('ranking', Boolean(guardado));
   if (guardado) return guardado;
 
   const entradas = await apiFor(mode).leaderboard(mode, { limit, country: pais });
   // Falha não chega aqui: ela sobe para quem chamou, e nada é guardado.
-  _rankingCache.set(chave, entradas);
+  cache.set(chave, entradas);
   return entradas;
 }
 
