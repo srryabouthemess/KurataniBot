@@ -185,6 +185,28 @@ function scoresGuardadosDoMapa(server, { mapId = null, md5 = null } = {}, { limi
     .all(server, valor, limit);
 }
 
+let _idPorNick = null;
+
+/**
+ * O id que aquele nick tinha da última vez que o bot o viu naquele servidor.
+ *
+ * É um PALPITE: o nick pode ter trocado de dono depois disso, e quem usa tem
+ * de conferir o perfil que voltar (ver fetchPlayer em userLink.js). Com nick
+ * repetido — sobra de troca de nick que ainda não passou de novo por aqui —,
+ * vale o visto mais recentemente.
+ *
+ * @returns {number|null}
+ */
+function idPorNick(server, username) {
+  if (!_disponivel || !username) return null;
+  _idPorNick ??= db.prepare(`
+    SELECT user_id FROM scores.score_players
+    WHERE server = ? AND username = ? COLLATE NOCASE
+    ORDER BY updated_at DESC LIMIT 1
+  `);
+  return _idPorNick.get(server, String(username))?.user_id ?? null;
+}
+
 /**
  * Tamanho e ritmo do que está guardado. É daqui que sai o número de jogadores
  * distintos por dia — as métricas em memória não têm como dar (ver CHANGELOG).
@@ -217,4 +239,5 @@ module.exports = {
   definirScoresDisponivel, scoresDisponivel,
   gravarScores, contarScoresPorServidor, podarScoresDoServidor, esquecerJogador,
   topScoresGuardados, scoresGuardadosDoJogador, scoresGuardadosDoMapa, estatisticasScores,
+  idPorNick,
 };

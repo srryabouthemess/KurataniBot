@@ -162,13 +162,47 @@ function precisaEnriquecer(score) {
   return !score.beatmap?.max_combo || !score.beatmap?.difficulty_rating;
 }
 
-async function enrichBeatmapData(scores) {
+/**
+ * Começa a baixar o `.osu` dos mapas cujos metadados vão à rede.
+ *
+ * Sem isto a página de um mapa frio pagava duas idas e voltas em fila: o
+ * `/beatmaps` e, só depois dele, o `.osu` que o cálculo de pp pede à thread. Uma
+ * não depende da outra, e o Bathbot dispara as duas juntas (`try_join!` em
+ * manager/osu_map.rs). O `dedupe` do beatmapFile.js faz a thread, quando pedir
+ * os bytes, pegar este mesmo download em voo.
+ *
+ * Só para o que vai mesmo à rede: com o metadado guardado não há espera para
+ * sobrepor. Falha aqui não é dita a ninguém — o pedido de verdade, se vier,
+ * tenta de novo e loga.
+ */
+function aquecerArquivos(ids) {
+  for (const id of ids) {
+    if (isCustomMapId(id) || beatmapCache.get(id) || _missingBeatmaps.has(id)) continue;
+    pp.getBeatmapFile(id).catch(() => {});
+  }
+}
+
+/**
+ * @param {object}  [opts]
+ * @param {boolean} [opts.aquecerArquivos] baixa o `.osu` dos mapas frios junto
+ *   dos metadados (ver aquecerArquivos). É de quem renderiza UMA página: no
+ *   enriquecimento das 100 plays do /nochoke e do /topif, pediria 100 arquivos
+ *   ao balde de 4/s, inclusive de play FC, que nem chega a calcular.
+ */
+async function enrichBeatmapData(scores, { aquecerArquivos: aquecer = false } = {}) {
+  // Antes de tudo: um mapa reenviado perde arquivo e metadados aqui, e o resto
+  // desta função os busca de novo como mapa frio (ver conferirChecksum).
+  await Promise.all(scores.map(score =>
+    pp.conferirChecksum(score.beatmap?.id, score.beatmap?.checksum ?? score.map_md5)));
+
   const idsNeeded = [...new Set(
     scores
       .filter(precisaEnriquecer)
       .map(score => score.beatmap?.id)
       .filter(Boolean),
   )];
+
+  if (aquecer) aquecerArquivos(idsNeeded);
 
   // Todos de uma vez, e não pelo mapLimit de antes: é o lote que agrupa (ver
   // carregarMeta), e ele só junta o que foi pedido na mesma janela. Com um teto

@@ -17,12 +17,16 @@ const test = require('node:test');
 const assert = require('node:assert');
 
 // Trocados ANTES de carregar o userLink: ele resolve os dois no require do topo.
-// O db entra dublê porque só o `resolvePlayer` o usa — o `fetchPlayer` não toca
-// no banco, e abrir o de verdade só para este arquivo seria efeito colateral.
+// O db entra dublê: do banco o `fetchPlayer` só lê o palpite de id pelo nick
+// (`idPorNick`), que cada teste define, e abrir o de verdade só para este
+// arquivo seria efeito colateral.
+let palpite = () => null;
+
 for (const [caminho, exports] of [
   ['../src/db', {
     getLink: () => null, getPreferredServer: () => null, getPreferredModo: () => null,
     getUserLang: () => null, getServerLang: () => null,
+    idPorNick: (...args) => palpite(...args),
   }],
   ['../src/osuClient', {}],
 ]) {
@@ -141,4 +145,102 @@ test('`fresh` chega ao perfil, com id conhecido ou não (é o botão 🔄)', asy
   opcoes.length = 0;
   await fetchPlayer({ username: 42, mode: 'official' }, async () => []);
   assert.deepEqual(opcoes, [{ fresh: false }]);
+});
+
+// ─── Nick digitado com id já visto ───────────────────────────────────────────
+// O `idPorNick` dá o id que aquele nick tinha da última vez (ver db/scores.js).
+// É palpite: o nick pode ter trocado de dono. Então as duas chamadas saem
+// juntas, mas o perfil que voltar precisa ter o nick digitado — senão tudo é
+// descartado e o caminho de sempre (nome → id → scores) responde.
+
+/** Palpite fixo para o teste, desfeito no fim dele. */
+function comPalpite(t, fn) {
+  palpite = fn;
+  t.after(() => { palpite = () => null; });
+}
+
+test('nick com id já visto: as duas chamadas saem juntas', async t => {
+  const consultas = [];
+  comPalpite(t, (mode, nome) => { consultas.push([mode, nome]); return 42; });
+
+  let liberar;
+  const scoresComecou = new Promise(resolve => { liberar = resolve; });
+  osuMock.getUser = async () => { await scoresComecou; return JOGADOR; };
+  const ids = [];
+  const buscar = async (id) => { ids.push(id); liberar(); return ['play']; };
+
+  const { user, scores } = await comPrazo(
+    fetchPlayer({ username: 'pudim2', mode: 'official' }, buscar),
+    'com o id do banco, a busca de scores esperou o perfil',
+  );
+
+  assert.equal(user, JOGADOR);
+  assert.deepEqual(scores, ['play']);
+  assert.deepEqual(ids, [42]);
+  assert.deepEqual(consultas, [['official', 'pudim2']]);
+});
+
+test('o nick confere sem diferenciar maiúsculas nem _ de espaço', async t => {
+  // No osu! "Some_Name" e "some name" são o mesmo nick.
+  comPalpite(t, () => 42);
+  const pedidos = [];
+  osuMock.getUser = async (v) => { pedidos.push(v); return { id: 42, username: 'Some Name' }; };
+
+  const { user } = await fetchPlayer({ username: 'some_name', mode: 'official' }, async () => ['play']);
+
+  assert.equal(user.id, 42);
+  assert.deepEqual(pedidos, [42], 'conferiu e mesmo assim buscou de novo pelo nome');
+});
+
+test('o nick trocou de dono: descarta e busca pelo nome', async t => {
+  // O id 42 era do "pudim2", que virou "pudim3"; quem tem "pudim2" hoje é o 77.
+  comPalpite(t, () => 42);
+  osuMock.getUser = async (v) => (v === 42
+    ? { id: 42, username: 'pudim3' }
+    : { id: 77, username: 'pudim2' });
+  const ids = [];
+
+  const { user, scores } = await fetchPlayer({ username: 'pudim2', mode: 'official' }, async (id) => {
+    ids.push(id);
+    return [`play de ${id}`];
+  });
+
+  assert.equal(user.id, 77);
+  assert.deepEqual(scores, ['play de 77']);
+  assert.equal(ids.at(-1), 77);
+});
+
+test('o id do banco não existe mais: busca pelo nome em vez de dizer "não encontrado"', async t => {
+  comPalpite(t, () => 42);
+  osuMock.getUser = async (v) => (v === 42 ? null : { id: 77, username: 'pudim2' });
+
+  const { user, scores } = await fetchPlayer(
+    { username: 'pudim2', mode: 'official' },
+    async (id) => {
+      if (id === 42) throw new Error('404 no endpoint de scores');
+      return ['play'];
+    },
+  );
+
+  assert.equal(user.id, 77);
+  assert.deepEqual(scores, ['play']);
+});
+
+test('com o nick conferido, falha real na busca de scores sobe', async t => {
+  comPalpite(t, () => 42);
+  osuMock.getUser = async () => JOGADOR;
+
+  await assert.rejects(
+    () => fetchPlayer({ username: 'pudim2', mode: 'official' }, async () => { throw new Error('ECONNRESET'); }),
+    /ECONNRESET/,
+  );
+});
+
+test('`fresh` chega ao perfil também pelo caminho do palpite', async t => {
+  comPalpite(t, () => 42);
+  const opcoes = [];
+  osuMock.getUser = async (_v, _mode, opts) => { opcoes.push(opts); return JOGADOR; };
+
+  await fetchPlayer({ username: 'pudim2', mode: 'official' }, async () => [], { fresh: true });
+  assert.deepEqual(opcoes, [{ fresh: true }]);
 });

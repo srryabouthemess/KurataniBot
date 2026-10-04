@@ -43,7 +43,19 @@ test('número inválido vira o default na leitura', () => {
   limpar({ REDIS_HOST: 'localhost', REDIS_PORT: 'abc', REDIS_DB: '-1', BEATMAP_CACHE_MAX: '0' });
   assert.equal(config.redis.port, 6379);
   assert.equal(config.redis.database, 0);
-  assert.equal(config.cache.beatmapMaxRows, 1500);
+  assert.equal(config.cache.beatmapMaxRows, 5000);
+});
+
+test('PP_THREADS: padrão de 1 a 2 conforme os núcleos, e o número informado vale', () => {
+  limpar();
+  const padrao = config.pp.threads;
+  assert.ok(padrao >= 1 && padrao <= 2, `padrão fora de 1–2: ${padrao}`);
+
+  limpar({ PP_THREADS: '4' });
+  assert.equal(config.pp.threads, 4);
+
+  limpar({ PP_THREADS: '0' });
+  assert.equal(config.pp.threads, padrao);
 });
 
 test('sem host, redis e mysql são null; com host, os defaults', () => {

@@ -142,11 +142,12 @@ module.exports = {
 
       async function buildEmbed(page) {
         // Enriquece só a play exibida agora, não as 50 buscadas de uma vez —
-        // evita rajada de requisições/rate limit na API do osu!
+        // evita rajada de requisições/rate limit na API do osu! O .osu de mapa
+        // frio sai junto dos metadados (ver aquecerArquivos no osuClient).
         const rawPlay      = recents[page];
         const playMode     = rawPlay._mode; // de qual chave (VN ou RX) essa play veio
         const [scoredPlay] = await osu.enrichScores([rawPlay], playMode);
-        const [recent]     = await osu.enrichBeatmapData([scoredPlay]);
+        const [recent]     = await osu.enrichBeatmapData([scoredPlay], { aquecerArquivos: true });
 
         pageMapId.set(page, recent.beatmap.id);
 
@@ -249,13 +250,15 @@ module.exports = {
         // certo (ver mapContext.js).
         onPage: page => mapContext.remember(interaction, pageMapId.get(page), recents[page]?._mode ?? mode),
         // Mesma ordem do /topplays: primeiro o enriquecimento (uma requisição
-        // por play em servidor privado), depois o arquivo do mapa.
+        // por play em servidor privado), depois o arquivo do mapa — que, com o
+        // mapa frio, já saiu junto dos metadados (ver aquecerArquivos no
+        // osuClient).
         prefetch: async (page) => {
           const proxima = recents[page];
           if (!proxima) return;
 
           const [scored] = await osu.enrichScores([proxima], proxima._mode);
-          const [cheia]  = await osu.enrichBeatmapData([scored]);
+          const [cheia]  = await osu.enrichBeatmapData([scored], { aquecerArquivos: true });
           if (cheia?.beatmap?.id) await osu.getBeatmapFile(cheia.beatmap.id);
         },
       });

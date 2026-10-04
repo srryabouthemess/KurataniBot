@@ -27,6 +27,8 @@
 // entrada precisa lembrar de carregar o `.env` antes do resto.
 require('dotenv').config({ quiet: true });
 
+const os = require('os');
+
 // ─── Leitura ──────────────────────────────────────────────────────────────────
 
 /** Texto, sem espaço nas pontas. Vazio conta como ausente. */
@@ -92,9 +94,19 @@ const config = {
 
   get cache() {
     return {
-      beatmapMaxRows: int('BEATMAP_CACHE_MAX', 1500, 1),
+      beatmapMaxRows: int('BEATMAP_CACHE_MAX', 5000, 1),
       fcPpMaxRows:    int('FC_PP_CACHE_MAX', 20000, 1),
     };
+  },
+
+  /**
+   * Threads por motor de pp (ver pp/wasmWorker.js). O padrão deixa um núcleo
+   * para o processo principal e para em 2: cada thread é uma instância Wasm a
+   * mais, com os mapas parseados dela.
+   */
+  get pp() {
+    const padrao = Math.min(2, Math.max(1, os.availableParallelism() - 1));
+    return { threads: int('PP_THREADS', padrao, 1) };
   },
 
   /**
@@ -162,7 +174,7 @@ const config = {
 const VARS = [
   'DISCORD_TOKEN', 'CLIENT_ID', 'COMMAND_PREFIX',
   'OSU_CLIENT_ID', 'OSU_CLIENT_SECRET',
-  'KURATANI_DATA_DIR', 'BEATMAP_CACHE_MAX', 'FC_PP_CACHE_MAX', 'SCORE_STORE_MAX',
+  'KURATANI_DATA_DIR', 'BEATMAP_CACHE_MAX', 'FC_PP_CACHE_MAX', 'SCORE_STORE_MAX', 'PP_THREADS',
   'EXIT_ON_UNCAUGHT',
   'DAYCORE_GUILD_ID', 'DAYCORE_ANNOUNCE_CHANNEL_ID', 'DAYCORE_ROLE_LOG_CHANNEL_ID',
   'DAYCORE_CUSTOM_MAP_CHANNEL_ID', 'NOMINATION_THRESHOLD',
@@ -172,7 +184,7 @@ const VARS = [
 ];
 
 const INTS = {
-  BEATMAP_CACHE_MAX: 1, FC_PP_CACHE_MAX: 1, SCORE_STORE_MAX: 1, NOMINATION_THRESHOLD: 1,
+  BEATMAP_CACHE_MAX: 1, FC_PP_CACHE_MAX: 1, SCORE_STORE_MAX: 1, PP_THREADS: 1, NOMINATION_THRESHOLD: 1,
   REDIS_PORT: 1, REDIS_DB: 0, DAYCORE_MYSQL_PORT: 1,
 };
 

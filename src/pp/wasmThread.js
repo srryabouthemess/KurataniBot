@@ -64,10 +64,11 @@ function guardarMapa(mapId, beatmap) {
 /**
  * Carrega o pacote do `workerData.pacote` e passa a atender pedidos.
  *
- * @param {(lib: object) => Record<string, (beatmap: object, args: object) => object>} montar
+ * @param {(lib: object) => Record<string, (beatmap: object, args: object, mapId: number) => object>} montar
  *   recebe a lib carregada e devolve as operações que o motor sabe fazer. Toda
- *   operação recebe um Beatmap já parseado e devolve valores simples — o que
- *   atravessa a fronteira da thread precisa ser serializável.
+ *   operação recebe um Beatmap já parseado (e o id dele, para quem guarda algo
+ *   por mapa) e devolve valores simples — o que atravessa a fronteira da thread
+ *   precisa ser serializável.
  */
 function servir(montar) {
   // A lib é opcional: sem ela o bot continua respondendo, só sem os valores de
@@ -88,8 +89,21 @@ function servir(montar) {
   // Resposta: { id, value }            deu certo
   //           { id, needBytes: true }  o mapa não está parseado aqui; reenvie com bytes
   //           { id, error }            não deu, e o motivo
+  //
+  // A operação `esquecer` é do transporte, não do motor: larga o mapa parseado
+  // (o `.osu` mudou, ver conferirChecksum em pp/index.js), e o próximo cálculo
+  // dele pede os bytes de novo.
   parentPort.on('message', (pedido) => {
     const { id, op, mapId, args, bytes } = pedido;
+
+    if (op === 'esquecer') {
+      const beatmap = _mapas.get(mapId);
+      if (beatmap) {
+        _mapas.delete(mapId);
+        beatmap.free();
+      }
+      return parentPort.postMessage({ id, value: Boolean(beatmap) });
+    }
 
     if (!lib) {
       return parentPort.postMessage({ id, error: erroDeCarga });
@@ -111,7 +125,7 @@ function servir(montar) {
       const executar = operacoes[op];
       if (!executar) return parentPort.postMessage({ id, error: `operação desconhecida: ${op}` });
 
-      parentPort.postMessage({ id, value: executar(beatmap, args) });
+      parentPort.postMessage({ id, value: executar(beatmap, args, mapId) });
     } catch (error) {
       // Mapa problemático responde erro e a thread continua de pé: derrubá-la
       // puniria as outras plays da mesma página.

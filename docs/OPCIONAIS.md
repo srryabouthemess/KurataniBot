@@ -260,7 +260,8 @@ Do lado do servidor isso exige o fork publicar `ex:priv_change` no `!addpriv`/`!
 | Variável | O que faz |
 |---|---|
 | `OSU_MODE` | Servidor padrão dos comandos (`official` ou a chave de um configurado) |
-| `BEATMAP_CACHE_MAX` | Quantos `.osu` manter em cache; padrão `1500` (~75–150 MB) |
+| `BEATMAP_CACHE_MAX` | Quantos `.osu` manter em cache; padrão `5000` (~300 MB) |
+| `PP_THREADS` | Threads por motor de cálculo de pp; padrão 1 ou 2, conforme os núcleos. Mais threads calculam ao mesmo tempo, ao custo de uma instância Wasm cada |
 | `FC_PP_CACHE_MAX` | Quantos valores de "PP se tivesse sido FC" manter; padrão `20000` (~1–2 MB) |
 | `SCORE_STORE_MAX` | Quantos scores manter no `scores.db`; padrão `300000` (~64 MB). Passando do teto, saem os sem pp e os de menor pp |
 | `KURATANI_DATA_DIR` | Onde ficam `bot.db`, `cache.db` e `scores.db`; vazio = `data/`, dentro do projeto. No `npm test` ela é preenchida sozinha (ver [Testes](#testes)) |

@@ -18,6 +18,7 @@ const {
   clockRate, modAcronym,
 } = require('../mods');
 const { logErrorOnce } = require('../lib/logger');
+const metrics = require('../lib/metrics');
 const { getBeatmapFile } = require('./beatmapFile');
 const { TtlCache } = require('../lib/ttlCache');
 const wasmWorker = require('./wasmWorker');
@@ -476,8 +477,59 @@ async function getAdjustedStars(beatmapId, mods, mode = DEFAULT_MODE) {
   return attrs ? attrs.stars.toFixed(2) : null;
 }
 
+// ─── O mapa mudou? ────────────────────────────────────────────────────────────
+
+/**
+ * Pares (mapa, md5) já conferidos. Um md5 que não bate não derruba o mapa duas
+ * vezes: score feito numa versão antiga do mapa continua sem bater depois do
+ * download novo, e sem esta memória cada exibição baixaria o arquivo outra vez.
+ */
+const _conferidos = new TtlCache({ ttlMs: 24 * 60 * 60 * 1000, max: 5000 });
+
+const MD5 = /^[0-9a-f]{32}$/i;
+
+/**
+ * Confere o `.osu` guardado contra o md5 que o score traz, e esquece o mapa se
+ * ele mudou.
+ *
+ * O checksum de um mapa no osu! é o md5 do arquivo (conferido nos 228 mapas do
+ * cache.db com metadados). Mapa não travado pode ser reenviado, e o arquivo
+ * velho valia por 30 dias — a estrela e o FC pp feitos com ele, para sempre. O
+ * Bathbot confere do mesmo jeito (manager/osu_map.rs, `ChecksumMismatch`).
+ *
+ * Esquecer é apagar tudo que saiu do arquivo: ele mesmo, os metadados, a
+ * estrela, o FC pp, a linha do mapa em memória e o mapa parseado nas threads. O
+ * próximo cálculo baixa o arquivo atual.
+ *
+ * @param {number} mapId
+ * @param {string} [md5] `beatmap.checksum` da API oficial ou `map_md5` do bancho.py
+ * @returns {Promise<boolean>} se o mapa foi esquecido
+ */
+async function conferirChecksum(mapId, md5) {
+  if (!mapId || typeof md5 !== 'string' || !MD5.test(md5)) return false;
+
+  const esperado = md5.toLowerCase();
+  const chave = `${mapId}:${esperado}`;
+  if (_conferidos.has(chave)) return false;
+
+  const atual = db.md5DoArquivoGuardado(mapId);
+  // Sem arquivo não há o que conferir, e nada é lembrado: o que vier a ser
+  // baixado é conferido na próxima vez.
+  if (atual === null) return false;
+
+  _conferidos.set(chave, true);
+  if (atual === esperado) return false;
+
+  db.esquecerMapa(mapId);
+  _mapAttrs.deleteWhere(k => k.startsWith(`${mapId}:`));
+  await wasmWorker.esquecerMapa(mapId);
+  metrics.count('mapa.checksumMudou');
+  return true;
+}
+
 module.exports = {
   engineMods,
+  conferirChecksum,
   getBeatmapFile,
   closeWasmWorker: wasmWorker.close,
   getDifficultyAttrs,

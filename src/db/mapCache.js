@@ -17,6 +17,7 @@
  *   fc_pp           teto por idade      — cresce por SCORE, não por mapa
  */
 
+const crypto = require('crypto');
 const metrics = require('../lib/metrics');
 const config = require('../config');
 const { db } = require('./connection');
@@ -49,7 +50,12 @@ function mapaTravado(mapId) {
 
 /**
  * Teto de mapas em cache. Cada .osu costuma ter ~50KB (mapas longos passam de
- * 300KB), então 1500 ≈ 75–150MB.
+ * 300KB); medido, 1500 mapas deram 87MB de banco, então o padrão de 5000 fica
+ * perto de 300MB.
+ *
+ * Era 1500. Subiu porque cada mapa frio custa um download no balde de 4/s do
+ * osu.ppy.sh, e um /nochoke de jogador novo toca até 100 mapas: 15 jogadores
+ * giravam o teto inteiro. O Bathbot guarda todos, sem teto.
  *
  * Sem teto, qualquer pessoa com acesso ao bot podia encher o disco: basta
  * chamar /simulate com IDs de mapa diferentes em sequência, e cada um grava um
@@ -94,8 +100,57 @@ function setBeatmapFile(mapId, bytes) {
     ON CONFLICT(map_id) DO UPDATE SET
       content = excluded.content, fetched_at = excluded.fetched_at, last_used = excluded.last_used
   `).run(mapId, bytes, now, now);
+  _md5s.delete(mapId);
 
   evictBeatmapFilesIfNeeded();
+}
+
+/**
+ * md5 de cada arquivo guardado, para não reler o BLOB a cada página. A linha
+ * lembra de qual `fetched_at` saiu: arquivo trocado por fora daqui também invalida.
+ */
+const _md5s = new Map();
+
+/**
+ * O md5 do `.osu` guardado, ou null sem arquivo. É o checksum do mapa no osu!
+ * (ver conferirChecksum em pp/index.js).
+ *
+ * Não vence o prazo nem renova o LRU como o getBeatmapFile: é conferência, não
+ * uso do arquivo.
+ */
+function md5DoArquivoGuardado(mapId) {
+  const linha = db.prepare('SELECT fetched_at FROM cache.beatmap_files WHERE map_id = ?').get(mapId);
+  if (!linha) return null;
+
+  const memo = _md5s.get(mapId);
+  if (memo?.fetchedAt === linha.fetched_at) return memo.md5;
+
+  const { content } = db.prepare('SELECT content FROM cache.beatmap_files WHERE map_id = ?').get(mapId);
+  const md5 = crypto.createHash('md5').update(content).digest('hex');
+
+  _md5s.delete(mapId);
+  _md5s.set(mapId, { fetchedAt: linha.fetched_at, md5 });
+  if (_md5s.size > MAP_FILE_MAX_ROWS) _md5s.delete(_md5s.keys().next().value);
+  return md5;
+}
+
+/**
+ * Apaga tudo que saiu do `.osu` de um mapa: o arquivo, os metadados (o combo
+ * máximo e a estrela da API mudam junto) e as duas tabelas sem prazo, estrela e
+ * FC pp. É o que se faz quando o mapa foi reenviado (ver conferirChecksum).
+ */
+function esquecerMapa(mapId) {
+  db.exec('BEGIN');
+  try {
+    for (const tabela of ['beatmap_files', 'beatmap_meta', 'map_difficulty', 'fc_pp']) {
+      db.prepare(`DELETE FROM cache.${tabela} WHERE map_id = ?`).run(mapId);
+    }
+    db.exec('COMMIT');
+  } catch (error) {
+    try { db.exec('ROLLBACK'); } catch { /* a transação já caiu sozinha */ }
+    throw error;
+  }
+  _md5s.delete(mapId);
 }
 
 /** Descarta os menos usados recentemente até voltar ao teto. */
@@ -231,7 +286,7 @@ function evictFCppIfNeeded() {
 }
 
 module.exports = {
-  getBeatmapFile, setBeatmapFile,
+  getBeatmapFile, setBeatmapFile, md5DoArquivoGuardado, esquecerMapa,
   getBeatmapMeta, setBeatmapMeta,
   getMapDifficulty, setMapDifficulty,
   getCachedFCpp, setCachedFCpp,

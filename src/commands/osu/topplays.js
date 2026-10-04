@@ -179,7 +179,7 @@ module.exports = {
         // uma vez — evita rajada de requisições/rate limit na API do osu!
         const itens      = fatia(page);
         const scoredPage = await osu.enrichScores(itens.map(item => item.score), mode);
-        const pagePlays  = await osu.enrichBeatmapData(scoredPage);
+        const pagePlays  = await osu.enrichBeatmapData(scoredPage, { aquecerArquivos: true });
 
         pageMapId.set(page, pagePlays[0]?.beatmap?.id ?? null);
 
@@ -253,10 +253,14 @@ module.exports = {
         // ele busca o mapa de cada score no servidor (e, quando a lista vem sem
         // acertos, o detalhe do score — 294–843ms medidos numa página de
         // cinco), enquanto o .osu quase sempre já está no cache em disco. Era o
-        // que sobrava no relógio depois que o cálculo de PP saiu dele.
+        // que sobrava no relógio depois que o cálculo de PP saiu dele. O .osu de
+        // mapa frio sai junto dos metadados (ver aquecerArquivos no osuClient).
         prefetch: async (page) => {
           const proxima = fatia(page).map(item => item.score);
-          const cheias  = await osu.enrichBeatmapData(await osu.enrichScores(proxima, mode));
+          const cheias  = await osu.enrichBeatmapData(
+            await osu.enrichScores(proxima, mode),
+            { aquecerArquivos: true },
+          );
 
           await Promise.all(
             cheias.map(play => play.beatmap?.id && osu.getBeatmapFile(play.beatmap.id))

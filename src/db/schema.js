@@ -315,6 +315,13 @@ function apply(db) {
       updated_at INTEGER NOT NULL,
       PRIMARY KEY (server, user_id)
     ) WITHOUT ROWID;
+
+    -- Nick → id, para o fetchPlayer buscar perfil e scores juntos mesmo quando
+    -- digitam um nome (ver idPorNick). O updated_at desempata nick repetido
+    -- sem voltar à tabela. Sem migração nem versão nova: o IF NOT EXISTS cria
+    -- o índice também no scores.db que já existe, e código anterior o ignora.
+    CREATE INDEX IF NOT EXISTS scores.idx_score_players_nick
+      ON score_players (server, username COLLATE NOCASE, updated_at);
   `);
 }
 

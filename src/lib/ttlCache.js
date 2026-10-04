@@ -52,6 +52,13 @@ class TtlCache {
     return this.get(key) !== undefined;
   }
 
+  /** Apaga as entradas cuja chave passa no teste. */
+  deleteWhere(teste) {
+    for (const key of [...this._map.keys()]) {
+      if (teste(key)) this._map.delete(key);
+    }
+  }
+
   set(key, value) {
     // Ver armadilha 1 no cabeçalho: sem o delete, a reinserção não muda a
     // posição e a evicção trata uma chave quente como a mais antiga.

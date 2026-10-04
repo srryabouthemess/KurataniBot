@@ -25,11 +25,12 @@
  * modo e link passam a ser os do fulano, e não os de quem digitou.
  */
 
-const { getLink, getPreferredServer, getPreferredModo } = require('./db');
+const { getLink, getPreferredServer, getPreferredModo, idPorNick } = require('./db');
 const { t } = require('./i18n');
 const modo = require('./modo');
 const servers = require('./servers');
 const osu = require('./osuClient');
+const metrics = require('./lib/metrics');
 
 /**
  * A chave de servidor que o comando vai usar: servidor e modo, resolvidos.
@@ -185,6 +186,14 @@ function resolvePlayer(interaction, playerOptionName = 'player', serverOptionNam
  * verdade), perfil vazio encerra ali (o erro do outro lado é consequência, não
  * causa), e só com o jogador existindo é que a falha dos scores importa.
  *
+ * ── Nick digitado ─────────────────────────────────────────────────────────────
+ * Sem link, o id pode vir do que o bot já viu (`idPorNick`, ver db/scores.js),
+ * como o Bathbot faz pelo `osu_user_names`. Só que lá é palpite: o nick pode
+ * ter trocado de dono. Então o perfil que voltar tem de ter o nick digitado; se
+ * não tiver, ou se aquele id não existir mais, tudo é descartado e o caminho de
+ * sempre responde. O caso raro paga uma ida e volta a mais, o comum economiza
+ * uma.
+ *
  * @param {{username: string|number, mode: string}} resolved o que o resolvePlayer devolveu
  * @param {(osuId: number) => Promise<Array>} buscarScores recebe o id já resolvido
  * @param {object}  [opts]
@@ -194,18 +203,39 @@ function resolvePlayer(interaction, playerOptionName = 'player', serverOptionNam
  */
 async function fetchPlayer({ username, mode }, buscarScores, { fresh = false } = {}) {
   const idConhecido = /^\d+$/.test(String(username)) ? Number(username) : null;
+  if (idConhecido !== null) return juntos(idConhecido, mode, buscarScores, fresh);
 
-  if (idConhecido === null) {
-    const user = await osu.getUser(username, mode, { fresh });
-    return { user, scores: user ? await buscarScores(user.id) : [] };
+  const palpite = idPorNick(mode, username);
+  if (palpite !== null) {
+    const resultado = await juntos(palpite, mode, buscarScores, fresh, { nick: username });
+    metrics.count(resultado ? 'nickLocal.confirmou' : 'nickLocal.descartou');
+    if (resultado) return resultado;
   }
 
+  const user = await osu.getUser(username, mode, { fresh });
+  return { user, scores: user ? await buscarScores(user.id) : [] };
+}
+
+/** No osu!, maiúsculas e `_` contra espaço não distinguem um nick de outro. */
+const mesmoNick = (a, b) => {
+  const forma = (nick) => String(nick ?? '').toLowerCase().replace(/_/g, ' ');
+  return forma(a) === forma(b);
+};
+
+/**
+ * Perfil e scores juntos a partir de um id ainda não validado (ver fetchPlayer).
+ *
+ * Com `nick`, o id é palpite: perfil vazio ou com outro nick devolve null, para
+ * quem chamou refazer pelo nome — e aí o erro dos scores daquele id não importa.
+ */
+async function juntos(id, mode, buscarScores, fresh, { nick = null } = {}) {
   const [perfil, scores] = await Promise.allSettled([
-    osu.getUser(idConhecido, mode, { fresh }),
-    buscarScores(idConhecido),
+    osu.getUser(id, mode, { fresh }),
+    buscarScores(id),
   ]);
 
   if (perfil.status === 'rejected') throw perfil.reason;
+  if (nick !== null && !mesmoNick(perfil.value?.username, nick)) return null;
   if (!perfil.value) return { user: null, scores: [] };
   if (scores.status === 'rejected') throw scores.reason;
 

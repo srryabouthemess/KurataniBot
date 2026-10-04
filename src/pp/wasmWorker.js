@@ -9,13 +9,20 @@
  * O porquê da thread está no rosuWorkerThread.js; o do cache de mapas
  * parseados, no wasmThread.js.
  *
- * ── Uma thread por build ──────────────────────────────────────────────────────
+ * ── Threads por build ─────────────────────────────────────────────────────────
  * Cada servidor calcula no motor que ele roda (ver engines.js), e os builds são
- * pacotes Wasm diferentes. Cada um ganha a sua thread, com o seu cache de mapas
- * e o seu backoff: um build que não carrega não derruba o outro. A thread só
- * nasce no primeiro pedido, então um build que nenhum servidor configurado usa
- * nunca é carregado. O script da thread sai do tipo do motor: as operações do
- * rosu-pp e as do akatsuki-pp são outras.
+ * pacotes Wasm diferentes. Cada um ganha as suas threads, com o seu backoff: um
+ * build que não carrega não derruba o outro. Uma thread só nasce no primeiro
+ * pedido que cai nela, então um build que nenhum servidor configurado usa nunca
+ * é carregado. O script da thread sai do tipo do motor: as operações do rosu-pp
+ * e as do akatsuki-pp são outras.
+ *
+ * São `PP_THREADS` por build (ver config.js). Era uma: duas pessoas ao mesmo
+ * tempo, ou as 100 plays de um /nochoke frio, entravam na mesma fila — no
+ * Bathbot o cálculo roda em todas as threads do tokio. O mapa escolhe a thread
+ * (`mapId % N`), para o mesmo mapa cair sempre na mesma: é lá que estão o mapa
+ * parseado e os atributos de dificuldade dele (ver wasmThread.js e
+ * atributosCache.js).
  *
  * ── Bytes só quando faltam ────────────────────────────────────────────────────
  * O `.osu` tem 50–300KB, e mandá-lo em todo cálculo seria trocar um custo de CPU
@@ -28,6 +35,7 @@ const path = require('path');
 const { Worker } = require('node:worker_threads');
 
 const { logErrorOnce } = require('../lib/logger');
+const config = require('../config');
 
 /** Tipo do motor (ver engines.js) → corpo da thread. */
 const SCRIPTS = {
@@ -46,7 +54,10 @@ const RESTART_BACKOFF_MS = 60_000;
 
 let _nextId = 1;
 
-/** pacote → { pacote, script, worker, blockedUntil, stats } */
+/**
+ * pacote → { pacote, script, threads, blockedUntil, stats }. `threads` tem uma
+ * vaga por thread, null enquanto ela não nasceu (ou depois que morreu).
+ */
 const _pools = new Map();
 
 function poolDe({ pacote, tipo }) {
@@ -55,7 +66,7 @@ function poolDe({ pacote, tipo }) {
     pool = {
       pacote,
       script: SCRIPTS[tipo],
-      worker: null,
+      threads: new Array(config.pp.threads).fill(null),
       blockedUntil: 0,
       stats: { spawns: 0, served: 0, failed: 0, bytesEnviados: 0 },
     };
@@ -94,7 +105,8 @@ function derrubar(pool, worker, motivo) {
   if (worker.done) return;
   worker.done = true;
 
-  if (pool.worker === worker) pool.worker = null;
+  const vaga = pool.threads.indexOf(worker);
+  if (vaga >= 0) pool.threads[vaga] = null;
   encerrarPendentes(worker);
 
   // Uma thread que morreu SEM nunca ter respondido nada é quase sempre lib
@@ -129,13 +141,22 @@ function iniciar(pool) {
   return worker;
 }
 
-function garantir(pool) {
-  if (pool.worker) return pool.worker;
+/** A vaga da thread daquele mapa: o mesmo mapa cai sempre na mesma (ver cabeçalho). */
+function vagaDe(pool, mapId) {
+  const id = Math.abs(Math.trunc(Number(mapId)));
+  return Number.isFinite(id) ? id % pool.threads.length : 0;
+}
+
+function garantir(pool, vaga) {
+  if (pool.threads[vaga]) return pool.threads[vaga];
   if (Date.now() < pool.blockedUntil) return null;
 
-  pool.worker = iniciar(pool);
-  return pool.worker;
+  pool.threads[vaga] = iniciar(pool);
+  return pool.threads[vaga];
 }
+
+/** As threads de pé de um build. */
+const vivas = (pool) => pool.threads.filter(worker => worker && !worker.done);
 
 // ─── Pedido e resposta ────────────────────────────────────────────────────────
 
@@ -184,7 +205,7 @@ function enviar(pool, worker, pedido) {
 }
 
 /**
- * Executa uma operação na thread do build pedido.
+ * Executa uma operação na thread do build pedido que cuida daquele mapa.
  *
  * @param {{pacote: string, tipo: 'rosu'|'akatsuki'}} motor o build (ver engines.js)
  * @param {'attributes'|'difficulty'|'fc'|'simulate'} op
@@ -197,7 +218,8 @@ function enviar(pool, worker, pedido) {
  */
 async function calcular(motor, op, mapId, args, obterBytes) {
   const pool = poolDe(motor);
-  const worker = garantir(pool);
+  const vaga = vagaDe(pool, mapId);
+  const worker = garantir(pool, vaga);
   if (!worker) return null;
 
   const primeira = await enviar(pool, worker, { op, mapId, args });
@@ -214,7 +236,7 @@ async function calcular(motor, op, mapId, args, obterBytes) {
   if (!bytes) return null;
 
   // A thread pode ter morrido entre as duas viagens.
-  const vivo = garantir(pool);
+  const vivo = garantir(pool, vaga);
   if (!vivo) return null;
 
   pool.stats.bytesEnviados += bytes.length;
@@ -227,18 +249,29 @@ async function calcular(motor, op, mapId, args, obterBytes) {
   return segunda.value;
 }
 
+/**
+ * Faz toda thread viva largar o mapa parseado (ver `esquecer` no wasmThread.js).
+ *
+ * Thread que não está de pé não tem o que largar: a próxima nasce sem nada.
+ */
+async function esquecerMapa(mapId) {
+  await Promise.all([..._pools.values()].flatMap(pool =>
+    vivas(pool).map(worker => enviar(pool, worker, { op: 'esquecer', mapId }))));
+}
+
 /** Encerra todas as threads. Chamado no shutdown do bot (ver index.js). */
 function close() {
   for (const pool of _pools.values()) {
-    const worker = pool.worker;
-    if (!worker) continue;
-    pool.worker = null;
+    for (const [vaga, worker] of pool.threads.entries()) {
+      if (!worker) continue;
+      pool.threads[vaga] = null;
 
-    // Marcado antes de terminar: o 'exit' chega depois, e sem isto um shutdown
-    // normal seria relatado como falha da thread.
-    worker.done = true;
-    encerrarPendentes(worker);
-    worker.thread.terminate().catch(() => {});
+      // Marcado antes de terminar: o 'exit' chega depois, e sem isto um shutdown
+      // normal seria relatado como falha da thread.
+      worker.done = true;
+      encerrarPendentes(worker);
+      worker.thread.terminate().catch(() => {});
+    }
   }
 }
 
@@ -246,8 +279,13 @@ function close() {
 function stats() {
   return Object.fromEntries([..._pools.values()].map(pool => [
     pool.pacote,
-    { ...pool.stats, vivo: Boolean(pool.worker), bloqueadoAte: pool.blockedUntil },
+    {
+      ...pool.stats,
+      vivo: vivas(pool).length > 0,
+      threads: vivas(pool).length,
+      bloqueadoAte: pool.blockedUntil,
+    },
   ]));
 }
 
-module.exports = { calcular, close, stats };
+module.exports = { calcular, esquecerMapa, close, stats };
