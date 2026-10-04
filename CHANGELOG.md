@@ -226,7 +226,6 @@
   - Plays em mapas **Approved** passam a aparecer no top, como já contavam no
     pp do perfil.
   - `limit` acima de 100 é clampado: a v1 responde 422 e a lista sairia vazia.
-  - A investigação: [`docs/investigacoes/2026-09-30-daycore-scores-v1.md`](docs/investigacoes/2026-09-30-daycore-scores-v1.md).
 
 ---
 

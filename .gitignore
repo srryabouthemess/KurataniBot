@@ -43,3 +43,8 @@ links.json*
 languages.json*
 langs.json
 beatmap_cache.json*
+
+# Planos, specs e investigações: ficam só na máquina de quem escreve, não vão
+# para o GitHub.
+docs/superpowers/
+docs/investigacoes/
