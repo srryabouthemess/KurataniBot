@@ -70,6 +70,7 @@ module.exports = ({ ADMIN }) => ({
   help_cmd_invitecode:     'Создаёт код приглашения Daycore.',
   help_cmd_staff:          'Управление привязками стаффа.',
   help_cmd_role:           'Выдача и снятие ролей сервера.',
+  help_cmd_group:          'Добавление игроков в группы лидербордов и удаление из них.',
   help_servers:            '🌐 Доступные серверы',
   help_modo:               'На серверах с Relax `modo:` выбирает VN или RX (`-vn`, `-rx`). Значение по умолчанию задаётся в `/link`.',
   help_prefix:             '⌨️ Текстовые команды',
@@ -389,6 +390,16 @@ module.exports = ({ ADMIN }) => ({
     `**${name}** (\`${id}\`)\nРоль: **${role}**\nПричина: ${reason}`,
   role_already_has:        (name, role) => `❌ У **${name}** уже есть **${role}**.`,
   role_missing:            (name, role) => `❌ У **${name}** нет **${role}**.`,
+
+  group_add_title:         (group) => `Добавлен в группу: ${group}`,
+  group_remove_title:      (group) => `Удалён из группы: ${group}`,
+  group_body:              (name, id, group, reason) =>
+    `**${name}** (\`${id}\`)\nГруппа: **${group}**\nПричина: ${reason}`,
+  group_already_in:        (name, group) => `❌ **${name}** уже в группе **${group}**.`,
+  group_not_in:            (name, group) => `❌ **${name}** не в группе **${group}**.`,
+  group_unknown:           (group, lista) => `❌ Группы **${group}** нет. Доступны: ${lista}.`,
+  group_unconfigured:      `❌ Управление группами не настроено на этом боте (отсутствует \`DAYCORE_MYSQL_HOST\` в \`.env\`).`,
+  group_unreachable:       `❌ Сейчас нет связи с базой данных ${ADMIN}. Ничего не опубликовано.`,
 
   invitecode_unconfigured: `❌ Генерация кодов приглашения не настроена на этом боте (отсутствует \`DAYCORE_MYSQL_HOST\` в \`.env\`).`,
   invitecode_unreachable:  `❌ Сейчас нет связи с базой данных ${ADMIN}. Код не создан.`,

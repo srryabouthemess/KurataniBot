@@ -2,6 +2,24 @@
 
 ---
 
+# Sessão de 2026-10-14 (grupos do Daycore)
+
+## ✨ Novidades
+
+- **`/group add` e `/group remove`.** [`commands/admin/group.js`](src/commands/admin/group.js)
+  - Põe e tira um jogador de um grupo do Daycore (Legit, Closet...), que decide
+    em qual leaderboard ele joga. Antes o staff ia ao painel do site à mão.
+  - Exige **Moderator**. Grupo não dá poder sobre conta, só muda onde o
+    jogador aparece. Não vale para a própria conta.
+  - O bot só publica no canal `setgroup`. Quem grava em `sh_groups_users` é o
+    bancho, que já reposiciona o jogador nos rankings na hora (antes só o
+    `sync` periódico acertava). O patch do Daycore ganhou o receptor.
+  - O MySQL do bot é só leitura: lista os grupos e confere o efeito. Precisa de
+    SELECT em `sh_groups` e `sh_groups_users` (ver `.env.example`).
+  - **Só funciona depois de aplicar o patch novo e reiniciar o bancho.**
+
+---
+
 # Sessão de 2026-10-04 (menos requisições ao osu!)
 
 ## 🔧 Mudanças

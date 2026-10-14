@@ -70,6 +70,7 @@ module.exports = ({ ADMIN }) => ({
   help_cmd_invitecode:     'Generate a Daycore invite code.',
   help_cmd_staff:          'Manage staff links.',
   help_cmd_role:           'Grant and remove server roles.',
+  help_cmd_group:          'Add and remove leaderboard groups.',
   help_servers:            '🌐 Available servers',
   help_modo:               'On servers with Relax, `modo:` picks VN or RX (`-vn`, `-rx`). You can set a default with `/link`.',
   help_prefix:             '⌨️ Text commands',
@@ -389,6 +390,16 @@ module.exports = ({ ADMIN }) => ({
     `**${name}** (\`${id}\`)\nRole: **${role}**\nReason: ${reason}`,
   role_already_has:        (name, role) => `❌ **${name}** already has **${role}**.`,
   role_missing:            (name, role) => `❌ **${name}** does not have **${role}**.`,
+
+  group_add_title:         (group) => `Added to group: ${group}`,
+  group_remove_title:      (group) => `Removed from group: ${group}`,
+  group_body:              (name, id, group, reason) =>
+    `**${name}** (\`${id}\`)\nGroup: **${group}**\nReason: ${reason}`,
+  group_already_in:        (name, group) => `❌ **${name}** is already in **${group}**.`,
+  group_not_in:            (name, group) => `❌ **${name}** is not in **${group}**.`,
+  group_unknown:           (group, lista) => `❌ No group called **${group}**. Available: ${lista}.`,
+  group_unconfigured:      `❌ Group management is not configured on this bot (missing \`DAYCORE_MYSQL_HOST\` in \`.env\`).`,
+  group_unreachable:       `❌ Could not reach the ${ADMIN} database right now. Nothing was published.`,
 
   invitecode_unconfigured: `❌ Invite code generation is not configured on this bot (missing \`DAYCORE_MYSQL_HOST\` in \`.env\`).`,
   invitecode_unreachable:  `❌ Could not reach the ${ADMIN} database right now. No code was created.`,

@@ -42,6 +42,7 @@ const CHANNELS = {
   MAPWIPE:    'mapwipe',
   ADDPRIV:    'addpriv',
   REMOVEPRIV: 'removepriv',
+  SETGROUP:   'setgroup',
 };
 
 /**

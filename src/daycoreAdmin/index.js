@@ -34,6 +34,7 @@
  *   actions.js     um publish por ação (rank, restrict, wipe, cargos…)
  *   privileges.js  leitura da máscara de privilégios e o menu do /role
  *   reads.js       o servidor administrado e os privilégios de um jogador
+ *   groups.js      os grupos do Shiina, lidos do MySQL
  *   verify.js      a releitura que confirma cada ação
  *
  * Tudo continua saindo de `require('./daycoreAdmin')`, com os mesmos nomes, como
@@ -45,6 +46,7 @@ const redis      = require('./redis');
 const actions    = require('./actions');
 const privileges = require('./privileges');
 const reads      = require('./reads');
+const groups     = require('./groups');
 const verify     = require('./verify');
 
 module.exports = {
@@ -57,5 +59,6 @@ module.exports = {
   ...actions,
   ...privileges,
   ...reads,
+  ...groups,
   ...verify,
 };

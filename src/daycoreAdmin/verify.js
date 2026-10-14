@@ -12,6 +12,7 @@ const osu = require('../osuClient');
 const { mapLimit } = require('../lib/concurrency');
 const { Privileges, WIPED_SCORE_STATUS } = require('./constants');
 const { hasPriv } = require('./privileges');
+const { getUserGroupIds } = require('./groups');
 
 // ─── Verificação pós-publicação ───────────────────────────────────────────────
 // Como o pub/sub não devolve resultado, relemos o estado pela API v2 para
@@ -201,6 +202,24 @@ async function verifyPriv(osuId, bit, expectPresent, { attempts = 3, delayMs = 1
   return false;
 }
 
+/**
+ * Confirma que o jogador entrou (ou saiu) do grupo.
+ *
+ * Lê o MySQL, e não a raspagem do perfil, que fica 30 minutos em cache.
+ */
+async function verifyGroup(osuId, groupId, expectPresent, { attempts = 3, delayMs = 1200 } = {}) {
+  for (let i = 0; i < attempts; i++) {
+    await sleep(delayMs);
+    try {
+      const ids = await getUserGroupIds(osuId);
+      if (ids.includes(Number(groupId)) === expectPresent) return true;
+    } catch {
+      // tenta de novo
+    }
+  }
+  return false;
+}
+
 module.exports = {
   verifyBudget,
   verifyMapStatus,
@@ -209,4 +228,5 @@ module.exports = {
   verifyScoreWiped,
   verifyMapScoresWiped,
   verifyPriv,
+  verifyGroup,
 };

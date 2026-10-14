@@ -169,6 +169,32 @@ async function removePrivilege(targetOsuId, roleKey, actor) {
   await publishPriv(CHANNELS.REMOVEPRIV, targetOsuId, roleKey, actor);
 }
 
+/**
+ * Põe ou tira o jogador de um grupo do Shiina.
+ *
+ * Quem grava em `sh_groups_users` é o bancho (canal `setgroup`, patch do
+ * Daycore), e não o bot, porque ele também reposiciona o jogador nos sorted
+ * sets de leaderboard dos grupos na hora. Gravar só no MySQL deixaria o jogador
+ * no leaderboard antigo até o próximo `rank_sets.sync`.
+ *
+ * O servidor valida alvo, grupo e ação, mas não olha quem publicou: a tranca de
+ * quem pode é o comando.
+ *
+ * @param {'add'|'remove'} action
+ * @param {{osuId: number}} actor quem aplica; o bancho grava como `admin` no log
+ */
+async function setGroup(targetOsuId, groupId, action, actor) {
+  if (action !== 'add' && action !== 'remove') {
+    throw new Error(`ação de grupo desconhecida: "${action}"`);
+  }
+  await publish(CHANNELS.SETGROUP, {
+    id:      Number(targetOsuId),
+    groupId: Number(groupId),
+    action,
+    adminId: Number(actor.osuId),
+  });
+}
+
 module.exports = {
   rankBeatmap,
   restrictPlayer,
@@ -178,4 +204,5 @@ module.exports = {
   wipeMapScores,
   addPrivilege,
   removePrivilege,
+  setGroup,
 };
