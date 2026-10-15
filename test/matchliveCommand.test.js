@@ -23,7 +23,8 @@ mysql2.createPool = () => ({
     if (sql.includes("`type` = 'join'")) return [banco.joins.filter(j => j.match_id === params[0] && j.user_id === params[1])];
     if (sql.includes('FROM `dc_matches`')) return [banco.partidas.filter(p => p.id === params[0])];
     if (sql.includes('FROM `dc_match_events`')) return [banco.eventos.filter(e => e.id > params[1])];
-    if (sql.includes('FROM `dc_match_games`')) return [[]];
+    if (sql.includes('FROM `dc_match_games`')) return [banco.jogos ?? []];
+    if (sql.includes('FROM `dc_match_scores`')) return [[]];
     throw new Error(`SQL inesperado: ${sql}`);
   },
   async query() { return [[{ 1: 1 }]]; },
@@ -168,4 +169,28 @@ test('privada com join de quem chamou: acompanha', async () => {
   await matchlive.execute(i);
   assert.match(texto(respostas.at(-1)), /Acompanhando a partida `9`/);
   assert.ok(db.getTrack(CANAL, 'daycore', 9));
+});
+
+test('track numa partida em andamento: jogos antigos entram como done:, o aberto fica sem chave', async () => {
+  const jg = (id, min, fim) => ({ id, map_id: 1, map_name: 'm', mode: 0, mods: 0, freemods: 0, team_type: 0,
+    started_at: new Date(Date.UTC(2026, 0, 1, 0, min)), ended_at: fim == null ? null : new Date(Date.UTC(2026, 0, 1, 0, fim)) });
+  banco.jogos = [jg(1, 0, 3), jg(2, 5, 8), jg(3, 10, null)];
+  const { i } = interacao({ sub: 'track', match: 'https://daycore.test/matches/9' });
+  await matchlive.execute(i);
+  assert.deepEqual(db.getTrack(CANAL, 'daycore', 9).gameMessages, { 1: 'done:', 2: 'done:' });
+});
+
+test('untrack funciona sem o MySQL configurado', async () => {
+  db.addTrack({ channelId: CANAL, guildId: 'g1', server: 'daycore', matchId: 9, lastEventId: 0, trackedBy: 'u1' });
+  const daycoreMysql = require('../src/daycoreMysql');
+  const original = daycoreMysql.isConfigured;
+  daycoreMysql.isConfigured = () => false;
+  try {
+    const { i, respostas } = interacao({ sub: 'untrack', match: 'https://daycore.test/matches/9' });
+    await matchlive.execute(i);
+    assert.match(texto(respostas[0]), /Parei de acompanhar/);
+    assert.equal(db.getTrack(CANAL, 'daycore', 9), null);
+  } finally {
+    daycoreMysql.isConfigured = original;
+  }
 });

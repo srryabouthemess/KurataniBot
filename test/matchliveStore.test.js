@@ -32,3 +32,9 @@ test('matchlive: mesma partida no mesmo canal não duplica', (t) => {
   db.addTrack(base);
   assert.throws(() => db.addTrack(base), /UNIQUE|PRIMARY/);
 });
+
+test('matchlive: addTrack aceita gameMessages iniciais', (t) => {
+  const db = freshDb(t);
+  db.addTrack({ ...base, gameMessages: { 5: 'done:', 6: 'done:' } });
+  assert.deepEqual(db.getTrack('c1', 'daycore', 42).gameMessages, { 5: 'done:', 6: 'done:' });
+});

@@ -123,3 +123,14 @@ test('aviso de banco fora que falha não vira rejeição solta', async () => {
   process.off('unhandledRejection', h);
   assert.equal(soltas.length, 0);
 });
+
+test('track semeado com done: nos jogos antigos posta só o jogo aberto', async () => {
+  const { gameMessagesIniciais } = require('../src/matchlive/diff');
+  const games = [jogo(50, 't1', 't2'), jogo(51, 't3'), jogo(52, 't4', 't5'), jogo(53, 't6')];
+  const gameMessages = gameMessagesIniciais(games);
+  const c = cenario({ tracks: [{ ...track, gameMessages }], snaps: [snap({ games })] });
+  await c.poller.tick();
+  assert.equal(c.enviados.length, 1);
+  assert.deepEqual(c.enviados[0].embeds, [{ start: 53 }]);
+  assert.equal(c.editados.length, 0);
+});

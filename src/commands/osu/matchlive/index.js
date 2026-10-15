@@ -61,7 +61,7 @@ function motivoDeRecusa(s, channelId, key, id) {
   return null;
 }
 
-/** O track pode começar? Responde o erro e devolve null; senão, a partida. */
+/** O track pode começar? Responde o erro e devolve null; senão, o snapshot. */
 async function partidaVisivel(interaction, s, fonte, key, id, label) {
   const check = await daycoreMysql.checkConnection();
   if (!check.ok) {
@@ -91,7 +91,7 @@ async function partidaVisivel(interaction, s, fonte, key, id, label) {
     await interaction.editReply(s.matchlive_ended(id));
     return null;
   }
-  return snap.match;
+  return snap;
 }
 
 module.exports = {
@@ -146,18 +146,20 @@ module.exports = {
     const key = alvo.key ?? servers.rootKey(resolveServer(interaction, 'server', null));
     const label = servers.get(key)?.label ?? key;
 
-    if (key === servers.OFFICIAL_KEY) return interaction.reply(efemero(s.matchlive_bancho_soon));
-    const fonte = matchlive.fontePara(key);
-    if (!fonte) return interaction.reply(efemero(s.matchlive_unsupported(label)));
-    if (!daycoreMysql.isConfigured()) return interaction.reply(efemero(s.matchlive_unconfigured(label)));
-
     const { channelId } = interaction;
     const id = alvo.id;
 
+    // Antes das checagens de fonte e de MySQL: parar um track tem que
+    // funcionar mesmo com o .env sem DAYCORE_MYSQL_* ou o servidor fora.
     if (sub === 'untrack') {
       const removido = db.removeTrack(channelId, key, id);
       return interaction.reply(efemero(removido ? s.matchlive_untracked(id) : s.matchlive_not_tracked(id)));
     }
+
+    if (key === servers.OFFICIAL_KEY) return interaction.reply(efemero(s.matchlive_bancho_soon));
+    const fonte = matchlive.fontePara(key);
+    if (!fonte) return interaction.reply(efemero(s.matchlive_unsupported(label)));
+    if (!daycoreMysql.isConfigured()) return interaction.reply(efemero(s.matchlive_unconfigured(label)));
 
     const recusa = motivoDeRecusa(s, channelId, key, id);
     if (recusa) return interaction.reply(efemero(recusa));
@@ -165,11 +167,13 @@ module.exports = {
     await interaction.deferReply();
 
     try {
-      const partida = await partidaVisivel(interaction, s, fonte, key, id, label);
-      if (!partida) return;
+      const snap = await partidaVisivel(interaction, s, fonte, key, id, label);
+      if (!snap) return;
+      const partida = snap.match;
 
       // Começa do último evento: o histórico de antes do track não é repostado.
-      // Jogo já em andamento aparece no primeiro tick (o diff vê gameMessages vazio).
+      // Os jogos já terminados ou superados entram como `done:`; só o jogo
+      // aberto mais recente fica sem chave e aparece no primeiro tick.
       const lastEventId = await fonte.lastEventIdOf(id);
 
       // De novo, depois do último await: outro /matchlive track pode ter
@@ -185,6 +189,7 @@ module.exports = {
         matchId: id,
         lastEventId,
         trackedBy: interaction.user.id,
+        gameMessages: matchlive.gameMessagesIniciais(snap.games),
       });
       return interaction.editReply(s.matchlive_tracking(id, partida.name));
     } catch (error) {

@@ -16,6 +16,22 @@ const LOGAVEIS = new Set(['join', 'leave', 'host']);
 
 const finalizado = msg => typeof msg === 'string' && msg.startsWith('done:');
 
+const emOrdem = games => [...games].sort((a, b) => (a.startedAt < b.startedAt ? -1 : a.startedAt > b.startedAt ? 1 : a.id - b.id));
+
+/**
+ * O gameMessages de um track novo: todo jogo terminado ou superado já conta
+ * como finalizado (`done:` sem mensagem), para o primeiro tick não repostar o
+ * histórico; o último jogo aberto fica sem chave e sai como "em andamento".
+ */
+function gameMessagesIniciais(games) {
+  const jogos = emOrdem(games);
+  const out = {};
+  jogos.forEach((game, i) => {
+    if (game.endedAt != null || i < jogos.length - 1) out[game.id] = 'done:';
+  });
+  return out;
+}
+
 function diff(estado, snapshot) {
   const acoes = [];
   let lastEventId = estado.lastEventId;
@@ -25,7 +41,7 @@ function diff(estado, snapshot) {
     if (LOGAVEIS.has(evento.type)) acoes.push({ tipo: 'log', evento });
   }
 
-  const jogos = [...snapshot.games].sort((a, b) => (a.startedAt < b.startedAt ? -1 : a.startedAt > b.startedAt ? 1 : a.id - b.id));
+  const jogos = emOrdem(snapshot.games);
   const fechada = snapshot.match.endedAt != null;
 
   jogos.forEach((game, i) => {
@@ -40,4 +56,4 @@ function diff(estado, snapshot) {
   return { acoes, lastEventId };
 }
 
-module.exports = { diff, finalizado };
+module.exports = { diff, finalizado, gameMessagesIniciais };

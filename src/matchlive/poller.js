@@ -35,6 +35,12 @@ function criarPoller({ client, db, fontes, render, strings, siteUrl, agora = Dat
   let timer = null;
   let rodando = false;
 
+  // Remoção pelo tick (partida apagada, canal perdido): poda o log em memória.
+  function removerTrack(tr) {
+    if (tr.logMessageId) linhasDoLog.delete(tr.logMessageId);
+    db.removeTrack(tr.channelId, tr.server, tr.matchId);
+  }
+
   async function postar(canal, payload) { return canal.send(payload); }
 
   async function editarOuPostar(canal, msgId, payload) {
@@ -64,7 +70,7 @@ function criarPoller({ client, db, fontes, render, strings, siteUrl, agora = Dat
       lastActivityAt: track.lastActivityAt,
     };
     let removido = false;
-    const remover = () => { removido = true; db.removeTrack(track.channelId, track.server, track.matchId); };
+    const remover = () => { removido = true; linhasDoLog.delete(estado.logMessageId); db.removeTrack(track.channelId, track.server, track.matchId); };
 
     try {
       const novasLinhas = acoes.filter(a => a.tipo === 'log').map(a => render.linhaDeLog(a.evento, s));
@@ -73,11 +79,14 @@ function criarPoller({ client, db, fontes, render, strings, siteUrl, agora = Dat
         const atuais = estado.logMessageId ? linhasDoLog.get(estado.logMessageId) : null;
         if (atuais && estado.logLines + novasLinhas.length <= MAX_LINHAS_LOG) {
           const todas = [...atuais, ...novasLinhas];
-          estado.logMessageId = await editarOuPostar(canal, estado.logMessageId, { embeds: [render.embedLog(todas, snap.match, s)] });
+          const anterior = estado.logMessageId;
+          estado.logMessageId = await editarOuPostar(canal, anterior, { embeds: [render.embedLog(todas, snap.match, s)] });
+          if (estado.logMessageId !== anterior) linhasDoLog.delete(anterior);
           linhasDoLog.set(estado.logMessageId, todas);
           estado.logLines = todas.length;
         } else {
           const m = await postar(canal, { embeds: [render.embedLog(novasLinhas, snap.match, s)] });
+          if (estado.logMessageId) linhasDoLog.delete(estado.logMessageId);
           estado.logMessageId = m.id;
           linhasDoLog.set(m.id, novasLinhas);
           estado.logLines = novasLinhas.length;
@@ -159,7 +168,7 @@ function criarPoller({ client, db, fontes, render, strings, siteUrl, agora = Dat
         falhas.delete(chave);
 
         if (snap === null) {
-          for (const tr of grupo) db.removeTrack(tr.channelId, tr.server, tr.matchId);
+          for (const tr of grupo) removerTrack(tr);
           continue;
         }
 
@@ -169,7 +178,7 @@ function criarPoller({ client, db, fontes, render, strings, siteUrl, agora = Dat
             await processarTrack(tr, snap, jogosTerminados);
           } catch (err) {
             logError('matchlive', err);
-            if (CANAL_PERDIDO.has(err?.code)) db.removeTrack(tr.channelId, tr.server, tr.matchId);
+            if (CANAL_PERDIDO.has(err?.code)) removerTrack(tr);
           }
         }
       }

@@ -25,13 +25,13 @@ function deLinha(r) {
   };
 }
 
-function addTrack({ channelId, guildId, server, matchId, lastEventId, trackedBy }) {
+function addTrack({ channelId, guildId, server, matchId, lastEventId, trackedBy, gameMessages = {} }) {
   const agora = Date.now();
   db.prepare(`
     INSERT INTO matchlive_tracks
-      (channel_id, guild_id, server, match_id, last_event_id, tracked_by, created_at, last_activity_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(channelId, guildId ?? null, server, matchId, lastEventId, trackedBy, agora, agora);
+      (channel_id, guild_id, server, match_id, last_event_id, tracked_by, game_messages, created_at, last_activity_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(channelId, guildId ?? null, server, matchId, lastEventId, trackedBy, JSON.stringify(gameMessages), agora, agora);
 }
 
 function removeTrack(channelId, server, matchId) {

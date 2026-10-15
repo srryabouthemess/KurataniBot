@@ -13,6 +13,7 @@ const { chaveDoDaycore } = require('../multiplayer/daycore');
 const { criarPoller } = require('./poller');
 const render = require('./render');
 const daycore = require('./sources/daycore');
+const { gameMessagesIniciais } = require('./diff');
 
 const LIMITE_POR_CANAL = 3;
 const LIMITE_GLOBAL = 20;
@@ -48,4 +49,4 @@ function iniciar(client, strings) {
   poller.start();
 }
 
-module.exports = { iniciar, fontePara, LIMITE_POR_CANAL, LIMITE_GLOBAL };
+module.exports = { iniciar, fontePara, gameMessagesIniciais, LIMITE_POR_CANAL, LIMITE_GLOBAL };
