@@ -29,6 +29,9 @@ const { registrarAcao } = require('../../adminLog');
 const { t } = require('../../i18n');
 const { exigirSubcomando } = require('../../subcommands');
 const { logError } = require('../../lib/logger');
+const { TtlCache } = require('../../lib/ttlCache');
+const db = require('../../db');
+const config = require('../../config');
 
 // Mesmo teto do /role.
 const REASON_MAX_LENGTH = 200;
@@ -44,15 +47,54 @@ function opcoes(sub, descricao, descricaoPt) {
       .setRequired(true)
       .setMaxLength(32))
     .addStringOption(o => o.setName('group')
-      .setDescription('Group name (e.g. Legit)')
-      .setDescriptionLocalizations({ 'pt-BR': 'Nome do grupo (ex.: Legit)' })
+      .setDescription('Group name (pick from the list)')
+      .setDescriptionLocalizations({ 'pt-BR': 'Nome do grupo (escolha na lista)' })
       .setRequired(true)
+      .setAutocomplete(true)
       .setMaxLength(64))
     .addStringOption(o => o.setName('reason')
       .setDescription('Reason (recorded by the bot)')
       .setDescriptionLocalizations({ 'pt-BR': 'Motivo (registrado pelo bot)' })
       .setRequired(true)
       .setMaxLength(REASON_MAX_LENGTH));
+}
+
+// O Discord pede a lista a cada tecla digitada; os grupos mudam por decisão de
+// staff, então meio minuto de cache poupa o MySQL sem esconder grupo novo.
+const GRUPOS_TTL_MS = 30_000;
+const _grupos = new TtlCache({ ttlMs: GRUPOS_TTL_MS, max: 1 });
+
+// O Discord aceita no máximo 25 sugestões.
+const SUGESTOES_MAX = 25;
+
+/**
+ * As sugestões do campo `group`: os nomes que casam com o que foi digitado.
+ *
+ * Só para staff já vinculado, na guilda do Daycore. A lista de grupos não é
+ * segredo, mas o comando aparece para todo mundo no servidor e o autocomplete
+ * não precisa servir de consulta pública. Quem não é staff vê a lista vazia, e
+ * o execute recusa de qualquer jeito (resolveStaff).
+ *
+ * O valor é o nome, o mesmo que o execute resolve — digitar à mão continua
+ * funcionando.
+ */
+async function autocomplete(interaction) {
+  const guildId = config.daycore.guildId;
+  if (!guildId || interaction.guildId !== guildId) return [];
+  if (!db.getStaffLink(interaction.user.id)) return [];
+  if (!daycoreMysql.isConfigured()) return [];
+
+  let grupos = _grupos.get('lista');
+  if (!grupos) {
+    grupos = await daycore.listGroups();
+    _grupos.set('lista', grupos);
+  }
+
+  const digitado = String(interaction.options.getFocused()).trim().toLowerCase();
+  return grupos
+    .filter(g => g.name.toLowerCase().includes(digitado))
+    .slice(0, SUGESTOES_MAX)
+    .map(g => ({ name: g.name.slice(0, 100), value: g.name.slice(0, 100) }));
 }
 
 /** Confirma que dá para falar com o MySQL do Daycore antes de prometer nada. */
@@ -79,6 +121,8 @@ module.exports = {
     .setContexts([InteractionContextType.Guild])
     .addSubcommand(sub => opcoes(sub.setName('add'), 'Add a player to a group', 'Põe um jogador num grupo'))
     .addSubcommand(sub => opcoes(sub.setName('remove'), 'Remove a player from a group', 'Tira um jogador de um grupo')),
+
+  autocomplete,
 
   async execute(interaction) {
     const s   = t(interaction);

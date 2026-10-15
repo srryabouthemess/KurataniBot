@@ -11,6 +11,7 @@ const assert = require('node:assert');
 // Stub do redis antes de carregar o daycoreAdmin, que desestrutura o
 // createClient no require — o mesmo arranjo do test/role.test.js.
 process.env.REDIS_HOST = '127.0.0.1';
+process.env.DAYCORE_GUILD_ID = '900000000000000001';
 const published = [];
 const redis = require('redis');
 redis.createClient = () => ({
@@ -90,4 +91,53 @@ test('a tranca é MODERATOR', () => {
   // Grupo não dá poder sobre conta nenhuma, só muda onde o jogador aparece.
   const fonte = require('fs').readFileSync(require.resolve('../src/commands/admin/group'), 'utf8');
   assert.match(fonte, /resolveStaff\(interaction, daycore\.Privileges\.MODERATOR/);
+});
+
+test('o campo group oferece autocomplete', () => {
+  const json = group.data.toJSON();
+  for (const sub of json.options) {
+    const opcao = sub.options.find(o => o.name === 'group');
+    assert.equal(opcao.autocomplete, true, sub.name);
+    // O Discord recusa autocomplete junto de choices fixas.
+    assert.equal(opcao.choices, undefined, sub.name);
+  }
+});
+
+test('autocomplete: só staff vinculado, na guilda do Daycore, e filtra pelo digitado', async () => {
+  const db = require('../src/db');
+  const mysql = require('../src/daycoreMysql');
+  const originais = {
+    getStaffLink: db.getStaffLink,
+    getPool: mysql.getPool, isConfigured: mysql.isConfigured,
+  };
+  const GUILDA = process.env.DAYCORE_GUILD_ID;
+  const fake = (guildId, digitado) => ({
+    guildId, user: { id: '1' }, options: { getFocused: () => digitado },
+  });
+  try {
+    mysql.isConfigured = () => true;
+    mysql.getPool = () => ({
+      query: async () => [[
+        { id: 1, name: 'Legit', removes_from_leaderboard: 0 },
+        { id: 2, name: 'Closet Cheating', removes_from_leaderboard: 1 },
+        { id: 3, name: 'Blatant Cheating', removes_from_leaderboard: 1 },
+      ]],
+    });
+
+    db.getStaffLink = () => null;
+    assert.deepEqual(await group.autocomplete(fake(GUILDA, '')), [], 'sem vínculo de staff');
+
+    db.getStaffLink = () => ({ osu_id: 3 });
+    assert.deepEqual(await group.autocomplete(fake('999', '')), [], 'outra guilda');
+
+    const todos = await group.autocomplete(fake(GUILDA, ''));
+    assert.deepEqual(todos.map(o => o.value), ['Legit', 'Closet Cheating', 'Blatant Cheating']);
+
+    const filtrados = await group.autocomplete(fake(GUILDA, 'CHEAT'));
+    assert.deepEqual(filtrados.map(o => o.name), ['Closet Cheating', 'Blatant Cheating']);
+  } finally {
+    db.getStaffLink = originais.getStaffLink;
+    mysql.getPool = originais.getPool;
+    mysql.isConfigured = originais.isConfigured;
+  }
 });

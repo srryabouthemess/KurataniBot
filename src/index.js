@@ -148,6 +148,19 @@ client.once('clientReady', async () => {
 });
 
 client.on('interactionCreate', async interaction => {
+  // Autocomplete não é um comando rodando: não passa por cooldown, defer nem
+  // métrica de comando. O Discord dá 3 s, e uma falha aqui só deixa a lista
+  // vazia — nunca deve virar mensagem de erro para quem digita.
+  if (interaction.isAutocomplete()) {
+    try {
+      const options = await client.commands.get(interaction.commandName)?.autocomplete?.(interaction);
+      await interaction.respond(options ?? []);
+    } catch (error) {
+      logError(`autocomplete:${interaction.commandName}`, error);
+      await interaction.respond([]).catch(() => {});
+    }
+    return;
+  }
   if (!interaction.isChatInputCommand()) return;
 
   const command = client.commands.get(interaction.commandName);

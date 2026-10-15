@@ -17,6 +17,14 @@
   - O MySQL do bot é só leitura: lista os grupos e confere o efeito. Precisa de
     SELECT em `sh_groups` e `sh_groups_users` (ver `.env.example`).
   - **Só funciona depois de aplicar o patch novo e reiniciar o bancho.**
+  - **O campo `group` tem autocomplete.** Lista os grupos de `sh_groups` conforme
+    se digita (até 25, cache de 30 s), só para staff vinculado na guilda do
+    Daycore. Digitar o nome à mão continua valendo. É o primeiro autocomplete
+    do bot: o handler fica no `interactionCreate` e qualquer comando pode
+    declarar `autocomplete(interaction)`.
+  - **O bancho avisa o Shiina** (`ex:user_reload`) depois de gravar o grupo; sem
+    isso o painel e a tag do perfil ficavam com o grupo antigo, porque o Shiina
+    guarda os grupos de cada usuário em cache.
 
 ---
 
