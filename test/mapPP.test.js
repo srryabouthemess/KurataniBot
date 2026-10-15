@@ -83,6 +83,7 @@ const osuMock = {
     difficulty_rating: 7.8, beatmapset_id: 39804,
     beatmapset: { id: 39804, title: 'FREEDOM DiVE', artist: 'xi', creator: 'Nakagawa-Kanon', covers: {} },
   }),
+  getBeatmapFor:    async (id, mode) => ({ beatmap: await osuMock.getBeatmap(id), mode }),
   getAdjustedStars: async () => '8.33',
   getMapAttrs:      async () => ({
     cs: 4, ar: 10, od: 10, hp: 6, clockRate: 1, bpm: 222.22, objects: 1983,

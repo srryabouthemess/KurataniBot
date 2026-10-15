@@ -96,7 +96,7 @@ module.exports = {
     // jogador: `/map` fala de um mapa, não de uma conta, e sempre respondeu
     // pelo padrão quando ninguém pede outro. O `modo:` entra por cima porque
     // Relax troca o motor de PP (ver pp.js), não só o leaderboard.
-    const mode      = modo.apply(
+    let mode        = modo.apply(
       interaction.options.getString('server') || osu.DEFAULT_MODE,
       interaction.options.getString('modo'),
     );
@@ -125,7 +125,11 @@ module.exports = {
     await interaction.deferReply();
 
     try {
-      const beatmap = await osu.getBeatmap(beatmapId);
+      // Mapa custom cai no servidor dono dele, e o resto do comando passa a
+      // falar daquele servidor (URL, rodapé, motor de pp). Ver getBeatmapFor.
+      const achado  = await osu.getBeatmapFor(beatmapId, mode);
+      const beatmap = achado.beatmap;
+      mode = achado.mode;
       if (!beatmap) return interaction.editReply(s.simulate_map_not_found);
 
       // O mapa embrulhado como play, que é a forma que o embeds/play sabe ler

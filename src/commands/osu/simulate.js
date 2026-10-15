@@ -93,7 +93,7 @@ module.exports = {
     // Mesma escolha do /map: o padrão não vem do link, porque a simulação é
     // sobre um mapa e não sobre uma conta. O `modo:` entra por cima porque em
     // Relax o cálculo de PP é outro.
-    const mode      = modo.apply(
+    let mode        = modo.apply(
       interaction.options.getString('server') || osu.DEFAULT_MODE,
       interaction.options.getString('modo'),
     );
@@ -116,7 +116,11 @@ module.exports = {
     await interaction.deferReply();
 
     try {
-      const beatmap = await osu.getBeatmap(beatmapId);
+      // Mapa custom cai no servidor dono dele, e o resto do comando passa a
+      // falar daquele servidor (URL, rodapé, motor de pp). Ver getBeatmapFor.
+      const achado  = await osu.getBeatmapFor(beatmapId, mode);
+      const beatmap = achado.beatmap;
+      mode = achado.mode;
       if (!beatmap) return interaction.editReply(s.simulate_map_not_found);
 
       // Mecânica stable, sempre — inclusive no Bancho, onde o padrão seria

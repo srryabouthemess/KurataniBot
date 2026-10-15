@@ -440,6 +440,58 @@ async function getUserBeatmapScores(userId, beatmapId, mode = DEFAULT_MODE) {
   return withMap.sort((a, b) => (b.pp ?? -1) - (a.pp ?? -1));
 }
 
+/**
+ * O mapa no formato da API oficial, para quem fala de um MAPA (/map, /simulate).
+ *
+ * Mapa custom de um servidor bancho.py não existe na API oficial, e esses
+ * comandos respondiam "mapa não encontrado". Aqui ele cai no `/v2/maps/{id}`
+ * do servidor: primeiro o pedido, depois (só para id custom) qualquer bancho.py
+ * cadastrado — o padrão é `official`, e quem cola o link de um mapa do Daycore
+ * não pensa em pedir o servidor. O `.osu` já vem do espelho do servidor (ver
+ * pp/beatmapFile.js); só faltava o metadado.
+ *
+ * Devolve também o `mode` em que o mapa foi achado: a URL e o rodapé têm de
+ * apontar para o servidor dono do mapa, não para o ppy.sh, que daria 404.
+ *
+ * @returns {Promise<{beatmap: object|null, mode: string}>}
+ */
+async function getBeatmapFor(id, mode = DEFAULT_MODE) {
+  const oficial = await fetchBeatmap(id);
+  if (oficial) return { beatmap: oficial, mode };
+
+  const candidatos = servers.get(mode)?.kind === 'banchopy' ? [mode] : [];
+  if (isCustomMapId(id)) {
+    for (const server of servers.all()) {
+      const chave = servers.rootKey(server.key);
+      if (server.kind === 'banchopy' && !candidatos.some(c => servers.rootKey(c) === chave)) {
+        candidatos.push(chave);
+      }
+    }
+  }
+
+  for (const chave of candidatos) {
+    let map = null;
+    try {
+      map = await banchoPyApi.getServerMap(id, chave);
+    } catch (error) {
+      if (error?.response?.status !== 404) logErrorOnce('osuClient:serverMap', error);
+    }
+    if (!map) continue;
+
+    const { beatmap, beatmapset } = banchoPyApi.mergeServerMap(
+      { beatmap: { id }, beatmapset: {} }, map, servers.get(chave).covers ?? null,
+    );
+    // O modo pedido vence quando é do mesmo servidor (Relax continua Relax).
+    const achado = servers.rootKey(mode) === chave ? mode : chave;
+    return {
+      beatmap: { ...beatmap, beatmapset_id: beatmapset.id, beatmapset },
+      mode:    achado,
+    };
+  }
+
+  return { beatmap: null, mode };
+}
+
 // ─── Ranking do servidor ──────────────────────────────────────────────────────
 /**
  * O ranking de pp daquele servidor, do primeiro colocado para baixo.
@@ -637,6 +689,7 @@ module.exports = {
   getPlayerGroups,
   supportsPlayerGroups,
   getBeatmap: fetchBeatmap,
+  getBeatmapFor,
   enrichBeatmapData,
   enrichScores,
 
