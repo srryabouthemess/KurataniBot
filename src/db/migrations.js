@@ -45,7 +45,7 @@ const path = require('path');
 const { DATA_DIR } = require('../paths');
 const backup = require('./backup');
 
-const VERSAO_ATUAL = 10;
+const VERSAO_ATUAL = 11;
 
 /** A versão mais antiga que as migrações abaixo sabem levar até a atual. */
 const VERSAO_MINIMA = 1;
@@ -480,6 +480,11 @@ function run(db) {
   if (versao < 10) {
     acrescentarColunaEmbedLayout(db);
   }
+
+  // 10 → 11: a tabela do /matchlive é nova e inteira, sem coluna em tabela
+  // existente — o CREATE IF NOT EXISTS do schema.js já a cria no banco antigo.
+  // A faixa existe só para o carimbo (e o backup) acompanharem a mudança.
+  if (versao < 11) { /* nada além do schema */ }
 
   // Interpolado porque PRAGMA não aceita parâmetro; o valor é uma constante do
   // código, não entrada de ninguém.

@@ -406,8 +406,7 @@ test('9 → 10 acrescenta users.embed_layout e mantém modo e formato do score',
   assert.ok(!colunasDe(dbPath, 'users').includes('embed_layout'));
 
   const db = load();
-  assert.equal(userVersion(dbPath), 10);
-  assert.equal(db.SCHEMA_VERSION, 10);
+  assert.equal(userVersion(dbPath), db.SCHEMA_VERSION);
   assert.ok(colunasDe(dbPath, 'users').includes('embed_layout'));
   assert.equal(db.getEmbedLayout('1'), null, 'quem já existia fica no padrão');
   assert.equal(db.getPreferredModo('1'), 'rx');
@@ -432,6 +431,6 @@ test('9 → 10 roda de novo sem erro num banco que já tem a coluna', t => {
   comHandle(dbPath, h => h.exec('PRAGMA user_version = 9'));
 
   const db = load();
-  assert.equal(userVersion(dbPath), 10);
+  assert.equal(userVersion(dbPath), db.SCHEMA_VERSION);
   assert.deepEqual([...db.getEmbedLayout('1')], ['hits']);
 });

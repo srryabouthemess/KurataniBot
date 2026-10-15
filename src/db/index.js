@@ -39,6 +39,7 @@ const nominations = require('./nominations');
 const mapCache    = require('./mapCache');
 const meta        = require('./meta');
 const scores      = require('./scores');
+const matchlive   = require('./matchlive');
 
 // A ordem é obrigatória. A conferência vem antes de tudo: o schema aplicado por
 // cima de um banco que as migrações não sabem levar (antigo demais, ou de um
@@ -62,6 +63,7 @@ module.exports = {
   ...mapCache,
   ...meta,
   ...scores,
+  ...matchlive,
 
   close: connection.close,
 

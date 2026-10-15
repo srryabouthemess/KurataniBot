@@ -164,6 +164,23 @@ function apply(db) {
     );
 
     CREATE INDEX IF NOT EXISTS idx_admin_actions_created ON admin_actions (created_at DESC);
+
+    -- Partidas multiplayer que o /matchlive acompanha em cada canal, e o que
+    -- já foi postado: sem isto um restart repostaria tudo desde o começo.
+    CREATE TABLE IF NOT EXISTS matchlive_tracks (
+      channel_id        TEXT    NOT NULL,
+      guild_id          TEXT,
+      server            TEXT    NOT NULL,
+      match_id          INTEGER NOT NULL,
+      last_event_id     INTEGER NOT NULL DEFAULT 0,
+      log_message_id    TEXT,
+      log_lines         INTEGER NOT NULL DEFAULT 0,
+      game_messages     TEXT    NOT NULL DEFAULT '{}',  -- JSON game_id → message_id
+      tracked_by        TEXT    NOT NULL,
+      created_at        INTEGER NOT NULL,
+      last_activity_at  INTEGER NOT NULL,
+      PRIMARY KEY (channel_id, server, match_id)
+    );
   `);
 
   // ─── Cache de mapas (arquivo separado) ──────────────────────────────────────
