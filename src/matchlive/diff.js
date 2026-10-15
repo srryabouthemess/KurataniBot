@@ -19,17 +19,27 @@ const finalizado = msg => typeof msg === 'string' && msg.startsWith('done:');
 const emOrdem = games => [...games].sort((a, b) => (a.startedAt < b.startedAt ? -1 : a.startedAt > b.startedAt ? 1 : a.id - b.id));
 
 /**
- * O gameMessages de um track novo: todo jogo terminado ou superado já conta
- * como finalizado (`done:` sem mensagem), para o primeiro tick não repostar o
- * histórico; o último jogo aberto fica sem chave e sai como "em andamento".
+ * O gameMessages de um track novo, com o histórico como no Bathbot: os últimos
+ * `limite` mapas (terminados, abortados e o aberto mais recente) ficam sem
+ * chave e o primeiro tick posta cada um; os mais antigos que isso já contam
+ * como finalizados (`done:` sem mensagem) e não saem.
  */
-function gameMessagesIniciais(games) {
+function gameMessagesIniciais(games, limite = Infinity) {
   const jogos = emOrdem(games);
   const out = {};
-  jogos.forEach((game, i) => {
-    if (game.endedAt != null || i < jogos.length - 1) out[game.id] = 'done:';
-  });
+  const corte = Math.max(0, jogos.length - limite);
+  for (const game of jogos.slice(0, corte)) out[game.id] = 'done:';
   return out;
+}
+
+/**
+ * O lastEventId de um track novo para o log do passado trazer só as últimas
+ * `maxLinhas` entradas: o id do evento logável logo antes delas, ou 0 se
+ * todas cabem.
+ */
+function inicioDoLog(events, maxLinhas) {
+  const logaveis = events.filter(e => LOGAVEIS.has(e.type));
+  return logaveis.length > maxLinhas ? logaveis[logaveis.length - maxLinhas - 1].id : 0;
 }
 
 function diff(estado, snapshot) {
@@ -56,4 +66,4 @@ function diff(estado, snapshot) {
   return { acoes, lastEventId };
 }
 
-module.exports = { diff, finalizado, gameMessagesIniciais };
+module.exports = { diff, finalizado, gameMessagesIniciais, inicioDoLog, LOGAVEIS };

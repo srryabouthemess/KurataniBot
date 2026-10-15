@@ -2,7 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert');
 const { criarPoller, INATIVIDADE_MS } = require('../src/matchlive/poller');
 
-function cenario({ snaps, tracks }) {
+function cenario({ snaps, tracks, infoDoMapa, rotuloDaGrade }) {
   const enviados = [];
   const editados = [];
   let seq = 0;
@@ -24,18 +24,20 @@ function cenario({ snaps, tracks }) {
   const s = new Proxy({}, { get: (_, k) => (...a) => `${String(k)}(${a.join(',')})` });
   const render = {
     linhaDeLog: e => `log:${e.id}`,
-    embedLog: l => ({ log: l }), embedJogoInicio: g => ({ start: g.id }), embedJogoFim: g => ({ end: g.id }),
+    embedLog: l => ({ log: l }),
+    embedJogoInicio: (g, _p, _s, x) => ({ start: g.id, ...(x?.mapa ? { mapa: x.mapa } : {}) }),
+    embedJogoFim: (g, _p, _j, _s, x) => ({ end: g.id, ...(x?.mapa ? { mapa: x.mapa } : {}), ...(x?.rotuloDaGrade ? { grade: x.rotuloDaGrade('S') } : {}) }),
     embedJogoAbortado: g => ({ abort: g.id }), embedFim: () => ({ fim: true }),
   };
   let relogio = 1000;
-  const poller = criarPoller({ client, db, fontes: { daycore: fonte }, render, strings: () => s, siteUrl: () => null, agora: () => relogio });
+  const poller = criarPoller({ client, db, fontes: { daycore: fonte }, render, strings: () => s, siteUrl: () => null, agora: () => relogio, infoDoMapa, rotuloDaGrade });
   return { poller, ctl, client, enviados, editados, estado, avancar: ms => { relogio += ms; } };
 }
 
 const track = { channelId: 'c1', guildId: 'g', server: 'daycore', matchId: 9, lastEventId: 0 };
 const snap = (o = {}) => ({ match: { id: 9, name: 's', private: false, endedAt: null }, events: [], games: [], ...o });
 const ev = (id, type = 'join') => ({ id, type, userId: 1, username: 'A', gameId: null, at: 'x' });
-const jogo = (id, startedAt, endedAt = null) => ({ id, startedAt, endedAt, scores: [] });
+const jogo = (id, startedAt, endedAt = null) => ({ id, mapId: id * 10, startedAt, endedAt, scores: [] });
 
 test('posta log e início de jogo, depois edita com o fim', async () => {
   const c = cenario({ tracks: [track], snaps: [
@@ -124,13 +126,37 @@ test('aviso de banco fora que falha não vira rejeição solta', async () => {
   assert.equal(soltas.length, 0);
 });
 
-test('track semeado com done: nos jogos antigos posta só o jogo aberto', async () => {
+test('track semeado com histórico: posta os últimos mapas direto no estado final e o aberto', async () => {
   const { gameMessagesIniciais } = require('../src/matchlive/diff');
   const games = [jogo(50, 't1', 't2'), jogo(51, 't3'), jogo(52, 't4', 't5'), jogo(53, 't6')];
-  const gameMessages = gameMessagesIniciais(games);
+  const gameMessages = gameMessagesIniciais(games, 2);
   const c = cenario({ tracks: [{ ...track, gameMessages }], snaps: [snap({ games })] });
   await c.poller.tick();
-  assert.equal(c.enviados.length, 1);
-  assert.deepEqual(c.enviados[0].embeds, [{ start: 53 }]);
+  assert.deepEqual(c.enviados.map(e => e.embeds[0]), [{ end: 52 }, { start: 53 }]);
   assert.equal(c.editados.length, 0);
+  assert.match(c.estado.get('c1|9').gameMessages[52], /^done:m/);
+});
+
+test('jogo que começou e terminou no mesmo tick: um post só, já com o resultado', async () => {
+  const c = cenario({ tracks: [track], snaps: [snap({ games: [jogo(50, 't1', 't2'), jogo(51, 't3'), jogo(52, 't4')] })] });
+  await c.poller.tick();
+  assert.deepEqual(c.enviados.map(e => e.embeds[0]), [{ end: 50 }, { abort: 51 }, { start: 52 }]);
+  assert.equal(c.editados.length, 0);
+  const gm = c.estado.get('c1|9').gameMessages;
+  assert.equal(gm[50], `done:${c.enviados[0].msg}`);
+  assert.equal(gm[51], `done:${c.enviados[1].msg}`);
+});
+
+test('infoDoMapa e rotuloDaGrade chegam ao render; falha do infoDoMapa não derruba o tick', async () => {
+  const pedidos = [];
+  const c = cenario({
+    tracks: [track],
+    snaps: [snap({ games: [jogo(50, 't1', 't2'), jogo(51, 't3')] })],
+    infoDoMapa: async id => { pedidos.push(id); if (id === 510) throw new Error('api fora'); return { setId: 7, segundos: 90 }; },
+    rotuloDaGrade: g => `<${g}>`,
+  });
+  await c.poller.tick();
+  assert.deepEqual(pedidos, [500, 510]);
+  assert.deepEqual(c.enviados[0].embeds, [{ end: 50, mapa: { setId: 7, segundos: 90 }, grade: '<S>' }]);
+  assert.deepEqual(c.enviados[1].embeds, [{ start: 51 }]);
 });

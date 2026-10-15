@@ -46,3 +46,23 @@ test('restart: jogo inteiro perdido sai como start + end', () => {
   const r = diff({ lastEventId: 0, gameMessages: {} }, snap({ games: [jogo(50, 't1', 't2')] }));
   assert.deepEqual(tipos(r), ['gameStart:50', 'gameEnd:50']);
 });
+
+const { gameMessagesIniciais, inicioDoLog } = require('../src/matchlive/diff');
+
+test('gameMessagesIniciais sem limite: nenhum jogo vira done:', () => {
+  assert.deepEqual(gameMessagesIniciais([jogo(50, 't1', 't2'), jogo(51, 't3')]), {});
+});
+
+test('gameMessagesIniciais com limite: só os últimos mapas, o aberto conta', () => {
+  const games = [jogo(50, 't1', 't2'), jogo(51, 't3'), jogo(52, 't4', 't5'), jogo(53, 't6')];
+  assert.deepEqual(gameMessagesIniciais(games, 2), { 50: 'done:', 51: 'done:' });
+  assert.deepEqual(gameMessagesIniciais(games.slice(0, 3), 2), { 50: 'done:' });
+  assert.deepEqual(gameMessagesIniciais(games, 0), { 50: 'done:', 51: 'done:', 52: 'done:', 53: 'done:' });
+});
+
+test('inicioDoLog: o evento logável logo antes das últimas N entradas, ou 0', () => {
+  const evs = [ev(1, 'create'), ev(2, 'join'), ev(3, 'game'), ev(4, 'join'), ev(5, 'host'), ev(6, 'leave')];
+  assert.equal(inicioDoLog(evs, 2), 4);
+  assert.equal(inicioDoLog(evs, 4), 0);
+  assert.equal(inicioDoLog(evs, 3), 2);
+});

@@ -13,7 +13,9 @@
  * próximo log abre mensagem nova) e o backoff de cada partida.
  *
  * Dependências injetadas para o teste rodar sem Discord nem banco; `_fontes`
- * existe só para o teste trocar a fonte depois de criado.
+ * existe só para o teste trocar a fonte depois de criado. `infoDoMapa` (capa e
+ * duração, da API do osu!) e `rotuloDaGrade` (emote da grade) também chegam de
+ * fora: quem sabe falar com a API e com os emojis é o comando.
  */
 
 const { logError } = require('../lib/logger');
@@ -29,7 +31,16 @@ const BACKOFF_MAX_MS = 60000;
 const CANAL_PERDIDO = new Set([10003, 50001, 50013]);
 const MENSAGEM_SUMIU = 10008;
 
-function criarPoller({ client, db, fontes, render, strings, siteUrl, agora = Date.now, intervaloMs = INTERVALO_MS }) {
+const semInfo = async () => null;
+
+// O match cost de um mapa do histórico é a parcial até ele, e não a da partida
+// inteira (no ao vivo dá no mesmo: os terminados são os de até agora).
+const ateEste = (terminados, game) => terminados.filter(g => g.endedAt <= game.endedAt);
+
+function criarPoller({
+  client, db, fontes, render, strings, siteUrl, infoDoMapa = semInfo, rotuloDaGrade,
+  agora = Date.now, intervaloMs = INTERVALO_MS,
+}) {
   const falhas = new Map();        // `${server}|${matchId}` → { desde, backoff, proxima, avisou }
   const linhasDoLog = new Map();   // logMessageId → string[]
   let timer = null;
@@ -44,6 +55,7 @@ function criarPoller({ client, db, fontes, render, strings, siteUrl, agora = Dat
   async function postar(canal, payload) { return canal.send(payload); }
 
   async function editarOuPostar(canal, msgId, payload) {
+    if (!msgId) return (await postar(canal, payload)).id;
     try {
       await canal.messages.edit(msgId, payload);
       return msgId;
@@ -51,6 +63,13 @@ function criarPoller({ client, db, fontes, render, strings, siteUrl, agora = Dat
       if (err?.code !== MENSAGEM_SUMIU) throw err;
       return (await postar(canal, payload)).id;
     }
+  }
+
+  // Capa e duração do mapa. Sem elas o embed sai do mesmo jeito: uma falha da
+  // API do osu! nunca derruba o tick.
+  async function mapaDe(game) {
+    try { return (await infoDoMapa(game.mapId)) ?? null; }
+    catch (err) { logError('matchlive:mapa', err); return null; }
   }
 
   // O estado é salvo a cada ação que deu certo (no finally), e não só no fim:
@@ -96,15 +115,22 @@ function criarPoller({ client, db, fontes, render, strings, siteUrl, agora = Dat
       // Só avança o cursor de eventos depois que as linhas foram de fato postadas.
       estado.lastEventId = novoLastEventId;
 
+      // Jogo que começou e já acabou no mesmo tick (histórico do track novo,
+      // restart): sai direto com o embed final, sem o "em andamento" antes.
+      const fechadosNoTick = new Set(acoes.filter(a => a.tipo === 'gameEnd' || a.tipo === 'gameAbort').map(a => a.game.id));
+
       for (const acao of acoes) {
         if (acao.tipo === 'gameStart') {
-          const m = await postar(canal, { embeds: [render.embedJogoInicio(acao.game, snap.match, s)] });
+          if (fechadosNoTick.has(acao.game.id)) continue;
+          const mapa = await mapaDe(acao.game);
+          const m = await postar(canal, { embeds: [render.embedJogoInicio(acao.game, snap.match, s, { mapa })] });
           estado.gameMessages[acao.game.id] = m.id;
           estado.lastActivityAt = agora();
         } else if (acao.tipo === 'gameEnd' || acao.tipo === 'gameAbort') {
+          const mapa = await mapaDe(acao.game);
           const embed = acao.tipo === 'gameEnd'
-            ? render.embedJogoFim(acao.game, snap.match, jogosTerminados, s)
-            : render.embedJogoAbortado(acao.game, snap.match, s);
+            ? render.embedJogoFim(acao.game, snap.match, ateEste(jogosTerminados, acao.game), s, { mapa, rotuloDaGrade })
+            : render.embedJogoAbortado(acao.game, snap.match, s, { mapa });
           const id = await editarOuPostar(canal, estado.gameMessages[acao.game.id], { embeds: [embed] });
           estado.gameMessages[acao.game.id] = `done:${id}`;
           estado.lastActivityAt = agora();

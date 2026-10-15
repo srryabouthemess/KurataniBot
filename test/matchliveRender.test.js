@@ -73,7 +73,7 @@ test('linhas no formato do Bathbot: colunas alinhadas, miss só quando > 0', () 
   const e = r.embedJogoFim(g, partida, [g], s, { rotuloDaGrade: x => `<${x}>` });
   const linhas = e.description.split('\n').filter(l => l.startsWith('<'));
   assert.equal(linhas[0], '<XH> `Beatriz` `+HDDT` `  100%` `100x` `1,234,567`');
-  assert.match(linhas[1], /^<A> `Ana    ` `\+NM  ` `   98%` `  5x` `  500,000` 2❌$/);
+  assert.match(linhas[1], /^<A> `Ana {4}` `\+NM {2}` ` {3}98%` ` {2}5x` ` {2}500,000` 2❌$/);
 });
 
 test('team-vs agrupa por time com total, rodapé com vencedor e match cost', () => {

@@ -18,7 +18,7 @@ let banco = {};
 const mysql2 = require('mysql2/promise');
 mysql2.createPool = () => ({
   async execute(sql, params) {
-    if (sql.includes('MAX(`id`)')) banco.aoLerUltimoEvento?.();
+    if (sql.includes('FROM `dc_match_games`')) banco.aoLerJogos?.();
     if (sql.includes('MAX(`id`)')) return [[{ n: banco.eventos.length ? Math.max(...banco.eventos.map(e => e.id)) : null }]];
     if (sql.includes("`type` = 'join'")) return [banco.joins.filter(j => j.match_id === params[0] && j.user_id === params[1])];
     if (sql.includes('FROM `dc_matches`')) return [banco.partidas.filter(p => p.id === params[0])];
@@ -99,12 +99,12 @@ test('privada sem join: não encontrada', async () => {
   assert.equal(db.countTracks(), 0);
 });
 
-test('track grava com lastEventId atual e untrack remove', async () => {
+test('track grava o início do log e untrack remove', async () => {
   const a = interacao({ sub: 'track', match: 'https://daycore.test/matches/9' });
   await matchlive.execute(a.i);
   assert.match(texto(a.respostas.at(-1)), /Acompanhando a partida `9` \(\*\*sala\*\*\)/);
   const tr = db.getTrack(CANAL, 'daycore', 9);
-  assert.equal(tr.lastEventId, 5);
+  assert.equal(tr.lastEventId, 0);
   assert.equal(tr.trackedBy, 'u1');
   assert.equal(tr.guildId, 'g1');
 
@@ -138,7 +138,7 @@ test('fora de servidor: só em canal de guild', async () => {
 });
 
 test('outro track gravado durante as consultas: limite conferido de novo antes de gravar', async () => {
-  banco.aoLerUltimoEvento = () => {
+  banco.aoLerJogos = () => {
     for (const matchId of [1, 2, 3]) {
       db.addTrack({ channelId: CANAL, guildId: 'g1', server: 'daycore', matchId, lastEventId: 0, trackedBy: 'u2' });
     }
@@ -171,13 +171,49 @@ test('privada com join de quem chamou: acompanha', async () => {
   assert.ok(db.getTrack(CANAL, 'daycore', 9));
 });
 
-test('track numa partida em andamento: jogos antigos entram como done:, o aberto fica sem chave', async () => {
-  const jg = (id, min, fim) => ({ id, map_id: 1, map_name: 'm', mode: 0, mods: 0, freemods: 0, team_type: 0,
-    started_at: new Date(Date.UTC(2026, 0, 1, 0, min)), ended_at: fim == null ? null : new Date(Date.UTC(2026, 0, 1, 0, fim)) });
+const jg = (id, min, fim) => ({ id, map_id: 1, map_name: 'm', mode: 0, mods: 0, freemods: 0, team_type: 0,
+  started_at: new Date(Date.UTC(2026, 0, 1, 0, min)), ended_at: fim == null ? null : new Date(Date.UTC(2026, 0, 1, 0, fim)) });
+
+test('track numa partida em andamento: todo o histórico cabe, nada vira done:', async () => {
   banco.jogos = [jg(1, 0, 3), jg(2, 5, 8), jg(3, 10, null)];
-  const { i } = interacao({ sub: 'track', match: 'https://daycore.test/matches/9' });
+  const { i, respostas } = interacao({ sub: 'track', match: 'https://daycore.test/matches/9' });
   await matchlive.execute(i);
-  assert.deepEqual(db.getTrack(CANAL, 'daycore', 9).gameMessages, { 1: 'done:', 2: 'done:' });
+  assert.deepEqual(db.getTrack(CANAL, 'daycore', 9).gameMessages, {});
+  assert.doesNotMatch(texto(respostas.at(-1)), /ficaram de fora/);
+});
+
+test('histórico longo: log conta 1, mapas mais antigos viram done: e a resposta avisa', async () => {
+  banco.jogos = Array.from({ length: 12 }, (_, k) => jg(k + 1, k * 5, k * 5 + 3));
+  banco.eventos = Array.from({ length: 20 }, (_, k) => ({ id: k + 1, type: 'join', user_id: 3, name: 'Alice', game_id: null, created_at: new Date() }));
+  const { i, respostas } = interacao({ sub: 'track', match: 'https://daycore.test/matches/9' });
+  await matchlive.execute(i);
+  const tr = db.getTrack(CANAL, 'daycore', 9);
+  // 20 entradas, só as últimas 15 (ids 6..20) entram: começa depois do 5.
+  assert.equal(tr.lastEventId, 5);
+  // 10 mensagens: 1 de log + 9 mapas; os 3 primeiros ficam de fora.
+  assert.deepEqual(tr.gameMessages, { 1: 'done:', 2: 'done:', 3: 'done:' });
+  assert.match(texto(respostas.at(-1)), /3 mapa\(s\) mais antigo\(s\) ficaram de fora/);
+});
+
+test('untrack sem id: para a única partida do canal', async () => {
+  db.addTrack({ channelId: CANAL, guildId: 'g1', server: 'daycore', matchId: 9, lastEventId: 0, trackedBy: 'u1' });
+  const { i, respostas } = interacao({ sub: 'untrack' });
+  await matchlive.execute(i);
+  assert.match(texto(respostas[0]), /Parei de acompanhar a partida `9`/);
+  assert.equal(db.countTracks(), 0);
+});
+
+test('untrack sem id com zero ou duas partidas: pede o id', async () => {
+  const a = interacao({ sub: 'untrack' });
+  await matchlive.execute(a.i);
+  assert.match(texto(a.respostas[0]), /opção `match`/);
+  for (const matchId of [1, 2]) {
+    db.addTrack({ channelId: CANAL, guildId: 'g1', server: 'daycore', matchId, lastEventId: 0, trackedBy: 'u1' });
+  }
+  const b = interacao({ sub: 'untrack' });
+  await matchlive.execute(b.i);
+  assert.match(texto(b.respostas[0]), /opção `match`/);
+  assert.equal(db.countTracks(), 2);
 });
 
 test('untrack funciona sem o MySQL configurado', async () => {

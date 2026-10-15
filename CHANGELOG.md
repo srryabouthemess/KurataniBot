@@ -26,6 +26,14 @@
 - **`logic.js` do `/matchcost` mudou para `src/multiplayer/`.** [`multiplayer/logic.js`](src/multiplayer/logic.js)
   - As constantes e a consulta de join foram junto, compartilhadas com o
     `/matchlive`.
+- **`/matchlive` mais perto do Bathbot.** [`matchlive/`](src/matchlive/)
+  - Ao começar, posta o histórico: até 10 mensagens (o log com as últimas 15
+    entradas e os últimos mapas); se cortar mapas antigos, a resposta avisa.
+    Mapa que já terminou sai direto com o resultado, num post só.
+  - Linha do jogador com emote da grade, colunas alinhadas e miss só quando há;
+    team-vs agrupado por time com total, e o vencedor no rodapé junto do match cost.
+  - Capa do mapset no embed do mapa e duração no "em andamento".
+  - `/matchlive untrack` sem `match` para a única partida do canal.
 
 ---
 

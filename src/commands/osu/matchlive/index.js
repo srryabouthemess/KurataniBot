@@ -27,19 +27,56 @@ const { exigirSubcomando } = require('../../../subcommands');
 const { parseMatchInput, podeVerPartida } = require('../../../multiplayer/logic');
 const { jogouNela } = require('../../../multiplayer/daycore');
 const matchlive = require('../../../matchlive');
+const osu = require('../../../osuClient');
+const emojis = require('../../../emojis');
 
-function opcaoMatch(sub) {
+function opcaoMatch(sub, obrigatoria = true) {
   return sub.addStringOption(option =>
     option
       .setName('match')
       .setDescription('Match link or id')
       .setDescriptionLocalizations({ 'pt-BR': 'Link ou id da partida' })
-      .setRequired(true)
+      .setRequired(obrigatoria)
       .setMaxLength(200)
   );
 }
 
 const efemero = content => ({ content, flags: MessageFlags.Ephemeral });
+
+/** Capa e duração do mapa pela API do osu!; null em mapa custom/desconhecido. */
+async function infoDoMapa(mapId) {
+  const bm = await osu.getBeatmap(mapId);
+  if (!bm) return null;
+  return {
+    setId: bm.beatmapset_id ?? bm.beatmapset?.id ?? null,
+    segundos: Number.isFinite(bm.total_length) ? bm.total_length : null,
+  };
+}
+
+/**
+ * `/matchlive untrack` sem `match`: para a única partida do canal. Com zero ou
+ * mais de uma, pede o id.
+ */
+function untrackSemId(interaction, s) {
+  const tracks = db.listTracksByChannel(interaction.channelId);
+  if (tracks.length !== 1) return interaction.reply(efemero(s.matchlive_untrack_need_id));
+  const [tr] = tracks;
+  db.removeTrack(tr.channelId, tr.server, tr.matchId);
+  return interaction.reply(efemero(s.matchlive_untracked(tr.matchId)));
+}
+
+/**
+ * O estado inicial com o histórico, como o Bathbot ao começar: até
+ * LIMITE_HISTORICO mensagens, uma delas o log do passado (as últimas
+ * MAX_LINHAS_LOG entradas) e o resto os últimos mapas. `cortados` é quantos
+ * mapas mais antigos ficaram de fora.
+ */
+function historicoInicial(snap) {
+  const lastEventId = matchlive.inicioDoLog(snap.events, matchlive.MAX_LINHAS_LOG);
+  const temLog = snap.events.some(e => e.id > lastEventId && matchlive.LOGAVEIS.has(e.type));
+  const gameMessages = matchlive.gameMessagesIniciais(snap.games, matchlive.LIMITE_HISTORICO - (temLog ? 1 : 0));
+  return { lastEventId, gameMessages, cortados: Object.keys(gameMessages).length };
+}
 
 function listar(interaction, s) {
   const tracks = db.listTracksByChannel(interaction.channelId);
@@ -113,15 +150,18 @@ module.exports = {
     .addSubcommand(sub => opcaoMatch(sub
       .setName('untrack')
       .setDescription('Stop following a match in this channel')
-      .setDescriptionLocalizations({ 'pt-BR': 'Para de acompanhar uma partida neste canal' })))
+      .setDescriptionLocalizations({ 'pt-BR': 'Para de acompanhar uma partida neste canal' }), false))
     .addSubcommand(sub => sub
       .setName('list')
       .setDescription('Matches followed in this channel')
       .setDescriptionLocalizations({ 'pt-BR': 'Partidas acompanhadas neste canal' })),
 
-  /** Liga o poller no boot (chamado pelo index.js no `clientReady`). */
+  /**
+   * Liga o poller no boot (chamado pelo index.js no `clientReady`). A API do
+   * osu! e os emojis entram daqui porque src/matchlive/ não fala com eles.
+   */
   iniciar(client) {
-    matchlive.iniciar(client, guildId => forGuild(guildId));
+    matchlive.iniciar(client, guildId => forGuild(guildId), { infoDoMapa, rotuloDaGrade: emojis.rankLabel });
   },
 
   async execute(interaction) {
@@ -139,7 +179,10 @@ module.exports = {
       return interaction.reply(efemero(s.matchlive_no_permission));
     }
 
-    const alvo = parseMatchInput(interaction.options.getString('match'), servers.all().filter(x => !x.relax));
+    const entrada = interaction.options.getString('match');
+    if (sub === 'untrack' && !entrada) return untrackSemId(interaction, s);
+
+    const alvo = parseMatchInput(entrada, servers.all().filter(x => !x.relax));
     if (!alvo) return interaction.reply(efemero(s.matchlive_bad_input));
 
     // Link manda; id sozinho vai para o servidor preferido, como no /matchcost.
@@ -171,12 +214,10 @@ module.exports = {
       if (!snap) return;
       const partida = snap.match;
 
-      // Começa do último evento: o histórico de antes do track não é repostado.
-      // Os jogos já terminados ou superados entram como `done:`; só o jogo
-      // aberto mais recente fica sem chave e aparece no primeiro tick.
-      const lastEventId = await fonte.lastEventIdOf(id);
+      // O primeiro tick posta o histórico (ver historicoInicial).
+      const { lastEventId, gameMessages, cortados } = historicoInicial(snap);
 
-      // De novo, depois do último await: outro /matchlive track pode ter
+      // De novo, depois dos awaits: outro /matchlive track pode ter
       // gravado enquanto este esperava o MySQL. O SQLite é síncrono, então
       // entre esta conferência e o INSERT nada mais roda.
       const recusa = motivoDeRecusa(s, channelId, key, id);
@@ -189,9 +230,11 @@ module.exports = {
         matchId: id,
         lastEventId,
         trackedBy: interaction.user.id,
-        gameMessages: matchlive.gameMessagesIniciais(snap.games),
+        gameMessages,
       });
-      return interaction.editReply(s.matchlive_tracking(id, partida.name));
+      const resposta = s.matchlive_tracking(id, partida.name);
+      return interaction.editReply(cortados ? `${resposta}
+${s.matchlive_history_truncated(cortados)}` : resposta);
     } catch (error) {
       logError('matchlive', error);
       return safeEditReply(interaction, s.error_generic);
