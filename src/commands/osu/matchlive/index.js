@@ -51,6 +51,16 @@ function listar(interaction, s) {
   return interaction.reply(efemero(`**${s.matchlive_list_title}**\n${linhas.join('\n')}`));
 }
 
+/** Já acompanhada ou acima de um limite: a mensagem de recusa; senão null. */
+function motivoDeRecusa(s, channelId, key, id) {
+  if (db.getTrack(channelId, key, id)) return s.matchlive_already(id);
+  if (db.listTracksByChannel(channelId).length >= matchlive.LIMITE_POR_CANAL) {
+    return s.matchlive_channel_full(matchlive.LIMITE_POR_CANAL);
+  }
+  if (db.countTracks() >= matchlive.LIMITE_GLOBAL) return s.matchlive_global_full;
+  return null;
+}
+
 /** O track pode começar? Responde o erro e devolve null; senão, a partida. */
 async function partidaVisivel(interaction, s, fonte, key, id, label) {
   const check = await daycoreMysql.checkConnection();
@@ -149,11 +159,8 @@ module.exports = {
       return interaction.reply(efemero(removido ? s.matchlive_untracked(id) : s.matchlive_not_tracked(id)));
     }
 
-    if (db.getTrack(channelId, key, id)) return interaction.reply(efemero(s.matchlive_already(id)));
-    if (db.listTracksByChannel(channelId).length >= matchlive.LIMITE_POR_CANAL) {
-      return interaction.reply(efemero(s.matchlive_channel_full(matchlive.LIMITE_POR_CANAL)));
-    }
-    if (db.countTracks() >= matchlive.LIMITE_GLOBAL) return interaction.reply(efemero(s.matchlive_global_full));
+    const recusa = motivoDeRecusa(s, channelId, key, id);
+    if (recusa) return interaction.reply(efemero(recusa));
 
     await interaction.deferReply();
 
@@ -163,12 +170,20 @@ module.exports = {
 
       // Começa do último evento: o histórico de antes do track não é repostado.
       // Jogo já em andamento aparece no primeiro tick (o diff vê gameMessages vazio).
+      const lastEventId = await fonte.lastEventIdOf(id);
+
+      // De novo, depois do último await: outro /matchlive track pode ter
+      // gravado enquanto este esperava o MySQL. O SQLite é síncrono, então
+      // entre esta conferência e o INSERT nada mais roda.
+      const recusa = motivoDeRecusa(s, channelId, key, id);
+      if (recusa) return interaction.editReply(recusa);
+
       db.addTrack({
         channelId,
         guildId: interaction.guildId,
         server: key,
         matchId: id,
-        lastEventId: await fonte.lastEventIdOf(id),
+        lastEventId,
         trackedBy: interaction.user.id,
       });
       return interaction.editReply(s.matchlive_tracking(id, partida.name));

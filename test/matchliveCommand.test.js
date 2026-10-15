@@ -18,6 +18,7 @@ let banco = {};
 const mysql2 = require('mysql2/promise');
 mysql2.createPool = () => ({
   async execute(sql, params) {
+    if (sql.includes('MAX(`id`)')) banco.aoLerUltimoEvento?.();
     if (sql.includes('MAX(`id`)')) return [[{ n: banco.eventos.length ? Math.max(...banco.eventos.map(e => e.id)) : null }]];
     if (sql.includes("`type` = 'join'")) return [banco.joins.filter(j => j.match_id === params[0] && j.user_id === params[1])];
     if (sql.includes('FROM `dc_matches`')) return [banco.partidas.filter(p => p.id === params[0])];
@@ -133,4 +134,38 @@ test('fora de servidor: só em canal de guild', async () => {
   const { i, respostas } = interacao({ sub: 'list', guildId: null });
   await matchlive.execute(i);
   assert.match(texto(respostas[0]), /só funciona em canais de servidor/);
+});
+
+test('outro track gravado durante as consultas: limite conferido de novo antes de gravar', async () => {
+  banco.aoLerUltimoEvento = () => {
+    for (const matchId of [1, 2, 3]) {
+      db.addTrack({ channelId: CANAL, guildId: 'g1', server: 'daycore', matchId, lastEventId: 0, trackedBy: 'u2' });
+    }
+  };
+  const { i, respostas } = interacao({ sub: 'track', match: 'https://daycore.test/matches/9' });
+  await matchlive.execute(i);
+  assert.equal(i.deferred, true);
+  assert.match(texto(respostas.at(-1)), /já acompanha 3 partidas/);
+  assert.equal(db.getTrack(CANAL, 'daycore', 9), null);
+  assert.equal(db.countTracks(), 3);
+});
+
+test('limite global', async () => {
+  for (let matchId = 100; matchId < 120; matchId++) {
+    db.addTrack({ channelId: `outro${matchId}`, guildId: 'g2', server: 'daycore', matchId, lastEventId: 0, trackedBy: 'u2' });
+  }
+  const { i, respostas } = interacao({ sub: 'track', match: 'https://daycore.test/matches/9' });
+  await matchlive.execute(i);
+  assert.match(texto(respostas[0]), /limite de partidas acompanhadas/);
+  assert.equal(db.getTrack(CANAL, 'daycore', 9), null);
+});
+
+test('privada com join de quem chamou: acompanha', async () => {
+  banco.partidas[0].private = 1;
+  banco.joins = [{ match_id: 9, user_id: 3 }];
+  db.setLink('u1', 'daycore', 'Alice', 3);
+  const { i, respostas } = interacao({ sub: 'track', match: 'https://daycore.test/matches/9' });
+  await matchlive.execute(i);
+  assert.match(texto(respostas.at(-1)), /Acompanhando a partida `9`/);
+  assert.ok(db.getTrack(CANAL, 'daycore', 9));
 });
