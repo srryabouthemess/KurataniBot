@@ -140,7 +140,7 @@ module.exports = {
       if (!servers.isOfficial(mode)) {
         const realOnes    = previewList.filter(p => !p._hypothetical);
         const enrichedMap = new Map(
-          (await osu.enrichScores(realOnes)).map((p, i) => [realOnes[i], p])
+          (await osu.enrichScores(realOnes, mode)).map((p, i) => [realOnes[i], p])
         );
         previewList = previewList.map(p => p._hypothetical ? p : (enrichedMap.get(p) ?? p));
       }

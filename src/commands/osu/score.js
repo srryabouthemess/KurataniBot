@@ -103,13 +103,17 @@ module.exports = {
       // sabe ler, e evita um segundo caminho de leitura de metadados só para o
       // cabeçalho desta tela. Sem mods, porque aqui o mapa é o mapa — cada
       // score da lista mostra os seus.
+      // Mapa custom não existe na API oficial: aí o mapa vem do primeiro score,
+      // que o adaptador já completou com o mapa do servidor (mergeServerMap).
+      const doScore = beatmap ? null : scores[0];
       const mapaComoPlay = {
-        beatmap:    { ...(beatmap ?? {}), id: beatmapId },
-        beatmapset: beatmap?.beatmapset ?? scores[0]?.beatmapset ?? {},
+        beatmap:    { ...(beatmap ?? doScore?.beatmap ?? {}), id: beatmapId },
+        beatmapset: beatmap?.beatmapset ?? doScore?.beatmapset ?? {},
         mods:       [],
       };
 
-      const mapTitle = beatmap ? playEmbed.mapTitle(mapaComoPlay) : `\`${beatmapId}\``;
+      const temTitulo = beatmap || doScore?.beatmapset?.title;
+      const mapTitle = temTitulo ? playEmbed.mapTitle(mapaComoPlay) : `\`${beatmapId}\``;
 
       if (scores.length === 0) {
         // Lembra o mapa mesmo sem score: quem veio pelo link continua no
