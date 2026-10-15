@@ -40,14 +40,24 @@ function embedLog(linhas, partida, s) {
   return { color: COR_LOG, title: s.matchlive_log_title(partida.name), description: linhas.join('\n') };
 }
 
-function cabecalho(game, partida, cor, description) {
-  return {
+const capa = setId => `https://assets.ppy.sh/beatmaps/${setId}/covers/cover.jpg`;
+const minSeg = seg => `${Math.floor(seg / 60)}:${String(Math.floor(seg % 60)).padStart(2, '0')}`;
+const gradeEmTexto = g => `**${g}**`;
+
+/**
+ * `mapa` é o que o poller resolveu pelo `infoDoMapa` injetado ({setId, segundos}
+ * ou null): a capa do mapset vira a imagem do embed, como no Bathbot.
+ */
+function cabecalho(game, partida, cor, description, mapa) {
+  const e = {
     color: cor,
     author: { name: partida.name },
     title: game.mapName,
     url: mapaUrl(game.mapId),
     description,
   };
+  if (mapa?.setId) e.image = { url: capa(mapa.setId) };
+  return e;
 }
 
 function infoDoJogo(game, s) {
@@ -55,28 +65,96 @@ function infoDoJogo(game, s) {
   return `**${s.matchlive_game_mods}:** ${mods} · **${s.matchlive_game_team_type}:** ${game.teamType}`;
 }
 
-function embedJogoInicio(game, partida, s) {
-  return cabecalho(game, partida, COR_ANDAMENTO, `${s.matchlive_game_playing}\n${infoDoJogo(game, s)}`);
+function embedJogoInicio(game, partida, s, { mapa = null } = {}) {
+  const linhas = [s.matchlive_game_playing, infoDoJogo(game, s)];
+  if (Number.isFinite(mapa?.segundos)) linhas.push(`**${s.matchlive_game_length}:** \`${minSeg(mapa.segundos)}\``);
+  return cabecalho(game, partida, COR_ANDAMENTO, linhas.join('\n'), mapa);
 }
 
-function embedJogoAbortado(game, partida, s) {
-  return cabecalho(game, partida, COR_ABORTADO, `${s.matchlive_game_aborted}\n${infoDoJogo(game, s)}`);
+function embedJogoAbortado(game, partida, s, { mapa = null } = {}) {
+  return cabecalho(game, partida, COR_ABORTADO, `${s.matchlive_game_aborted}\n${infoDoJogo(game, s)}`, mapa);
 }
 
-function linhaDoScore(sc, i) {
-  return `**${i + 1}.** ${nome(sc.username, sc.userId)} ${modsTxt(sc.mods)} — **${fmt(sc.score)}** · ` +
-    `${acuracia(sc).toFixed(2)}% · ${sc.maxCombo}x · ${sc.nmiss}❌${sc.passed ? '' : ' (F)'}`;
+/**
+ * A grade legada do osu! std a partir dos hits (a regra clássica do stable).
+ * Não passou = F; outros modos ficam sem grade (null), porque cada um tem a
+ * sua regra e a linha anda bem sem ela.
+ */
+function grade({ n300, n100, n50, nmiss, passed }, mods = [], mode = 0) {
+  if (mode !== 0) return null;
+  if (!passed) return 'F';
+  const total = n300 + n100 + n50 + nmiss;
+  if (!total) return 'D';
+  const prata = mods.includes('HD') || mods.includes('FL');
+  const r300 = n300 / total;
+  const r50 = n50 / total;
+  if (n300 === total) return prata ? 'XH' : 'X';
+  if (r300 > 0.9 && r50 <= 0.01 && nmiss === 0) return prata ? 'SH' : 'S';
+  if ((r300 > 0.8 && nmiss === 0) || r300 > 0.9) return 'A';
+  if ((r300 > 0.7 && nmiss === 0) || r300 > 0.8) return 'B';
+  if (r300 > 0.6) return 'C';
+  return 'D';
 }
 
-function placarDeTimes(game, s) {
-  if (game.teamType !== 'team-vs' && game.teamType !== 'tag-team-vs') return null;
+const TIMES_VS = new Set(['team-vs', 'tag-team-vs']);
+
+/**
+ * As linhas dos jogadores como as do Bathbot (embeds/osu/match_live.rs):
+ * colunas de nome, mods, combo e score com a largura do maior valor (o
+ * ColumnSizes de lá), acc em 5 posições e miss só quando há (MissFormat).
+ */
+function linhasDosScores(scores, game, rotuloDaGrade) {
+  const itens = scores.map(sc => ({
+    sc,
+    nome: String(nome(sc.username, sc.userId)),
+    mods: sc.mods.length ? sc.mods.join('') : 'NM',
+    combo: fmt(sc.maxCombo),
+    score: fmt(sc.score),
+  }));
+  const larg = campo => Math.max(0, ...itens.map(x => x[campo].length));
+  const w = { nome: larg('nome'), mods: larg('mods'), combo: larg('combo'), score: larg('score') };
+
+  const linhas = new Map();
+  for (const x of itens) {
+    const g = grade(x.sc, [...new Set([...x.sc.mods, ...game.mods])], game.mode);
+    const acc = String(Math.round(acuracia(x.sc) * 100) / 100).padStart(5);
+    const miss = x.sc.nmiss > 0 ? ` ${x.sc.nmiss}❌` : '';
+    linhas.set(x.sc, `${g ? `${rotuloDaGrade(g)} ` : ''}\`${x.nome.padEnd(w.nome)}\` \`+${x.mods.padEnd(w.mods)}\` ` +
+      `\`${acc}%\` \`${x.combo.padStart(w.combo)}x\` \`${x.score.padStart(w.score)}\`${miss}`);
+  }
+  return linhas;
+}
+
+/**
+ * O corpo do resultado. Team-vs agrupa como o `team!` do Bathbot: o time de
+ * maior soma primeiro, cada um com cabeçalho e total; H2H é só a lista por
+ * score. Devolve também a frase do vencedor, que vai para o rodapé.
+ */
+function corpoDoResultado(game, s, rotuloDaGrade) {
+  const ordenados = [...game.scores].sort((a, b) => b.score - a.score);
+  const linhas = linhasDosScores(ordenados, game, rotuloDaGrade);
+  if (!TIMES_VS.has(game.teamType)) return { corpo: ordenados.map(x => linhas.get(x)), vencedor: null };
+
   const soma = time => game.scores.filter(x => x.team === time).reduce((a, x) => a + x.score, 0);
-  const azul = soma('blue');
-  const vermelho = soma('red');
-  if (azul === vermelho) return null;
-  return azul > vermelho
-    ? s.matchlive_team_wins(s.matchlive_team_blue, fmt(azul), fmt(vermelho))
-    : s.matchlive_team_wins(s.matchlive_team_red, fmt(vermelho), fmt(azul));
+  const times = [
+    { time: 'blue', total: soma('blue'), emoji: ':blue_circle:', rotulo: s.matchlive_team_blue },
+    { time: 'red', total: soma('red'), emoji: ':red_circle:', rotulo: s.matchlive_team_red },
+  ].sort((a, b) => b.total - a.total);
+
+  const corpo = [];
+  for (const t of times) {
+    const doTime = ordenados.filter(x => x.team === t.time);
+    if (!doTime.length) continue;
+    if (corpo.length) corpo.push('');
+    corpo.push(`${t.emoji} **${t.rotulo}** ${t.emoji} | ${fmt(t.total)}`, ...doTime.map(x => linhas.get(x)));
+  }
+  const semTime = ordenados.filter(x => x.team !== 'blue' && x.team !== 'red');
+  if (semTime.length) corpo.push('', ...semTime.map(x => linhas.get(x)));
+
+  if (!game.scores.length) return { corpo, vencedor: null };
+  const [a, b] = times;
+  const vencedor = a.total === b.total ? s.matchlive_team_tied : s.matchlive_team_wins_by(a.rotulo, fmt(a.total - b.total));
+  return { corpo, vencedor };
 }
 
 /** Os jogadores do resultado do calcularMatchCost, qualquer que seja o `tipo`. */
@@ -103,13 +181,11 @@ function rodapeDeCusto(partida, jogosTerminados, s) {
   return s.matchlive_cost_footer(top.map(j => `${j.username ?? j.userId} ${j.matchCost.toFixed(2)}`).join(' · '));
 }
 
-function embedJogoFim(game, partida, jogosTerminados, s) {
-  const ordenados = [...game.scores].sort((a, b) => b.score - a.score);
-  const linhas = [infoDoJogo(game, s), '', ...ordenados.map(linhaDoScore)];
-  const times = placarDeTimes(game, s);
-  if (times) linhas.push('', times);
-  const e = cabecalho(game, partida, COR_FIM, linhas.join('\n'));
-  const rodape = rodapeDeCusto(partida, jogosTerminados, s);
+function embedJogoFim(game, partida, jogosTerminados, s, { mapa = null, rotuloDaGrade = gradeEmTexto } = {}) {
+  const { corpo, vencedor } = corpoDoResultado(game, s, rotuloDaGrade);
+  const e = cabecalho(game, partida, COR_FIM, [infoDoJogo(game, s), '', ...corpo].join('\n'), mapa);
+  // Vencedor e match cost dividem o rodapé, um depois do outro.
+  const rodape = [vencedor, rodapeDeCusto(partida, jogosTerminados, s)].filter(Boolean).join(' • ');
   if (rodape) e.footer = { text: rodape };
   return e;
 }
@@ -120,4 +196,4 @@ function embedFim(partida, siteUrl, s) {
   return e;
 }
 
-module.exports = { acuracia, linhaDeLog, embedLog, embedJogoInicio, embedJogoAbortado, embedJogoFim, embedFim };
+module.exports = { acuracia, grade, linhaDeLog, embedLog, embedJogoInicio, embedJogoAbortado, embedJogoFim, embedFim };
