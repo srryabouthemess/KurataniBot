@@ -2713,7 +2713,7 @@ aviso de copyright de cada projeto no respectivo repositório.
 A fórmula do **`/matchcost`** é um porte do `match_costs.rs` do Bathbot
 (`bathbot/src/commands/osu/match_costs.rs`): as constantes, a ordem em que os jogos
 são filtrados, o tiebreaker, o arredondamento e o jeito de desempatar vêm de lá —
-reescritos em JavaScript em [`src/commands/osu/matchcost/logic.js`](src/commands/osu/matchcost/logic.js).
+reescritos em JavaScript em [`src/multiplayer/logic.js`](src/multiplayer/logic.js).
 O layout do embed segue a exibição compacta do mesmo bot.
 
 De Max Ohn — <https://github.com/MaxOhn/Bathbot>.

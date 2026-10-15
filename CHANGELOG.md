@@ -2,6 +2,33 @@
 
 ---
 
+# Sessão de 2026-10-15 (/matchlive)
+
+## ✨ Novidades
+
+- **`/matchlive track`, `untrack` e `list` (alias `ml`).** [`commands/osu/matchlive/index.js`](src/commands/osu/matchlive/index.js)
+  - Acompanha uma sala multiplayer ao vivo num canal: um log da sala (entradas,
+    saídas, trocas de mapa) e uma mensagem por mapa, postada no início e
+    editada no fim com o placar e o match cost.
+  - Só o **Daycore** por enquanto; o Bancho responde "em breve".
+  - `track` e `untrack` exigem **Manage Channels**. Partida privada só pode ser
+    acompanhada por quem entrou nela.
+  - Limites: 3 partidas por canal e 20 no bot.
+  - Retoma depois de reiniciar o bot (SQLite, schema v11). Sem evento novo por
+    3h, a partida para de ser acompanhada, com aviso no canal.
+  - O placar parcial ao vivo depende de um patch futuro no bancho
+    (`dc_match_live`); até lá o placar sai quando o mapa termina.
+  - O MySQL do bot precisa de SELECT em `dc_matches`, `dc_match_games`,
+    `dc_match_events`, `dc_match_scores` e `users` (o `/matchcost` já exigia).
+
+## 🔧 Mudanças
+
+- **`logic.js` do `/matchcost` mudou para `src/multiplayer/`.** [`multiplayer/logic.js`](src/multiplayer/logic.js)
+  - As constantes e a consulta de join foram junto, compartilhadas com o
+    `/matchlive`.
+
+---
+
 # Sessão de 2026-10-14 (grupos do Daycore)
 
 ## ✨ Novidades
