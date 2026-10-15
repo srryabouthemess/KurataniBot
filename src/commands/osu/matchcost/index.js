@@ -22,18 +22,10 @@ const { t } = require('../../../i18n');
 const { logError } = require('../../../lib/logger');
 const { safeEditReply } = require('../../../replies');
 const { parseMatchInput, calcularMatchCost, DEFAULTS } = require('../../../multiplayer/logic');
+const { chaveDoDaycore } = require('../../../multiplayer/daycore');
 const bancho = require('./bancho');
 const daycore = require('./daycore');
 const { montarEmbeds } = require('./embed');
-
-/**
- * O servidor cujas partidas estão no MySQL: o privado do `SERVERS` do `.env`,
- * que é o mesmo dono do DAYCORE_MYSQL_* (ver o `private` em servers.js).
- */
-function chaveDoDaycore() {
-  const key = servers.resolveKey('private');
-  return key ? servers.rootKey(key) : null;
-}
 
 /**
  * O MySQL respondeu? Depois do `deferReply`, como no /invitecode (onde o defer

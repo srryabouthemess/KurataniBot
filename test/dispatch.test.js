@@ -199,7 +199,7 @@ const ORIGEM = {
   compare: 'osu/compare', leaderboard: 'osu/leaderboard', map: 'osu/map',
   pp: 'osu/pp', profile: 'osu/profile', recent: 'osu/recent', score: 'osu/score',
   simulate: 'osu/simulate', topplays: 'osu/topplays', topscores: 'osu/topscores',
-  whatif: 'osu/whatif', matchcost: 'osu/matchcost', nochoke: 'osu/nochoke',
+  whatif: 'osu/whatif', matchcost: 'osu/matchcost', matchlive: 'osu/matchlive', nochoke: 'osu/nochoke',
   topif: 'osu/topif', help: 'user/help', language: 'user/language', link: 'user/link',
   builder: 'user/builder',
   diag: 'admin/diag', group: 'admin/group', invitecode: 'admin/invitecode', moderate: 'admin/moderate',

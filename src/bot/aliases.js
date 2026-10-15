@@ -70,4 +70,10 @@ module.exports = [
     description: 'Alias for /matchcost — performance rating of each player in a multiplayer match',
     pt:          'Atalho para /matchcost — o desempenho de cada jogador numa partida multiplayer',
   },
+  {
+    name: 'ml',
+    of:   'matchlive',
+    description: 'Alias for /matchlive — follow a multiplayer match live in this channel',
+    pt:          'Atalho para /matchlive — acompanha uma partida multiplayer ao vivo neste canal',
+  },
 ];

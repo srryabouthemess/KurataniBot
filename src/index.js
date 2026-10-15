@@ -145,6 +145,15 @@ client.once('clientReady', async () => {
     // in-game — o que passa pelo /nominate continua saindo normalmente.
     logError('daycoreEvents', error);
   }
+
+  // O /matchlive retoma sozinho as partidas que estavam sendo acompanhadas
+  // antes do restart: o estado mora no SQLite (ver matchlive/poller.js). O
+  // poller é ligado pelo próprio comando, que é quem tem o i18n.
+  try {
+    client.commands.get('matchlive')?.iniciar?.(client);
+  } catch (error) {
+    logError('matchlive', error);
+  }
 });
 
 client.on('interactionCreate', async interaction => {

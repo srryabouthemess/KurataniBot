@@ -6,6 +6,17 @@
  * o test/architecture proíbe um comando de importar de outro.
  */
 
+const servers = require('../servers');
+
+/**
+ * O servidor cujas partidas estão no MySQL: o privado do `SERVERS` do `.env`,
+ * que é o mesmo dono do DAYCORE_MYSQL_* (ver o `private` em servers.js).
+ */
+function chaveDoDaycore() {
+  const key = servers.resolveKey('private');
+  return key ? servers.rootKey(key) : null;
+}
+
 /**
  * `dc_match_scores.team`, na numeração do bancho.py (`MatchTeams`, em
  * app/objects/match.py): 0 neutro, 1 azul, 2 vermelho.
@@ -39,4 +50,4 @@ async function jogouNela(pool, matchId, quem) {
   return false;
 }
 
-module.exports = { TIMES, TIPOS_DE_TIME, jogouNela };
+module.exports = { TIMES, TIPOS_DE_TIME, jogouNela, chaveDoDaycore };

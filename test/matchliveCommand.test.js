@@ -1,0 +1,136 @@
+/**
+ * /matchlive — o comando que liga e desliga o acompanhamento ao vivo.
+ *
+ * Sem MySQL nem Discord: o `mysql2` é dublado antes do require (como em
+ * test/matchcostDaycore.test.js) e a interaction é um objeto que grava as
+ * respostas. O banco do bot é um SQLite numa pasta temporária, aberto ANTES do
+ * comando para ele pegar este banco e não outro.
+ */
+const test = require('node:test');
+const assert = require('node:assert');
+const { dbWorkspace } = require('./helpers');
+
+process.env.DAYCORE_MYSQL_HOST = '127.0.0.1';
+process.env.SERVERS = 'daycore';
+process.env.SERVER_DAYCORE_URL = 'https://daycore.test';
+
+let banco = {};
+const mysql2 = require('mysql2/promise');
+mysql2.createPool = () => ({
+  async execute(sql, params) {
+    if (sql.includes('MAX(`id`)')) return [[{ n: banco.eventos.length ? Math.max(...banco.eventos.map(e => e.id)) : null }]];
+    if (sql.includes("`type` = 'join'")) return [banco.joins.filter(j => j.match_id === params[0] && j.user_id === params[1])];
+    if (sql.includes('FROM `dc_matches`')) return [banco.partidas.filter(p => p.id === params[0])];
+    if (sql.includes('FROM `dc_match_events`')) return [banco.eventos.filter(e => e.id > params[1])];
+    if (sql.includes('FROM `dc_match_games`')) return [[]];
+    throw new Error(`SQL inesperado: ${sql}`);
+  },
+  async query() { return [[{ 1: 1 }]]; },
+  async end() {},
+});
+
+const db = dbWorkspace({ after: fn => test.after(fn) }).load();
+const matchlive = require('../src/commands/osu/matchlive');
+
+const CANAL = 'c1';
+
+function interacao({ sub, match = null, pode = true, guildId = 'g1' }) {
+  const respostas = [];
+  const i = {
+    guildId,
+    channelId: CANAL,
+    locale: 'pt-BR',
+    guildLocale: 'pt-BR',
+    user: { id: 'u1' },
+    memberPermissions: { has: () => pode },
+    options: {
+      getSubcommand: () => sub,
+      getString: nome => (nome === 'match' ? match : null),
+    },
+    deferred: false,
+    replied: false,
+    async reply(p) { i.replied = true; respostas.push(p); },
+    async deferReply() { i.deferred = true; },
+    async editReply(p) { respostas.push(p); },
+  };
+  return { i, respostas };
+}
+
+const texto = r => (typeof r === 'string' ? r : r.content);
+
+test.beforeEach(() => {
+  for (const tr of db.listTracks()) db.removeTrack(tr.channelId, tr.server, tr.matchId);
+  banco = {
+    partidas: [{ id: 9, name: 'sala', private: 0, ended_at: null }],
+    eventos: [{ id: 5, type: 'join', user_id: 3, name: 'Alice', game_id: null, created_at: new Date() }],
+    joins: [],
+  };
+});
+
+test('sem Manage Channels: recusa em efêmero', async () => {
+  const { i, respostas } = interacao({ sub: 'track', match: '9', pode: false });
+  await matchlive.execute(i);
+  assert.match(texto(respostas[0]), /Gerenciar Canais/);
+  assert.ok(respostas[0].flags);
+  assert.equal(db.countTracks(), 0);
+});
+
+test('link do Bancho: em breve', async () => {
+  const { i, respostas } = interacao({ sub: 'track', match: 'https://osu.ppy.sh/community/matches/123' });
+  await matchlive.execute(i);
+  assert.match(texto(respostas[0]), /ainda não chegou/);
+});
+
+test('partida fechada: sugere /matchcost', async () => {
+  banco.partidas[0].ended_at = new Date();
+  const { i, respostas } = interacao({ sub: 'track', match: 'https://daycore.test/matches/9' });
+  await matchlive.execute(i);
+  assert.match(texto(respostas.at(-1)), /\/matchcost 9/);
+  assert.equal(db.countTracks(), 0);
+});
+
+test('privada sem join: não encontrada', async () => {
+  banco.partidas[0].private = 1;
+  const { i, respostas } = interacao({ sub: 'track', match: 'https://daycore.test/matches/9' });
+  await matchlive.execute(i);
+  assert.match(texto(respostas.at(-1)), /Nenhuma partida com o id `9`/);
+  assert.equal(db.countTracks(), 0);
+});
+
+test('track grava com lastEventId atual e untrack remove', async () => {
+  const a = interacao({ sub: 'track', match: 'https://daycore.test/matches/9' });
+  await matchlive.execute(a.i);
+  assert.match(texto(a.respostas.at(-1)), /Acompanhando a partida `9` \(\*\*sala\*\*\)/);
+  const tr = db.getTrack(CANAL, 'daycore', 9);
+  assert.equal(tr.lastEventId, 5);
+  assert.equal(tr.trackedBy, 'u1');
+  assert.equal(tr.guildId, 'g1');
+
+  const b = interacao({ sub: 'untrack', match: '9' + '' });
+  b.i.options.getString = () => 'https://daycore.test/matches/9';
+  await matchlive.execute(b.i);
+  assert.match(texto(b.respostas[0]), /Parei de acompanhar/);
+  assert.equal(db.getTrack(CANAL, 'daycore', 9), null);
+});
+
+test('limite de 3 por canal', async () => {
+  for (const matchId of [1, 2, 3]) {
+    db.addTrack({ channelId: CANAL, guildId: 'g1', server: 'daycore', matchId, lastEventId: 0, trackedBy: 'u1' });
+  }
+  const { i, respostas } = interacao({ sub: 'track', match: 'https://daycore.test/matches/9' });
+  await matchlive.execute(i);
+  assert.match(texto(respostas[0]), /já acompanha 3 partidas/);
+  assert.equal(db.getTrack(CANAL, 'daycore', 9), null);
+});
+
+test('list em canal vazio', async () => {
+  const { i, respostas } = interacao({ sub: 'list' });
+  await matchlive.execute(i);
+  assert.match(texto(respostas[0]), /Nenhuma partida acompanhada/);
+});
+
+test('fora de servidor: só em canal de guild', async () => {
+  const { i, respostas } = interacao({ sub: 'list', guildId: null });
+  await matchlive.execute(i);
+  assert.match(texto(respostas[0]), /só funciona em canais de servidor/);
+});

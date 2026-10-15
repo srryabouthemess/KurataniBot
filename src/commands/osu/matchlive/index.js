@@ -1,0 +1,180 @@
+/**
+ * /matchlive — acompanha uma partida multiplayer ao vivo num canal.
+ *
+ * Este arquivo só decide se o track pode começar (permissão, servidor,
+ * limites, partida privada) e grava no SQLite; quem posta no canal é o poller
+ * único de src/matchlive/poller.js, ligado no boot pelo `iniciar` daqui.
+ *
+ * O `iniciar` mora no comando, e não no index.js, porque o test/architecture
+ * não deixa o i18n fora de commands/ nem o index.js importar um comando: o
+ * index.js acha este pelo Map do loadCommands.
+ *
+ * Fase 1: só o servidor com as partidas no MySQL (o Daycore). O Bancho
+ * responde "em breve" em vez de "não suportado", porque vai chegar.
+ */
+
+const {
+  SlashCommandBuilder, ApplicationIntegrationType, InteractionContextType, MessageFlags, PermissionFlagsBits,
+} = require('discord.js');
+const servers = require('../../../servers');
+const db = require('../../../db');
+const daycoreMysql = require('../../../daycoreMysql');
+const { resolveServer } = require('../../../userLink');
+const { t, forGuild } = require('../../../i18n');
+const { logError } = require('../../../lib/logger');
+const { safeEditReply } = require('../../../replies');
+const { exigirSubcomando } = require('../../../subcommands');
+const { parseMatchInput, podeVerPartida } = require('../../../multiplayer/logic');
+const { jogouNela } = require('../../../multiplayer/daycore');
+const matchlive = require('../../../matchlive');
+
+function opcaoMatch(sub) {
+  return sub.addStringOption(option =>
+    option
+      .setName('match')
+      .setDescription('Match link or id')
+      .setDescriptionLocalizations({ 'pt-BR': 'Link ou id da partida' })
+      .setRequired(true)
+      .setMaxLength(200)
+  );
+}
+
+const efemero = content => ({ content, flags: MessageFlags.Ephemeral });
+
+function listar(interaction, s) {
+  const tracks = db.listTracksByChannel(interaction.channelId);
+  if (!tracks.length) return interaction.reply(efemero(s.matchlive_list_empty));
+
+  const linhas = tracks.map(tr =>
+    `• ${servers.get(tr.server)?.label ?? tr.server} \`${tr.matchId}\` — <t:${Math.floor(tr.createdAt / 1000)}:R>`
+  );
+  return interaction.reply(efemero(`**${s.matchlive_list_title}**\n${linhas.join('\n')}`));
+}
+
+/** O track pode começar? Responde o erro e devolve null; senão, a partida. */
+async function partidaVisivel(interaction, s, fonte, key, id, label) {
+  const check = await daycoreMysql.checkConnection();
+  if (!check.ok) {
+    logError('matchlive:mysql', new Error(check.error ?? check.reason));
+    await interaction.editReply(s.matchlive_unreachable(label));
+    return null;
+  }
+
+  const snap = await fonte.snapshot(id, 0);
+  if (!snap) {
+    await interaction.editReply(s.matchlive_not_found(id));
+    return null;
+  }
+
+  if (snap.match.private) {
+    // A mesma regra do /matchcost: quem jogou nela pode ver.
+    const link = db.getLink(interaction.user.id, key);
+    const quem = link ? { id: link.osu_id, name: link.osu_user } : null;
+    const participou = await jogouNela(daycoreMysql.getPool(), id, quem);
+    if (!podeVerPartida(snap.match, participou)) {
+      await interaction.editReply(s.matchlive_not_found(id));
+      return null;
+    }
+  }
+
+  if (snap.match.endedAt) {
+    await interaction.editReply(s.matchlive_ended(id));
+    return null;
+  }
+  return snap.match;
+}
+
+module.exports = {
+  // Os erros de validação saem em efêmero antes de qualquer defer (ver
+  // bot/dispatch.js); só o track, que fala com o MySQL, adia a resposta.
+  defer: false,
+
+  data: new SlashCommandBuilder()
+    .setName('matchlive')
+    .setDescription('Follow a multiplayer match live in this channel')
+    .setDescriptionLocalizations({ 'pt-BR': 'Acompanha uma partida multiplayer ao vivo neste canal' })
+    .setIntegrationTypes([ApplicationIntegrationType.GuildInstall])
+    .setContexts([InteractionContextType.Guild])
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageChannels)
+    .addSubcommand(sub => opcaoMatch(sub
+      .setName('track')
+      .setDescription('Start following a match in this channel')
+      .setDescriptionLocalizations({ 'pt-BR': 'Começa a acompanhar uma partida neste canal' })))
+    .addSubcommand(sub => opcaoMatch(sub
+      .setName('untrack')
+      .setDescription('Stop following a match in this channel')
+      .setDescriptionLocalizations({ 'pt-BR': 'Para de acompanhar uma partida neste canal' })))
+    .addSubcommand(sub => sub
+      .setName('list')
+      .setDescription('Matches followed in this channel')
+      .setDescriptionLocalizations({ 'pt-BR': 'Partidas acompanhadas neste canal' })),
+
+  /** Liga o poller no boot (chamado pelo index.js no `clientReady`). */
+  iniciar(client) {
+    matchlive.iniciar(client, guildId => forGuild(guildId));
+  },
+
+  async execute(interaction) {
+    const s = t(interaction);
+    const sub = exigirSubcomando(module.exports, interaction);
+
+    if (!interaction.guildId) return interaction.reply(efemero(s.matchlive_guild_only));
+    if (sub === 'list') return listar(interaction, s);
+
+    if (sub !== 'track' && sub !== 'untrack') {
+      throw new Error(`/matchlive: subcomando declarado mas sem tratamento: "${sub}"`);
+    }
+
+    if (!interaction.memberPermissions?.has(PermissionFlagsBits.ManageChannels)) {
+      return interaction.reply(efemero(s.matchlive_no_permission));
+    }
+
+    const alvo = parseMatchInput(interaction.options.getString('match'), servers.all().filter(x => !x.relax));
+    if (!alvo) return interaction.reply(efemero(s.matchlive_bad_input));
+
+    // Link manda; id sozinho vai para o servidor preferido, como no /matchcost.
+    const key = alvo.key ?? servers.rootKey(resolveServer(interaction, 'server', null));
+    const label = servers.get(key)?.label ?? key;
+
+    if (key === servers.OFFICIAL_KEY) return interaction.reply(efemero(s.matchlive_bancho_soon));
+    const fonte = matchlive.fontePara(key);
+    if (!fonte) return interaction.reply(efemero(s.matchlive_unsupported(label)));
+    if (!daycoreMysql.isConfigured()) return interaction.reply(efemero(s.matchlive_unconfigured(label)));
+
+    const { channelId } = interaction;
+    const id = alvo.id;
+
+    if (sub === 'untrack') {
+      const removido = db.removeTrack(channelId, key, id);
+      return interaction.reply(efemero(removido ? s.matchlive_untracked(id) : s.matchlive_not_tracked(id)));
+    }
+
+    if (db.getTrack(channelId, key, id)) return interaction.reply(efemero(s.matchlive_already(id)));
+    if (db.listTracksByChannel(channelId).length >= matchlive.LIMITE_POR_CANAL) {
+      return interaction.reply(efemero(s.matchlive_channel_full(matchlive.LIMITE_POR_CANAL)));
+    }
+    if (db.countTracks() >= matchlive.LIMITE_GLOBAL) return interaction.reply(efemero(s.matchlive_global_full));
+
+    await interaction.deferReply();
+
+    try {
+      const partida = await partidaVisivel(interaction, s, fonte, key, id, label);
+      if (!partida) return;
+
+      // Começa do último evento: o histórico de antes do track não é repostado.
+      // Jogo já em andamento aparece no primeiro tick (o diff vê gameMessages vazio).
+      db.addTrack({
+        channelId,
+        guildId: interaction.guildId,
+        server: key,
+        matchId: id,
+        lastEventId: await fonte.lastEventIdOf(id),
+        trackedBy: interaction.user.id,
+      });
+      return interaction.editReply(s.matchlive_tracking(id, partida.name));
+    } catch (error) {
+      logError('matchlive', error);
+      return safeEditReply(interaction, s.error_generic);
+    }
+  },
+};
