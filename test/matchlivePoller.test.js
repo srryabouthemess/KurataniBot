@@ -6,9 +6,10 @@ function cenario({ snaps, tracks }) {
   const enviados = [];
   const editados = [];
   let seq = 0;
+  const ctl = { falharNoEnvio: 0, chamadas: 0 };
   const canal = id => ({
     id,
-    async send({ embeds, content }) { const m = { id: `m${++seq}` }; enviados.push({ canal: id, msg: m.id, embeds, content }); return m; },
+    async send({ embeds, content }) { if (++ctl.chamadas === ctl.falharNoEnvio) throw new Error('429'); const m = { id: `m${++seq}` }; enviados.push({ canal: id, msg: m.id, embeds, content }); return m; },
     messages: { async edit(msgId, { embeds }) { editados.push({ canal: id, msg: msgId, embeds }); } },
   });
   const client = { channels: { async fetch(id) { return canal(id); } } };
@@ -28,7 +29,7 @@ function cenario({ snaps, tracks }) {
   };
   let relogio = 1000;
   const poller = criarPoller({ client, db, fontes: { daycore: fonte }, render, strings: () => s, siteUrl: () => null, agora: () => relogio });
-  return { poller, enviados, editados, estado, avancar: ms => { relogio += ms; } };
+  return { poller, ctl, client, enviados, editados, estado, avancar: ms => { relogio += ms; } };
 }
 
 const track = { channelId: 'c1', guildId: 'g', server: 'daycore', matchId: 9, lastEventId: 0 };
@@ -91,4 +92,34 @@ test('snapshot null remove o track', async () => {
   const c = cenario({ tracks: [track], snaps: [null] });
   await c.poller.tick();
   assert.equal(c.estado.size, 0);
+});
+
+test('falha no meio do tick: o que já foi postado fica salvo e não é repostado', async () => {
+  const s = snap({ events: [ev(1)], games: [jogo(50, 't1'), jogo(51, 't2')] });
+  const c = cenario({ tracks: [track], snaps: [s] });
+  c.ctl.falharNoEnvio = 3; // 1 log, 2 início do jogo 50, 3 início do jogo 51 falha
+  await c.poller.tick();
+  assert.equal(c.enviados.length, 2);
+  const st = c.estado.get('c1|9');
+  assert.equal(st.lastEventId, 1);
+  assert.ok(st.gameMessages[50]);
+  assert.equal(st.gameMessages[51], undefined);
+  await c.poller.tick();
+  assert.equal(c.enviados.length, 3);
+  assert.deepEqual(c.enviados[2].embeds, [{ start: 51 }]);
+});
+
+test('aviso de banco fora que falha não vira rejeição solta', async () => {
+  const c = cenario({ tracks: [track], snaps: [snap()] });
+  c.poller._fontes.daycore.snapshot = async () => { throw new Error('down'); };
+  c.client.channels.fetch = async () => ({ send: async () => { throw new Error('sem permissão'); } });
+  const soltas = [];
+  const h = e => soltas.push(e);
+  process.on('unhandledRejection', h);
+  await c.poller.tick();
+  c.avancar(5 * 60 * 1000);
+  await c.poller.tick();
+  await new Promise(r => setImmediate(r));
+  process.off('unhandledRejection', h);
+  assert.equal(soltas.length, 0);
 });

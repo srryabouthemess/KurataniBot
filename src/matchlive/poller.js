@@ -47,58 +47,72 @@ function criarPoller({ client, db, fontes, render, strings, siteUrl, agora = Dat
     }
   }
 
+  // O estado é salvo a cada ação que deu certo (no finally), e não só no fim:
+  // se um envio falha no meio (429, rede), o que já foi postado fica registrado
+  // e o próximo tick não reposta o log nem o início de jogo.
   async function processarTrack(track, snap, jogosTerminados) {
     const s = strings(track.guildId);
     const canal = await client.channels.fetch(track.channelId);
     const eventos = snap.events.filter(e => e.id > track.lastEventId);
-    const { acoes, lastEventId } = diff(track, { ...snap, events: eventos });
+    const { acoes, lastEventId: novoLastEventId } = diff(track, { ...snap, events: eventos });
 
-    let { logMessageId, logLines } = track;
-    const gameMessages = { ...track.gameMessages };
-    const novasLinhas = acoes.filter(a => a.tipo === 'log').map(a => render.linhaDeLog(a.evento, s));
+    const estado = {
+      lastEventId: track.lastEventId,
+      logMessageId: track.logMessageId,
+      logLines: track.logLines,
+      gameMessages: { ...track.gameMessages },
+      lastActivityAt: track.lastActivityAt,
+    };
+    let removido = false;
+    const remover = () => { removido = true; db.removeTrack(track.channelId, track.server, track.matchId); };
 
-    if (novasLinhas.length) {
-      const atuais = logMessageId ? linhasDoLog.get(logMessageId) : null;
-      if (atuais && logLines + novasLinhas.length <= MAX_LINHAS_LOG) {
-        const todas = [...atuais, ...novasLinhas];
-        logMessageId = await editarOuPostar(canal, logMessageId, { embeds: [render.embedLog(todas, snap.match, s)] });
-        linhasDoLog.set(logMessageId, todas);
-        logLines = todas.length;
-      } else {
-        const m = await postar(canal, { embeds: [render.embedLog(novasLinhas, snap.match, s)] });
-        logMessageId = m.id;
-        linhasDoLog.set(m.id, novasLinhas);
-        logLines = novasLinhas.length;
+    try {
+      const novasLinhas = acoes.filter(a => a.tipo === 'log').map(a => render.linhaDeLog(a.evento, s));
+
+      if (novasLinhas.length) {
+        const atuais = estado.logMessageId ? linhasDoLog.get(estado.logMessageId) : null;
+        if (atuais && estado.logLines + novasLinhas.length <= MAX_LINHAS_LOG) {
+          const todas = [...atuais, ...novasLinhas];
+          estado.logMessageId = await editarOuPostar(canal, estado.logMessageId, { embeds: [render.embedLog(todas, snap.match, s)] });
+          linhasDoLog.set(estado.logMessageId, todas);
+          estado.logLines = todas.length;
+        } else {
+          const m = await postar(canal, { embeds: [render.embedLog(novasLinhas, snap.match, s)] });
+          estado.logMessageId = m.id;
+          linhasDoLog.set(m.id, novasLinhas);
+          estado.logLines = novasLinhas.length;
+        }
+        estado.lastActivityAt = agora();
       }
-    }
+      // Só avança o cursor de eventos depois que as linhas foram de fato postadas.
+      estado.lastEventId = novoLastEventId;
 
-    let encerrar = false;
-    for (const acao of acoes) {
-      if (acao.tipo === 'gameStart') {
-        const m = await postar(canal, { embeds: [render.embedJogoInicio(acao.game, snap.match, s)] });
-        gameMessages[acao.game.id] = m.id;
-      } else if (acao.tipo === 'gameEnd' || acao.tipo === 'gameAbort') {
-        const embed = acao.tipo === 'gameEnd'
-          ? render.embedJogoFim(acao.game, snap.match, jogosTerminados, s)
-          : render.embedJogoAbortado(acao.game, snap.match, s);
-        const id = await editarOuPostar(canal, gameMessages[acao.game.id], { embeds: [embed] });
-        gameMessages[acao.game.id] = `done:${id}`;
-      } else if (acao.tipo === 'matchEnd') {
-        await postar(canal, { embeds: [render.embedFim(snap.match, siteUrl(track.server, track.matchId), s)] });
-        encerrar = true;
+      for (const acao of acoes) {
+        if (acao.tipo === 'gameStart') {
+          const m = await postar(canal, { embeds: [render.embedJogoInicio(acao.game, snap.match, s)] });
+          estado.gameMessages[acao.game.id] = m.id;
+          estado.lastActivityAt = agora();
+        } else if (acao.tipo === 'gameEnd' || acao.tipo === 'gameAbort') {
+          const embed = acao.tipo === 'gameEnd'
+            ? render.embedJogoFim(acao.game, snap.match, jogosTerminados, s)
+            : render.embedJogoAbortado(acao.game, snap.match, s);
+          const id = await editarOuPostar(canal, estado.gameMessages[acao.game.id], { embeds: [embed] });
+          estado.gameMessages[acao.game.id] = `done:${id}`;
+          estado.lastActivityAt = agora();
+        } else if (acao.tipo === 'matchEnd') {
+          await postar(canal, { embeds: [render.embedFim(snap.match, siteUrl(track.server, track.matchId), s)] });
+          remover();
+          return;
+        }
       }
+
+      if (!acoes.length && agora() - estado.lastActivityAt >= INATIVIDADE_MS) {
+        await postar(canal, { content: s.matchlive_idle_stop(track.matchId) });
+        remover();
+      }
+    } finally {
+      if (!removido) db.saveTrackState(track.channelId, track.server, track.matchId, estado);
     }
-
-    if (encerrar) return db.removeTrack(track.channelId, track.server, track.matchId);
-
-    let lastActivityAt = track.lastActivityAt;
-    if (acoes.length) lastActivityAt = agora();
-    else if (agora() - lastActivityAt >= INATIVIDADE_MS) {
-      await postar(canal, { content: s.matchlive_idle_stop(track.matchId) });
-      return db.removeTrack(track.channelId, track.server, track.matchId);
-    }
-
-    db.saveTrackState(track.channelId, track.server, track.matchId, { lastEventId, logMessageId, logLines, gameMessages, lastActivityAt });
   }
 
   async function falhou(chave, grupo, err) {
@@ -110,7 +124,7 @@ function criarPoller({ client, db, fontes, render, strings, siteUrl, agora = Dat
     if (!f.avisou && agora() - f.desde >= AVISO_DB_MS) {
       f.avisou = true;
       for (const tr of grupo) {
-        try { (await client.channels.fetch(tr.channelId)).send({ content: strings(tr.guildId).matchlive_db_down }); }
+        try { await (await client.channels.fetch(tr.channelId)).send({ content: strings(tr.guildId).matchlive_db_down }); }
         catch (e) { logError('matchlive', e); }
       }
     }
