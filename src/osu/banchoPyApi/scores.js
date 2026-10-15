@@ -184,12 +184,16 @@ async function privateBeatmapScores(userId, beatmapId, mode) {
   // status 0 é quit (o bancho.py guarda tentativa falha também). O endpoint
   // oficial só devolve play completa, então filtramos para os dois servidores
   // mostrarem a mesma coisa.
+  // O `map` já está na mão: sem passá-lo pelo mergeServerMap, o score saía sem
+  // combo nem estrelas do mapa — `544x/?x` e sem pp do FC no /score de um mapa
+  // custom, que a API oficial não completa depois (é um 404 lá).
+  const coverBase = servers.get(mode).covers ?? null;
   return raw
     .filter(v2 => (v2.status ?? 0) > 0)
-    .map(v2 => normalizeScorePrivate(
+    .map(v2 => mergeServerMap(normalizeScorePrivate(
       { map_id: map.id, map_set_id: map.set_id, map_name: map.filename },
       v2
-    ));
+    ), map, coverBase));
 }
 
 // ─── Melhores scores do servidor ─────────────────────────────────────────────
