@@ -17,10 +17,7 @@
 const daycoreMysql = require('../../daycoreMysql');
 const { decodeMods, stripImpliedDT } = require('../../mods');
 
-// Cópia dos mapas do commands/osu/matchcost/daycore.js: o test/architecture
-// proíbe importar de dentro de commands/, então ficam duplicados aqui.
-const TIMES = { 0: 'none', 1: 'blue', 2: 'red' };
-const TIPOS_DE_TIME = { 0: 'head-to-head', 1: 'tag-coop', 2: 'team-vs', 3: 'tag-team-vs' };
+const { TIMES, TIPOS_DE_TIME } = require('../../multiplayer/daycore');
 
 const SQL_PARTIDA = 'SELECT `id`, `name`, `private`, `ended_at` FROM `dc_matches` WHERE `id` = ?';
 const SQL_EVENTOS =

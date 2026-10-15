@@ -35,7 +35,7 @@ mysql2.createPool = () => ({
 });
 
 const daycore = require('../src/commands/osu/matchcost/daycore');
-const { calcularMatchCost } = require('../src/commands/osu/matchcost/logic');
+const { calcularMatchCost } = require('../src/multiplayer/logic');
 
 const FIM = new Date('2026-09-20T19:00:00.000Z');
 
@@ -74,8 +74,8 @@ test.beforeEach(() => {
 // ─── Normalização ─────────────────────────────────────────────────────────────
 
 test('as constantes seguem a numeração do bancho.py', () => {
-  assert.deepEqual(daycore.TIMES, { 0: 'none', 1: 'blue', 2: 'red' });
-  assert.deepEqual(daycore.TIPOS_DE_TIME, { 0: 'head-to-head', 1: 'tag-coop', 2: 'team-vs', 3: 'tag-team-vs' });
+  assert.deepEqual(require('../src/multiplayer/daycore').TIMES, { 0: 'none', 1: 'blue', 2: 'red' });
+  assert.deepEqual(require('../src/multiplayer/daycore').TIPOS_DE_TIME, { 0: 'head-to-head', 1: 'tag-coop', 2: 'team-vs', 3: 'tag-team-vs' });
 });
 
 test('linhas do MySQL → formato comum', () => {

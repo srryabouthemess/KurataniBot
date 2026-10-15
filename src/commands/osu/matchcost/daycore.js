@@ -23,36 +23,16 @@
  * O site responde 404 para quem não jogou nela, e o bot segue: só mostra se a
  * conta vinculada (/link) de quem chamou tem um `join` naquela partida — senão
  * a resposta é a de "não encontrada", sem confirmar que ela existe. A regra
- * pura mora em logic.js (`podeVerPartida`); aqui só a consulta.
+ * pura mora em multiplayer/logic.js (`podeVerPartida`); aqui só a consulta.
  */
 
 const daycoreMysql = require('../../../daycoreMysql');
 const servers = require('../../../servers');
 const { decodeMods, stripImpliedDT } = require('../../../mods');
-const { podeVerPartida } = require('./logic');
-
-/**
- * `dc_match_scores.team`, na numeração do bancho.py (`MatchTeams`, em
- * app/objects/match.py): 0 neutro, 1 azul, 2 vermelho.
- */
-const TIMES = { 0: 'none', 1: 'blue', 2: 'red' };
-
-/**
- * `dc_match_games.team_type`, na numeração do bancho.py (`MatchTeamTypes`, em
- * app/objects/match.py) — a mesma do osu!. Os nomes são os da API v2, que é o
- * formato comum do /matchcost.
- */
-const TIPOS_DE_TIME = { 0: 'head-to-head', 1: 'tag-coop', 2: 'team-vs', 3: 'tag-team-vs' };
+const { podeVerPartida } = require('../../../multiplayer/logic');
+const { TIMES, TIPOS_DE_TIME, jogouNela } = require('../../../multiplayer/daycore');
 
 const SQL_PARTIDA = 'SELECT `id`, `name`, `private`, `ended_at` FROM `dc_matches` WHERE `id` = ?';
-
-const SQL_JOIN_POR_ID =
-  "SELECT 1 FROM `dc_match_events` WHERE `match_id` = ? AND `type` = 'join' AND `user_id` = ? LIMIT 1";
-
-// Link antigo, gravado só com o nome: a conta sai do `users` pelo nome.
-const SQL_JOIN_POR_NOME =
-  'SELECT 1 FROM `dc_match_events` e JOIN `users` u ON u.`id` = e.`user_id` ' +
-  "WHERE e.`match_id` = ? AND e.`type` = 'join' AND u.`name` = ? LIMIT 1";
 
 const SQL_JOGOS =
   'SELECT `id`, `team_type`, `ended_at` FROM `dc_match_games` WHERE `match_id` = ? ORDER BY `started_at`, `id`';
@@ -89,18 +69,6 @@ async function buscarPartida(id, quem) {
   const [scores] = await pool.execute(SQL_SCORES, [id]);
 
   return { linhas: { partida, jogos, scores } };
-}
-
-async function jogouNela(pool, matchId, quem) {
-  if (quem?.id != null) {
-    const [linhas] = await pool.execute(SQL_JOIN_POR_ID, [matchId, Number(quem.id)]);
-    return linhas.length > 0;
-  }
-  if (quem?.name) {
-    const [linhas] = await pool.execute(SQL_JOIN_POR_NOME, [matchId, String(quem.name)]);
-    return linhas.length > 0;
-  }
-  return false;
 }
 
 const dataOuNull = valor => {
@@ -155,6 +123,4 @@ module.exports = {
   normalizarPartida,
   isConfigured: daycoreMysql.isConfigured,
   checkConnection: daycoreMysql.checkConnection,
-  TIMES,
-  TIPOS_DE_TIME,
 };

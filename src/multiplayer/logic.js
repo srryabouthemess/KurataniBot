@@ -1,8 +1,9 @@
 /**
- * commands/osu/matchcost/logic.js
+ * multiplayer/logic.js
  * A conta do /matchcost: de onde vem a partida, quais jogos entram, o match
  * cost de cada jogador e quem pode ver uma partida privada. Pura — nada de
- * Discord, de rede nem de banco.
+ * Discord, de rede nem de banco. Mora fora de commands/ porque o /matchcost e
+ * o /matchlive compartilham.
  *
  * ── De onde saiu a fórmula ──────────────────────────────────────────────────
  * Porte do `match_costs.rs` do Bathbot (MaxOhn/Bathbot, licença ISC — crédito

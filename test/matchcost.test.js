@@ -20,7 +20,7 @@ const assert = require('node:assert');
 const {
   parseMatchInput, podeVerPartida, selecionarJogos, calcularMatchCost,
   arredondar, chaveMods, vencedor, contarVitorias, ordemDoHashMap,
-} = require('../src/commands/osu/matchcost/logic');
+} = require('../src/multiplayer/logic');
 
 // ─── Montagem ─────────────────────────────────────────────────────────────────
 

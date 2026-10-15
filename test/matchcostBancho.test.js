@@ -39,7 +39,7 @@ require.cache[axiosPath] = {
 };
 
 const { buscarPartida, normalizarPartida, _reset } = require('../src/commands/osu/matchcost/bancho');
-const { calcularMatchCost } = require('../src/commands/osu/matchcost/logic');
+const { calcularMatchCost } = require('../src/multiplayer/logic');
 
 test.beforeEach(() => {
   _reset();

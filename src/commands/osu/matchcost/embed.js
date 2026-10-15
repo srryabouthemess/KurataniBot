@@ -9,7 +9,7 @@
  */
 
 const { EmbedBuilder } = require('discord.js');
-const { arredondar } = require('./logic');
+const { arredondar } = require('../../../multiplayer/logic');
 
 // A faixa diz quem ganhou em Team VS. Empate, head-to-head e partida sem jogo
 // ficam na cor neutra — não há time para destacar.
