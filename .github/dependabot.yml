@@ -1,0 +1,22 @@
+# Um PR por semana com minor/patch juntos; correcao de seguranca vem na hora
+# (alertas + security updates ligados no repo). cooldown de 14 dias = regra de
+# so usar versao com 2+ semanas de lancada. vendor/ (rosu-pp, akatsuki-pp) e
+# file: e fica de fora.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 14
+    groups:
+      dependencias:
+        patterns: ["*"]
+        update-types: [minor, patch]
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    cooldown:
+      default-days: 14
