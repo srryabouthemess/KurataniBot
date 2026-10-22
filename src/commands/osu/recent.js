@@ -84,25 +84,29 @@ module.exports = {
       // O top de cada chave vai junto, em paralelo, para o "PB #N". Ele não
       // pode derrubar nada: o fetchTops nunca rejeita, e sem top o comando
       // responde como antes, só sem a marca.
+      //
+      // O 🔄 repete esta mesma busca, com `fresh` (ver refreshList).
+      // O top sai por `guardarTops`, e não pelo retorno: o fetchPlayer só
+      // repassa a lista de scores.
+      const buscarRecentes = (guardarTops, { fresh = false } = {}) => async id => {
+        const [porModo, topsPorModo] = await Promise.all([
+          recentMerge.fetchEach(keys, key => osu.getRecentScores(id, FETCH_LIMIT, key)),
+          querPB
+            ? recentMerge.fetchTops(keys, key => osu.getBestScores(id, TOP_LIMIT, key, { fresh }))
+            : new Map(),
+        ]);
+        guardarTops(topsPorModo);
+        return recentMerge.mergeRecent(porModo, FETCH_LIMIT);
+      };
+
+      // Estado que o buildEmbed lê, e que o refresh troca por inteiro.
       let tops = new Map();
-      const { user, scores: recents } = await fetchPlayer(
-        resolved,
-        async id => {
-          const [porModo, topsPorModo] = await Promise.all([
-            recentMerge.fetchEach(keys, key => osu.getRecentScores(id, FETCH_LIMIT, key)),
-            querPB
-              ? recentMerge.fetchTops(keys, key => osu.getBestScores(id, TOP_LIMIT, key))
-              : new Map(),
-          ]);
-          tops = topsPorModo;
-          return recentMerge.mergeRecent(porModo, FETCH_LIMIT);
-        },
-      );
+      let { user, scores: recents } = await fetchPlayer(resolved, buscarRecentes(t => { tops = t; }));
       if (!user) return interaction.editReply(s.player_not_found);
       // O nick vai numa mensagem que renderiza markdown (ver markdown.js).
       if (recents.length === 0) return interaction.editReply(s.recent_none(md(user.username)));
 
-      const totalPages = recents.length;
+      let totalPages = recents.length;
 
       // Mapa de cada página já montada, para o /score conseguir responder à
       // play que está sendo exibida agora (ver mapContext.js). Fica fora do
@@ -122,12 +126,18 @@ module.exports = {
       //
       // Fora do `modo: both` isto não faz requisição nenhuma: as chaves buscadas
       // e a chave resolvida são a mesma, e o mapa já nasce com a resposta.
+      //
+      // Depois de um 🔄 (`perfisFrescos`), o do outro leaderboard também vem sem
+      // cache: a play nova mudou o pp dele.
       const perfis = new Map([[resolved.mode, Promise.resolve(user)]]);
+      let perfisFrescos = false;
       const perfilDe = (key) => {
         // Falhar aqui cai no perfil que já se tem: o cabeçalho fica com o número
         // do outro leaderboard, que é o que acontecia sempre até agora — melhor
         // do que derrubar a página inteira por causa da linha do autor.
-        if (!perfis.has(key)) perfis.set(key, osu.getUser(user.id, key).catch(() => null));
+        if (!perfis.has(key)) {
+          perfis.set(key, osu.getUser(user.id, key, { fresh: perfisFrescos }).catch(() => null));
+        }
         return perfis.get(key);
       };
 
@@ -195,48 +205,42 @@ module.exports = {
           });
       }
 
-      // Sem casar pelo id do score o refresh não teria como saber, dentro da
-      // lista nova, qual item é "a mesma play" (ver recentMerge.scoreIdOf).
-      const { scoreIdOf } = recentMerge;
-
       /**
-       * Busca de novo a lista de recentes da CHAVE de onde a play da página
-       * veio, e troca só aquele item — o resto de `recents` (as outras
-       * páginas) fica como estava. Reaproveita `osu.getRecentScores`, o mesmo
-       * fetch cru do carregamento inicial; `buildEmbed` reenriquece sozinho
-       * a partir do que for deixado em `recents[page]`.
+       * Refaz a busca da lista INTEIRA (as mesmas chaves do carregamento
+       * inicial) e volta para a primeira página. Quem clica no 🔄 do /rs
+       * acabou de jogar e quer ver a play nova — que entra no topo e empurra as
+       * outras. Re-buscar só a play da página não mudava nada: um score enviado
+       * não muda depois.
        *
-       * O top daquela chave é buscado de novo junto, sem cache: o 🔄 é o jeito
-       * de ver o "PB #N" de uma play que o top guardado (até um minuto) ainda
-       * não tinha. Falhando, fica o top de antes.
+       * Perfil e top vêm sem cache: a play nova mexe no pp e rank do cabeçalho
+       * e no "PB #N". Busca pelo id que já se conhece, e o estado só é trocado
+       * no fim — falha ou lista vazia lançam antes, e a tela fica como estava.
        */
-      async function refreshPlay(page) {
-        const current = recents[page];
-        if (!current) throw new Error(`recent refresh: sem play na página ${page}`);
-
-        const playMode = current._mode;
-        const scoreId  = scoreIdOf(current);
-
-        const [freshList, freshTops] = await Promise.all([
-          osu.getRecentScores(user.id, FETCH_LIMIT, playMode),
-          querPB
-            ? recentMerge.fetchTops([playMode], key => osu.getBestScores(user.id, TOP_LIMIT, key, { fresh: true }))
-            : new Map(),
-        ]);
-        if (freshTops.has(playMode)) tops.set(playMode, freshTops.get(playMode));
-
-        const match = scoreId != null
-          ? freshList.find(score => scoreIdOf(score) === scoreId)
-          : null;
-
-        if (!match) {
-          // Sem id pra casar, ou a play caiu fora da janela das últimas
-          // FETCH_LIMIT — não dá pra confirmar que ainda é a mesma play.
-          // Melhor recusar o refresh do que trocar a página por outra coisa.
-          throw new Error('recent refresh: play não encontrada na busca nova');
+      async function refreshList() {
+        let novosTops = new Map();
+        const novo = await fetchPlayer(
+          { username: user.id, mode: resolved.mode },
+          buscarRecentes(t => { novosTops = t; }, { fresh: true }),
+          { fresh: true },
+        );
+        if (!novo.user || novo.scores.length === 0) {
+          throw new Error('recent refresh: a busca nova não trouxe plays');
         }
 
-        recents[page] = { ...match, _mode: playMode };
+        // O top de uma chave que falhou agora fica o de antes: o fetchTops não
+        // rejeita, só deixa a chave de fora — e sem ela o "PB #N" sumiria.
+        for (const [key, top] of tops) if (!novosTops.has(key)) novosTops.set(key, top);
+
+        user = novo.user;
+        recents = novo.scores;
+        tops = novosTops;
+        totalPages = recents.length;
+        pageMapId.clear();
+        perfis.clear();
+        perfis.set(resolved.mode, Promise.resolve(user));
+        perfisFrescos = true;
+
+        return { totalPages, page: 0 };
       }
 
       await paginate(interaction, {
@@ -244,7 +248,8 @@ module.exports = {
         totalPages,
         buildEmbed,
         strings: s,
-        onRefresh: refreshPlay,
+        onRefresh: refreshList,
+        refreshError: s.recent_refresh_error,
         // O contexto do canal acompanha a página em que os botões pararam —
         // no modo da PLAY, pro /score sem argumento procurar no leaderboard
         // certo (ver mapContext.js).

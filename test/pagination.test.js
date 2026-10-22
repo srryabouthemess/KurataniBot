@@ -269,6 +269,35 @@ test('recarga completa que encolhe para uma página deixa só o 🔄 ativo', asy
   assert.deepEqual(botoesNaTela(h.edits).map(b => b.off), [true, false, true]);
 });
 
+test('recarga completa com `page` leva a tela para a página pedida', async () => {
+  // O /rs: a lista nova começa pela play mais recente, e é ela que a pessoa
+  // quer ver — ficar na página 3 mostraria outra play que não a que estava ali.
+  const h = harness(5, async page => ({ page }), {
+    onRefresh: async () => ({ totalPages: 6, page: 0 }),
+  });
+  await h.iniciar();
+  h.clicar('next'); await sleep(10);
+  h.clicar('next'); await sleep(10);
+  assert.equal(h.naTela(), 2);
+
+  h.clicar('refresh'); await sleep(20);
+  assert.equal(h.naTela(), 0);
+  assert.deepEqual(botoesNaTela(h.edits).map(b => b.off), [true, false, false]);
+
+  h.clicar('next'); await sleep(10);
+  assert.equal(h.naTela(), 1, 'a navegação parte da página nova');
+});
+
+test('recarga completa com `page` fora do limite é presa ao limite', async () => {
+  const h = harness(3, async page => ({ page }), {
+    onRefresh: async () => ({ totalPages: 2, page: 9 }),
+  });
+  await h.iniciar();
+
+  h.clicar('refresh'); await sleep(20);
+  assert.equal(h.naTela(), 1);
+});
+
 test('refresh que falha mantém o embed e avisa em efêmero', async () => {
   const h = harness(3, async page => ({ page }), {
     onRefresh: async () => { throw new Error('API caiu'); },

@@ -144,6 +144,7 @@ module.exports = ({ ADMIN }) => ({
 
   recent_none:             (name) => `Nenhuma play recente encontrada para **${name}**.`,
   recent_error:            'Erro ao buscar a play recente. Verifique se o jogador existe.',
+  recent_refresh_error:    '⚠️ Não deu para buscar as plays recentes de novo — mostrando os últimos dados buscados.',
   // Posição da play no top do jogador (o "PB #N" do Bathbot); só aparece
   // quando o id do score está no top daquele servidor/modo.
   recent_personal_best:    (n) => `**Top #${n} pessoal**`,

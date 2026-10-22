@@ -63,15 +63,16 @@ function buildRow(id, page, totalPages, { onRefresh, refreshing } = {}) {
  * @param {object}   options.strings      i18n já resolvido (para o aviso de dono)
  * @param {(page: number) => void} [options.onPage]   chamado a cada página exibida
  * @param {(page: number) => void} [options.prefetch] aquece a página seguinte
- * @param {(page: number) => Promise<void|{totalPages: number}>} [options.onRefresh]
+ * @param {(page: number) => Promise<void|{totalPages: number, page?: number}>} [options.onRefresh]
  *   busca dados novos e atualiza o estado de onde `buildEmbed` lê. Sem isto o
  *   botão 🔄 nem aparece — e com ele aparece mesmo com uma página só.
  *
- *   Devolvendo nada, só a página atual foi renovada (ex: o /rs troca a play
- *   correspondente no array já buscado) e só ela sai do cache. Devolvendo
- *   `{ totalPages }`, a lista INTEIRA foi recarregada (ex: o /topplays, onde uma
- *   play nova muda a ordem, as posições e até o número de páginas): o cache todo
- *   é descartado e a página atual é presa ao novo limite.
+ *   Devolvendo nada, só a página atual foi renovada e só ela sai do cache.
+ *   Devolvendo `{ totalPages }`, a lista INTEIRA foi recarregada (ex: o
+ *   /topplays, onde uma play nova muda a ordem, as posições e até o número de
+ *   páginas): o cache todo é descartado e a página atual é presa ao novo limite.
+ *   Com `page` junto, a tela vai para ela em vez de ficar onde estava (ex: o
+ *   /rs, onde a play nova entra na primeira página e empurra as outras).
  *
  *   Erros aqui não derrubam a página: o embed atual fica como está e a pessoa
  *   recebe um aviso discreto. Quem lança deve fazê-lo ANTES de mexer no estado.
@@ -185,7 +186,8 @@ async function paginate(interaction, {
           geracao++;
           cache.clear();
           totalPages = recarga.totalPages;
-          page = Math.min(page, totalPages - 1);
+          const alvo = Number.isInteger(recarga.page) ? recarga.page : page;
+          page = Math.max(0, Math.min(alvo, totalPages - 1));
         } else {
           cache.delete(page);
         }
