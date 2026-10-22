@@ -25,8 +25,8 @@
     "axios": "^1.14.0",
     "discord.js": "^14.26.2",
     "dotenv": "^17.4.0",
-    "mysql2": "^3.24.4",
-    "redis": "^6.2.0",
+    "mysql2": "^3.24.5",
+    "redis": "^6.3.0",
     "akatsuki-pp-akatsuki": "file:vendor/akatsuki-pp-akatsuki",
     "akatsuki-pp-daycore": "file:vendor/akatsuki-pp-daycore",
     "rosu-pp-bancho": "file:vendor/rosu-pp-bancho",
@@ -34,6 +34,6 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
-    "eslint": "^10.8.1"
+    "eslint": "^10.12.0"
   }
 }
