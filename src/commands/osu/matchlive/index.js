@@ -24,8 +24,7 @@ const { t, forGuild } = require('../../../i18n');
 const { logError } = require('../../../lib/logger');
 const { safeEditReply } = require('../../../replies');
 const { exigirSubcomando } = require('../../../subcommands');
-const { parseMatchInput, podeVerPartida } = require('../../../multiplayer/logic');
-const { jogouNela } = require('../../../multiplayer/daycore');
+const { parseMatchInput } = require('../../../multiplayer/logic');
 const matchlive = require('../../../matchlive');
 const osu = require('../../../osuClient');
 const emojis = require('../../../emojis');
@@ -114,14 +113,11 @@ async function partidaVisivel(interaction, s, fonte, key, id, label) {
   }
 
   if (snap.match.private) {
-    // A mesma regra do /matchcost: quem jogou nela pode ver.
-    const link = db.getLink(interaction.user.id, key);
-    const quem = link ? { id: link.osu_id, name: link.osu_user } : null;
-    const participou = await jogouNela(daycoreMysql.getPool(), id, quem);
-    if (!podeVerPartida(snap.match, participou)) {
-      await interaction.editReply(s.matchlive_not_found(id));
-      return null;
-    }
+    // O poller publica em um canal compartilhado e não consegue restringir
+    // cada atualização aos participantes da partida. Não acompanhar partidas
+    // privadas é mais seguro do que expor seus eventos a todo o canal.
+    await interaction.editReply(s.matchlive_not_found(id));
+    return null;
   }
 
   if (snap.match.endedAt) {
@@ -169,14 +165,15 @@ module.exports = {
     const sub = exigirSubcomando(module.exports, interaction);
 
     if (!interaction.guildId) return interaction.reply(efemero(s.matchlive_guild_only));
+
+    if (!interaction.memberPermissions?.has(PermissionFlagsBits.ManageChannels)) {
+      return interaction.reply(efemero(s.matchlive_no_permission));
+    }
+
     if (sub === 'list') return listar(interaction, s);
 
     if (sub !== 'track' && sub !== 'untrack') {
       throw new Error(`/matchlive: subcomando declarado mas sem tratamento: "${sub}"`);
-    }
-
-    if (!interaction.memberPermissions?.has(PermissionFlagsBits.ManageChannels)) {
-      return interaction.reply(efemero(s.matchlive_no_permission));
     }
 
     const entrada = interaction.options.getString('match');
