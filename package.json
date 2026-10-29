@@ -24,8 +24,8 @@
   "dependencies": {
     "axios": "^1.14.0",
     "discord.js": "^14.26.2",
-    "dotenv": "^18.0.6",
-    "mysql2": "^3.24.5",
+    "dotenv": "^18.0.8",
+    "mysql2": "^3.24.6",
     "redis": "^6.3.0",
     "akatsuki-pp-akatsuki": "file:vendor/akatsuki-pp-akatsuki",
     "akatsuki-pp-daycore": "file:vendor/akatsuki-pp-daycore",
