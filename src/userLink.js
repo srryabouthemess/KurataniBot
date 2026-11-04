@@ -202,8 +202,9 @@ function resolvePlayer(interaction, playerOptionName = 'player', serverOptionNam
  * @returns {Promise<{user: object|null, scores: Array}>}
  */
 async function fetchPlayer({ username, mode }, buscarScores, { fresh = false } = {}) {
-  const idConhecido = /^\d+$/.test(String(username)) ? Number(username) : null;
-  if (idConhecido !== null) return juntos(idConhecido, mode, buscarScores, fresh);
+  // Só número é id (o `osu_id` do link). Texto de dígitos é nick digitado — o
+  // jogador `547` do Daycore tem id 58 (ver resolvePlayerId).
+  if (typeof username === 'number') return juntos(username, mode, buscarScores, fresh);
 
   const palpite = idPorNick(mode, username);
   if (palpite !== null) {

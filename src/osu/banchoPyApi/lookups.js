@@ -13,14 +13,21 @@ const { PRIVATE_MODE, banchoV1Get, banchoV2Get } = require('./http');
 
 // ─── Busca ID do jogador pelo nome (via api v2) ──────────────────────────────
 async function resolvePlayerId(username, mode = PRIVATE_MODE) {
-  // Pode chegar como número (ID vindo do link salvo) ou string (nome digitado
-  // no comando). Normalizamos antes de qualquer operação de string — sem isso
-  // um ID numérico estourava em `username.trim()`.
+  // Número é ID (o link salvo entrega o `osu_id` assim); texto é o que alguém
+  // digitou. Decidir pelo formato confundia o jogador `547` (id 58) com o id
+  // 547: o comando respondia "jogador não encontrado" (04/11/2026).
+  if (typeof username === 'number') return username;
   const raw = String(username).trim();
 
+  // Texto só de dígitos: o nick vem primeiro, e o id só quando não há nick
+  // assim — quem digita o id de alguém continua sendo atendido.
   // /^\d+$/ em vez de !isNaN(): isNaN('   ') é false (Number('   ') === 0),
   // então uma string só de espaços virava silenciosamente o ID 0.
-  if (/^\d+$/.test(raw)) return Number(raw);
+  if (/^\d+$/.test(raw)) return (await idPeloNome(raw, mode)) ?? Number(raw);
+  return idPeloNome(raw, mode);
+}
+
+async function idPeloNome(raw, mode) {
 
   // Busca exata pelo nome. Usa a v1 do bancho porque o endpoint /players da
   // v2 NÃO aceita filtro por nome — os parâmetros dele são priv, country,

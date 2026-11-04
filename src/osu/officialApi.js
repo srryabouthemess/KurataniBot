@@ -218,8 +218,19 @@ async function officialBeatmapScores(userId, beatmapId) {
  * lia "ocorreu um erro" em vez de "jogador não encontrado".
  */
 async function fetchUser(username) {
+  // Número é id; texto é nick. Na v2 o nick vai com `@` — sem ele, texto só de
+  // dígitos é lido como id, e o jogador `727` virava a conta de id 727. Texto
+  // de dígitos sem nick igual ainda tenta o id, pra quem digitou um.
+  if (typeof username === 'number') return userPorCaminho(username);
+  const raw = String(username).trim();
+  const user = await userPorCaminho(`@${raw}`);
+  if (user || !/^\d+$/.test(raw)) return user;
+  return userPorCaminho(raw);
+}
+
+async function userPorCaminho(ref) {
   try {
-    return await officialGet(`/users/${urlSegment(username)}/osu`);
+    return await officialGet(`/users/${urlSegment(ref)}/osu`);
   } catch (error) {
     if (error?.response?.status === 404) return null;
     throw error;

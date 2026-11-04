@@ -294,8 +294,11 @@ const _userCache = new TtlCache({ ttlMs: USER_CACHE_TTL_MS, max: USER_CACHE_MAX 
  * cache carregava o dobro de entradas sem um acerto sequer.
  */
 function _userCacheKey(mode, value) {
-  const raw = String(value);
-  return /^\d+$/.test(raw) ? `${mode}:#${raw}` : `${mode}:${raw.toLowerCase()}`;
+  // Pelo tipo, não pelo formato: o nick "547" e o id 547 são pessoas diferentes
+  // (ver resolvePlayerId).
+  return typeof value === 'number'
+    ? `${mode}:#${value}`
+    : `${mode}:${String(value).trim().toLowerCase()}`;
 }
 
 // ─── Consulta ─────────────────────────────────────────────────────────────────
@@ -321,9 +324,7 @@ async function getUser(username, mode = DEFAULT_MODE, { fresh = false } = {}) {
     _userCache.set(_userCacheKey(mode, user.id), user);
     // Refresh por ID (é como o 🔄 busca): sem renovar também a chave do NOME, quem
     // consultasse o mesmo jogador pelo nome logo depois veria o pp de antes.
-    // Nick só de dígitos ficaria de fora: a chave dele seria a de um ID, e
-    // sobrescreveria a entrada de outra pessoa.
-    if (fresh && user.username && !/^\d+$/.test(user.username)) {
+    if (fresh && user.username) {
       _userCache.set(_userCacheKey(mode, user.username), user);
     }
   }

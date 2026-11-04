@@ -250,9 +250,16 @@ function normalizeLegacyScore(raw, beatmapId) {
  * ID no campo `name` faz o Ripple procurar um jogador chamado "1001".
  */
 async function fetchUser(username, mode) {
+  // Número é id (link salvo); texto é nick digitado. Texto só de dígitos tenta
+  // o nick primeiro e cai no id se não houver — o nick "1001" não é o id 1001.
+  if (typeof username === 'number') return userPor(mode, { id: username });
   const bruto = String(username).trim();
-  const params = /^\d+$/.test(bruto) ? { id: Number(bruto) } : { name: bruto };
+  const user = await userPor(mode, { name: bruto });
+  if (user || !/^\d+$/.test(bruto)) return user;
+  return userPor(mode, { id: Number(bruto) });
+}
 
+async function userPor(mode, params) {
   try {
     const data = await rippleGet(mode, '/users/full', params);
     return normalizeUser(data, mode);
