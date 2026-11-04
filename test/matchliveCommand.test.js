@@ -161,14 +161,21 @@ test('limite global', async () => {
   assert.equal(db.getTrack(CANAL, 'daycore', 9), null);
 });
 
-test('privada com join de quem chamou: acompanha', async () => {
+test('partida privada não é acompanhada em canal compartilhado', async () => {
   banco.partidas[0].private = 1;
   banco.joins = [{ match_id: 9, user_id: 3 }];
   db.setLink('u1', 'daycore', 'Alice', 3);
   const { i, respostas } = interacao({ sub: 'track', match: 'https://daycore.test/matches/9' });
   await matchlive.execute(i);
-  assert.match(texto(respostas.at(-1)), /Acompanhando a partida `9`/);
-  assert.ok(db.getTrack(CANAL, 'daycore', 9));
+  assert.match(texto(respostas.at(-1)), /Nenhuma partida com o id `9` foi encontrada/);
+  assert.equal(db.getTrack(CANAL, 'daycore', 9), null);
+});
+
+test('list sem Manage Channels: recusa em efêmero', async () => {
+  const { i, respostas } = interacao({ sub: 'list', pode: false });
+  await matchlive.execute(i);
+  assert.match(texto(respostas[0]), /Gerenciar Canais/);
+  assert.ok(respostas[0].flags);
 });
 
 const jg = (id, min, fim) => ({ id, map_id: 1, map_name: 'm', mode: 0, mods: 0, freemods: 0, team_type: 0,
